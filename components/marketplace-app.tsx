@@ -8,6 +8,7 @@ import {
   Clock3,
   GraduationCap,
   Heart,
+  ImagePlus,
   LogOut,
   MapPin,
   Menu,
@@ -231,11 +232,47 @@ export function MarketplaceApp() {
     setToast("已安全登出");
   }
 
-  function saveBook(event: FormEvent<HTMLFormElement>) {
+  async function saveBook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!currentUser) return;
     const data = new FormData(event.currentTarget);
     const fields = Object.fromEntries(data.entries());
+    const image = data.get("image");
+    let imageUrl = editingBook?.imageUrl ?? "";
+
+    if (image instanceof File && image.size > 0) {
+      if (!supabase) {
+        setToast("圖片上傳服務尚未完成設定");
+        return;
+      }
+      if (!["image/jpeg", "image/png", "image/webp"].includes(image.type)) {
+        setToast("圖片僅支援 JPG、PNG 或 WebP");
+        return;
+      }
+      if (image.size > 5 * 1024 * 1024) {
+        setToast("圖片大小不能超過 5MB");
+        return;
+      }
+
+      const extension = image.name.split(".").pop()?.toLowerCase() || "jpg";
+      const filePath = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from("book-images")
+        .upload(filePath, image, { cacheControl: "3600", upsert: false });
+
+      if (uploadError) {
+        setToast(`圖片上傳失敗：${uploadError.message}`);
+        return;
+      }
+
+      imageUrl = supabase.storage.from("book-images").getPublicUrl(filePath).data.publicUrl;
+    }
+
+    if (!imageUrl) {
+      setToast("請選擇一本書的封面圖片");
+      return;
+    }
+
     const payload = {
       title: String(fields.title),
       author: String(fields.author),
@@ -245,7 +282,7 @@ export function MarketplaceApp() {
       edition: String(fields.edition),
       condition: String(fields.condition),
       price: Number(fields.price),
-      imageUrl: String(fields.imageUrl),
+      imageUrl,
       meetup: String(fields.meetup),
       description: String(fields.description),
     };
@@ -674,9 +711,17 @@ function LoginModal({
   );
 }
 
-function BookFormModal({ book, onClose, onSubmit }: { book: Book | null; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+function BookFormModal({ book, onClose, onSubmit }: { book: Book | null; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void> }) {
   const value = book ?? blankBook;
-  return <ModalShell title={book ? "編輯刊登" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}><form onSubmit={onSubmit} className="form book-form"><label className="full">書名 *<input name="title" required defaultValue={value.title} placeholder="例如：資料結構：使用 C++" /></label><label>作者 *<input name="author" required defaultValue={value.author} /></label><label>版本 *<input name="edition" required defaultValue={value.edition} placeholder="例如：第 2 版" /></label><label>科系（選填）<select name="department" defaultValue={value.department}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label><label>課程（選填）<input name="course" defaultValue={value.course} /></label><label>授課老師（選填）<input name="teacher" defaultValue={value.teacher} /></label><label>書況 *<select name="condition" required defaultValue={value.condition}><option>近全新</option><option>書況良好</option><option>有筆記</option><option>使用痕跡明顯</option></select></label><label>價格（NT$）*<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label><label className="full">面交地點 *<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label><label className="full">封面圖片網址 *<input name="imageUrl" required type="url" defaultValue={value.imageUrl} placeholder="貼上書籍封面圖片網址" /></label><label className="full">書況說明 *<textarea name="description" required rows={3} defaultValue={value.description} /></label><button className="primary wide full" type="submit">{book ? "儲存變更" : "確認刊登"}</button></form></ModalShell>;
+  const [preview, setPreview] = useState(value.imageUrl);
+
+  function selectImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setPreview(URL.createObjectURL(file));
+  }
+
+  return <ModalShell title={book ? "編輯刊登" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}><form onSubmit={onSubmit} className="form book-form"><label className="full">書名 *<input name="title" required defaultValue={value.title} placeholder="例如：資料結構：使用 C++" /></label><label>作者 *<input name="author" required defaultValue={value.author} /></label><label>版本 *<input name="edition" required defaultValue={value.edition} placeholder="例如：第 2 版" /></label><label>科系（選填）<select name="department" defaultValue={value.department}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label><label>課程（選填）<input name="course" defaultValue={value.course} /></label><label>授課老師（選填）<input name="teacher" defaultValue={value.teacher} /></label><label>書況 *<select name="condition" required defaultValue={value.condition}><option>近全新</option><option>書況良好</option><option>有筆記</option><option>使用痕跡明顯</option></select></label><label>價格（NT$）*<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label><label className="full">面交地點 *<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label><label className="full">封面圖片 *<span className="image-upload"><input name="image" required={!book} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} /><ImagePlus size={22} /><b>{book ? "選擇新圖片（不選則保留原圖）" : "選擇圖片檔"}</b><small>支援 JPG、PNG、WebP，最大 5MB</small></span></label>{preview && <div className="image-preview full"><img src={preview} alt="書籍封面預覽" /></div>}<label className="full">書況說明 *<textarea name="description" required rows={3} defaultValue={value.description} /></label><button className="primary wide full" type="submit">{book ? "儲存變更" : "確認刊登"}</button></form></ModalShell>;
 }
 
 function RequestModal({ book, onClose, onSubmit }: { book: Book; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {

@@ -29,6 +29,8 @@ NEXT_PUBLIC_SUPABASE_URL=https://你的專案代碼.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=你的-publishable-或-anon-key
 ```
 
+`schema.sql` 也會建立公開的 `book-images` Storage bucket 與安全規則。登入使用者只能上傳及管理自己資料夾內的圖片。
+
 ### 2. 啟用 Email OTP
 
 1. 開啟 Supabase Dashboard → Authentication → Providers → Email。
