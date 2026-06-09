@@ -626,7 +626,7 @@ function LoginModal({
         {step === "email" ? (
           <>
             <h3>輸入你的 Gmail</h3>
-            <p>我們會寄送一組 6 位數驗證碼，確認這個 Email 由你本人使用。</p>
+            <p>我們會寄送一組一次性驗證碼，確認這個 Email 由你本人使用。</p>
             <form className="otp-form" onSubmit={requestCode}>
               <label>
                 Email
@@ -647,7 +647,7 @@ function LoginModal({
           </>
         ) : (
           <>
-            <h3>輸入 6 位數驗證碼</h3>
+            <h3>輸入 Email 驗證碼</h3>
             <p>驗證碼已寄到 <b>{email}</b>。沒有看到時，請檢查垃圾郵件。</p>
             <form className="otp-form" onSubmit={confirmCode}>
               <label>
@@ -657,15 +657,16 @@ function LoginModal({
                   className="otp-input"
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
+                  pattern="[0-9]{6,8}"
+                  minLength={6}
+                  maxLength={8}
                   value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="000000"
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 8))}
+                  placeholder="輸入 6 至 8 位數字"
                   required
                 />
               </label>
-              <button className="primary wide" type="submit" disabled={loading || code.length !== 6}>
+              <button className="primary wide" type="submit" disabled={loading || code.length < 6 || code.length > 8}>
                 {loading ? "驗證中..." : "確認並登入"}
               </button>
               <button className="text-button" type="button" onClick={() => { setStep("email"); setCode(""); setError(""); }}>
