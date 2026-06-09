@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "書流 BookFlow | 校園二手書",
+  title: "虎科書流 | 校園二手書",
   description: "讓用過的課本，找到下一位需要它的人。",
 };
 

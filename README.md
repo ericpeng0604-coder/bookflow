@@ -1,4 +1,4 @@
-# 書流 BookFlow
+# 虎科書流
 
 單一校園使用的二手課本交易原型，以 Next.js、TypeScript 與 Supabase 製作。
 
@@ -39,7 +39,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=你的-publishable-或-anon-key
 4. 將範本改為包含 `{{ .Token }}`，例如：
 
 ```html
-<h2>書流登入驗證碼</h2>
+<h2>虎科書流登入驗證碼</h2>
 <p>你的 8 位數驗證碼是：</p>
 <h1>{{ .Token }}</h1>
 <p>若不是你本人操作，請忽略這封信。</p>

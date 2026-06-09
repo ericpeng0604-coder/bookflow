@@ -18,7 +18,7 @@ if not exist "node_modules\next\dist\bin\next" (
   exit /b 1
 )
 
-echo Starting BookFlow...
+echo Starting HUST BookFlow...
 echo Keep this window open while using the website.
 start "" /b powershell.exe -NoProfile -WindowStyle Hidden -Command "$url='http://localhost:3000'; for($i=0;$i -lt 60;$i++){ try { $response=Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 2; if($response.StatusCode -eq 200){ Start-Process $url; exit } } catch {}; Start-Sleep -Seconds 1 }"
 "%NODE_EXE%" "node_modules\next\dist\bin\next" dev -p 3000

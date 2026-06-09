@@ -221,7 +221,7 @@ export function MarketplaceApp() {
 
     if (error) return "驗證碼錯誤或已過期，請重新確認";
     setModal(null);
-    setToast("Email 驗證成功，歡迎加入書流");
+    setToast("Email 驗證成功，歡迎加入虎科書流");
     return null;
   }
 
@@ -389,7 +389,7 @@ export function MarketplaceApp() {
       <header className="site-header">
         <button className="brand" onClick={() => setView("home")} aria-label="回首頁">
           <span className="brand-mark"><BookOpen size={23} /></span>
-          <span><b>書流</b><small>BOOKFLOW</small></span>
+          <span><b>虎科書流</b><small>HUST BOOKFLOW</small></span>
         </button>
         <nav>
           <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
@@ -522,7 +522,7 @@ export function MarketplaceApp() {
       {view === "dashboard" && currentUser && (
         <section className="dashboard">
           <div className="dashboard-head">
-            <div><span className="section-kicker">MY BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
+            <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
             <button className="primary" onClick={() => { setEditingBook(null); setModal("bookForm"); }}><Plus size={18} />刊登課本</button>
           </div>
           <div className="dashboard-tabs">
@@ -587,7 +587,7 @@ export function MarketplaceApp() {
         </section>
       )}
 
-      <footer><div className="brand footer-brand"><span className="brand-mark"><BookOpen size={20} /></span><span><b>書流</b><small>BOOKFLOW</small></span></div><p>讓每一本課本，都找到下一位需要它的人。</p><span>校園二手書交流平台 · Prototype 2026</span></footer>
+      <footer><div className="brand footer-brand"><span className="brand-mark"><BookOpen size={20} /></span><span><b>虎科書流</b><small>HUST BOOKFLOW</small></span></div><p>讓每一本課本，都找到下一位需要它的人。</p><span>虎科校園二手書交流平台 · Prototype 2026</span></footer>
 
       {modal === "login" && (
         <LoginModal
@@ -648,7 +648,7 @@ function LoginModal({
   }
 
   return (
-    <ModalShell title="加入書流" subtitle="用 Email 驗證碼快速登入，不必記密碼" onClose={onClose}>
+    <ModalShell title="加入虎科書流" subtitle="用 Email 驗證碼快速登入，不必記密碼" onClose={onClose}>
       <div className="email-login">
         <div className="auth-shield"><ShieldCheck size={24} /></div>
         {step === "email" ? (
@@ -705,7 +705,7 @@ function LoginModal({
         )}
         {error && <div className="auth-error">{error}</div>}
         {!configured && <div className="auth-warning">網站管理員尚未完成 Email 驗證設定，請先依照專案內的設定指南操作。</div>}
-        <small><ShieldCheck size={13} />書流不會取得或儲存你的 Gmail 密碼。</small>
+        <small><ShieldCheck size={13} />虎科書流不會取得或儲存你的 Gmail 密碼。</small>
       </div>
     </ModalShell>
   );
@@ -721,7 +721,7 @@ function BookFormModal({ book, onClose, onSubmit }: { book: Book | null; onClose
     setPreview(URL.createObjectURL(file));
   }
 
-  return <ModalShell title={book ? "編輯刊登" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}><form onSubmit={onSubmit} className="form book-form"><label className="full">書名 *<input name="title" required defaultValue={value.title} placeholder="例如：資料結構：使用 C++" /></label><label>作者 *<input name="author" required defaultValue={value.author} /></label><label>版本 *<input name="edition" required defaultValue={value.edition} placeholder="例如：第 2 版" /></label><label>科系（選填）<select name="department" defaultValue={value.department}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label><label>課程（選填）<input name="course" defaultValue={value.course} /></label><label>授課老師（選填）<input name="teacher" defaultValue={value.teacher} /></label><label>書況 *<select name="condition" required defaultValue={value.condition}><option>近全新</option><option>書況良好</option><option>有筆記</option><option>使用痕跡明顯</option></select></label><label>價格（NT$）*<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label><label className="full">面交地點 *<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label><label className="full">封面圖片 *<span className="image-upload"><input name="image" required={!book} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} /><ImagePlus size={22} /><b>{book ? "選擇新圖片（不選則保留原圖）" : "選擇圖片檔"}</b><small>支援 JPG、PNG、WebP，最大 5MB</small></span></label>{preview && <div className="image-preview full"><img src={preview} alt="書籍封面預覽" /></div>}<label className="full">書況說明 *<textarea name="description" required rows={3} defaultValue={value.description} /></label><button className="primary wide full" type="submit">{book ? "儲存變更" : "確認刊登"}</button></form></ModalShell>;
+  return <ModalShell title={book ? "編輯刊登" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}><form onSubmit={onSubmit} className="form book-form"><label className="full">書名 *<input name="title" required defaultValue={value.title} placeholder="例如：資料結構：使用 C++" /></label><label>作者 *<input name="author" required defaultValue={value.author} /></label><label>版本 *<input name="edition" required defaultValue={value.edition} placeholder="例如：第 2 版" /></label><label>科系（選填）<select name="department" defaultValue={value.department}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label><label>課程（選填）<input name="course" defaultValue={value.course} /></label><label>授課老師（選填）<input name="teacher" defaultValue={value.teacher} /></label><label>書況 *<select name="condition" required defaultValue={value.condition}><option>近全新</option><option>書況良好</option><option>有筆記</option><option>使用痕跡明顯</option><option>損壞嚴重</option></select></label><label>價格（NT$）*<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label><label className="full">面交地點 *<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label><label className="full">封面圖片 *<span className="image-upload"><input name="image" required={!book} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} /><ImagePlus size={22} /><b>{book ? "選擇新圖片（不選則保留原圖）" : "選擇圖片檔"}</b><small>支援 JPG、PNG、WebP，最大 5MB</small></span></label>{preview && <div className="image-preview full"><img src={preview} alt="書籍封面預覽" /></div>}<label className="full">書況說明 *<textarea name="description" required rows={3} defaultValue={value.description} /></label><button className="primary wide full" type="submit">{book ? "儲存變更" : "確認刊登"}</button></form></ModalShell>;
 }
 
 function RequestModal({ book, onClose, onSubmit }: { book: Book; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
