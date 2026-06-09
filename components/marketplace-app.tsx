@@ -27,7 +27,7 @@ import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-d
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type { Book, BookStatus, Profile, PurchaseRequest, RequestStatus } from "@/lib/types";
 
-const STORAGE_KEY = "bookflow-demo-v2";
+const STORAGE_KEY = "bookflow-market-v1";
 
 type View = "home" | "book" | "dashboard";
 type DashboardTab = "listings" | "requests" | "received";
@@ -56,8 +56,7 @@ const requestLabels: Record<RequestStatus, string> = {
 const blankBook: Omit<Book, "id" | "sellerId" | "createdAt" | "status"> = {
   title: "",
   author: "",
-  isbn: "",
-  department: "資訊工程學系",
+  department: "",
   course: "",
   teacher: "",
   edition: "",
@@ -167,7 +166,7 @@ export function MarketplaceApp() {
       .filter((book) =>
         !normalized
           ? true
-          : [book.title, book.author, book.course, book.teacher, book.isbn]
+          : [book.title, book.author, book.course, book.teacher]
               .join(" ")
               .toLowerCase()
               .includes(normalized),
@@ -240,14 +239,13 @@ export function MarketplaceApp() {
     const payload = {
       title: String(fields.title),
       author: String(fields.author),
-      isbn: String(fields.isbn),
       department: String(fields.department),
       course: String(fields.course),
       teacher: String(fields.teacher),
       edition: String(fields.edition),
       condition: String(fields.condition),
       price: Number(fields.price),
-      imageUrl: String(fields.imageUrl) || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&w=800&q=80",
+      imageUrl: String(fields.imageUrl),
       meetup: String(fields.meetup),
       description: String(fields.description),
     };
@@ -343,13 +341,6 @@ export function MarketplaceApp() {
     setToast("刊登已下架");
   }
 
-  function resetDemo() {
-    const initial = { books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null };
-    setStore(initial);
-    setView("home");
-    setToast("示範資料已重設");
-  }
-
   const myListings = currentUser ? store.books.filter((book) => book.sellerId === currentUser.id) : [];
   const myRequests = currentUser ? store.requests.filter((request) => request.buyerId === currentUser.id) : [];
   const receivedRequests = currentUser
@@ -392,7 +383,7 @@ export function MarketplaceApp() {
               <p>在校園裡找到你需要的課本，省下一筆，也讓學長姐的筆記繼續發揮價值。</p>
               <div className="hero-search">
                 <Search size={21} />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋書名、課程、老師或 ISBN..." />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋書名、課程或老師..." />
                 <button onClick={() => document.getElementById("market")?.scrollIntoView({ behavior: "smooth" })}>開始找書</button>
               </div>
               <div className="hero-trust">
@@ -434,7 +425,7 @@ export function MarketplaceApp() {
                     <button className="heart" aria-label="收藏" onClick={(event) => event.stopPropagation()}><Heart size={18} /></button>
                   </div>
                   <div className="card-body">
-                    <span className="course-tag">{book.course}</span>
+                    {book.course && <span className="course-tag">{book.course}</span>}
                     <h3>{book.title}</h3>
                     <p>{book.author} · {book.edition}</p>
                     <div className="card-meta"><span>{book.condition}</span><span><MapPin size={13} />{book.meetup}</span></div>
@@ -458,15 +449,16 @@ export function MarketplaceApp() {
               <span className={`status ${selectedBook.status}`}>{statusLabels[selectedBook.status]}</span>
             </div>
             <div className="detail-content">
-              <span className="course-tag">{selectedBook.department} · {selectedBook.course}</span>
+              {(selectedBook.department || selectedBook.course) && (
+                <span className="course-tag">{[selectedBook.department, selectedBook.course].filter(Boolean).join(" · ")}</span>
+              )}
               <h1>{selectedBook.title}</h1>
               <p className="detail-author">{selectedBook.author} · {selectedBook.edition}</p>
               <strong className="detail-price">{money(selectedBook.price)}</strong>
               <div className="detail-facts">
                 <div><small>書況</small><b>{selectedBook.condition}</b></div>
-                <div><small>授課老師</small><b>{selectedBook.teacher}</b></div>
+                {selectedBook.teacher && <div><small>授課老師</small><b>{selectedBook.teacher}</b></div>}
                 <div><small>面交地點</small><b>{selectedBook.meetup}</b></div>
-                <div><small>ISBN</small><b>{selectedBook.isbn || "未提供"}</b></div>
               </div>
               <div className="description"><h3>賣家說明</h3><p>{selectedBook.description}</p></div>
               <div className="seller-row">
@@ -508,7 +500,7 @@ export function MarketplaceApp() {
                 <div className="listing-row" key={book.id}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={book.imageUrl} alt="" />
-                  <div className="listing-main"><span className={`status ${book.status}`}>{statusLabels[book.status]}</span><h3>{book.title}</h3><p>{book.course} · {money(book.price)}</p></div>
+                  <div className="listing-main"><span className={`status ${book.status}`}>{statusLabels[book.status]}</span><h3>{book.title}</h3><p>{book.course ? `${book.course} · ` : ""}{money(book.price)}</p></div>
                   <div className="row-actions">
                     {book.status === "negotiating" && <button onClick={() => updateBookStatus(book.id, "sold")}><Check size={16} />完成交易</button>}
                     <button onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
@@ -555,7 +547,6 @@ export function MarketplaceApp() {
               {receivedRequests.length === 0 && <EmptyDashboard text="目前還沒有人送出購買意願" />}
             </div>
           )}
-          <button className="reset-demo" onClick={resetDemo}>重設示範資料</button>
         </section>
       )}
 
@@ -685,7 +676,7 @@ function LoginModal({
 
 function BookFormModal({ book, onClose, onSubmit }: { book: Book | null; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const value = book ?? blankBook;
-  return <ModalShell title={book ? "編輯刊登" : "刊登一本課本"} subtitle="資料越完整，學弟妹越容易找到它" onClose={onClose}><form onSubmit={onSubmit} className="form book-form"><label className="full">書名<input name="title" required defaultValue={value.title} placeholder="例如：資料結構：使用 C++" /></label><label>作者<input name="author" required defaultValue={value.author} /></label><label>ISBN<input name="isbn" defaultValue={value.isbn} /></label><label>科系<select name="department" defaultValue={value.department}>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label><label>課程<input name="course" required defaultValue={value.course} /></label><label>授課老師<input name="teacher" defaultValue={value.teacher} /></label><label>版本<input name="edition" defaultValue={value.edition} /></label><label>書況<select name="condition" defaultValue={value.condition}><option>近全新</option><option>書況良好</option><option>有筆記</option><option>使用痕跡明顯</option></select></label><label>價格（NT$）<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label><label className="full">面交地點<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label><label className="full">封面圖片網址<input name="imageUrl" type="url" defaultValue={value.imageUrl} placeholder="留空會使用預設圖片" /></label><label className="full">書況說明<textarea name="description" required rows={3} defaultValue={value.description} /></label><button className="primary wide full" type="submit">{book ? "儲存變更" : "確認刊登"}</button></form></ModalShell>;
+  return <ModalShell title={book ? "編輯刊登" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}><form onSubmit={onSubmit} className="form book-form"><label className="full">書名 *<input name="title" required defaultValue={value.title} placeholder="例如：資料結構：使用 C++" /></label><label>作者 *<input name="author" required defaultValue={value.author} /></label><label>版本 *<input name="edition" required defaultValue={value.edition} placeholder="例如：第 2 版" /></label><label>科系（選填）<select name="department" defaultValue={value.department}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label><label>課程（選填）<input name="course" defaultValue={value.course} /></label><label>授課老師（選填）<input name="teacher" defaultValue={value.teacher} /></label><label>書況 *<select name="condition" required defaultValue={value.condition}><option>近全新</option><option>書況良好</option><option>有筆記</option><option>使用痕跡明顯</option></select></label><label>價格（NT$）*<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label><label className="full">面交地點 *<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label><label className="full">封面圖片網址 *<input name="imageUrl" required type="url" defaultValue={value.imageUrl} placeholder="貼上書籍封面圖片網址" /></label><label className="full">書況說明 *<textarea name="description" required rows={3} defaultValue={value.description} /></label><button className="primary wide full" type="submit">{book ? "儲存變更" : "確認刊登"}</button></form></ModalShell>;
 }
 
 function RequestModal({ book, onClose, onSubmit }: { book: Book; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {

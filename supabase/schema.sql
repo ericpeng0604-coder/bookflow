@@ -17,9 +17,8 @@ create table public.books (
   seller_id uuid not null references public.profiles(id) on delete cascade,
   title text not null,
   author text not null,
-  isbn text not null default '',
-  department text not null,
-  course text not null,
+  department text not null default '',
+  course text not null default '',
   teacher text not null default '',
   edition text not null default '',
   condition text not null,
@@ -43,7 +42,7 @@ create table public.purchase_requests (
 );
 
 create index books_search_idx on public.books using gin (
-  to_tsvector('simple', title || ' ' || author || ' ' || course || ' ' || teacher || ' ' || isbn)
+  to_tsvector('simple', title || ' ' || author || ' ' || course || ' ' || teacher)
 );
 create index books_department_status_idx on public.books (department, status, created_at desc);
 create index requests_book_idx on public.purchase_requests (book_id, status);

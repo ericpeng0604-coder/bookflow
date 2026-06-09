@@ -13,7 +13,6 @@ export type Book = {
   sellerId: string;
   title: string;
   author: string;
-  isbn: string;
   department: string;
   course: string;
   teacher: string;
