@@ -117,7 +117,7 @@ function timeAgo(value: string) {
 
 function authErrorMessage(message: string, fallback: string) {
   const normalized = message.toLowerCase();
-  if (normalized.includes("invalid login credentials")) return "Email 或密碼錯誤；若你是舊版會員，請使用「舊會員建立密碼」";
+  if (normalized.includes("invalid login credentials")) return "Email 或密碼錯誤，請重新確認";
   if (normalized.includes("email not confirmed")) return "這個 Email 尚未完成驗證，請先完成註冊驗證";
   if (normalized.includes("user already registered") || normalized.includes("already been registered")) return "這個 Email 已經註冊，請直接登入";
   if (normalized.includes("password should be at least")) return "密碼至少需要 8 個字元";
@@ -369,15 +369,21 @@ export function MarketplaceApp() {
         .select("id,name,email,department,role,account_status,suspended_at,suspension_reason")
         .eq("id", user.id)
         .maybeSingle();
+      if (!storedProfile) {
+        await client.auth.signOut();
+        setStore((previous) => ({ ...previous, currentUser: null }));
+        await refreshMarketplace(null);
+        return;
+      }
       const googleProfile: Profile = {
         id: user.id,
         email: user.email,
-        name: storedProfile?.name || String(metadata.full_name || metadata.name || user.email.split("@")[0]),
-        department: storedProfile?.department || String(metadata.department || "未設定"),
-        role: (storedProfile?.role || "user") as UserRole,
-        accountStatus: (storedProfile?.account_status || "active") as Profile["accountStatus"],
-        suspendedAt: storedProfile?.suspended_at || null,
-        suspensionReason: storedProfile?.suspension_reason || "",
+        name: storedProfile.name || String(metadata.full_name || metadata.name || user.email.split("@")[0]),
+        department: storedProfile.department || String(metadata.department || "未設定"),
+        role: (storedProfile.role || "user") as UserRole,
+        accountStatus: (storedProfile.account_status || "active") as Profile["accountStatus"],
+        suspendedAt: storedProfile.suspended_at || null,
+        suspensionReason: storedProfile.suspension_reason || "",
       };
 
       setStore((previous) => ({
@@ -1460,7 +1466,6 @@ function LoginModal({
   onRequestReset: (email: string) => Promise<string | null>;
 }) {
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
-  const [resetReason, setResetReason] = useState<"legacy" | "forgot">("forgot");
   const [signupStep, setSignupStep] = useState<"form" | "code">("form");
   const [name, setName] = useState("");
   const [department, setDepartment] = useState("");
@@ -1582,14 +1587,9 @@ function LoginModal({
               <button className="primary wide" type="submit" disabled={loading || !configured}>
                 {loading ? "登入中..." : "登入"}
               </button>
-              <div className="auth-link-row">
-                <button className="text-button" type="button" onClick={() => { setResetReason("legacy"); setMode("forgot"); setError(""); }}>
-                  舊會員建立密碼
-                </button>
-                <button className="text-button" type="button" onClick={() => { setResetReason("forgot"); setMode("forgot"); setError(""); }}>
-                  忘記密碼？
-                </button>
-              </div>
+              <button className="text-button" type="button" onClick={() => { setMode("forgot"); setError(""); }}>
+                忘記密碼？
+              </button>
             </form>
           </>
         ) : mode === "signup" && signupStep === "form" ? (
@@ -1695,12 +1695,8 @@ function LoginModal({
           </>
         ) : (
           <>
-            <h3>{resetReason === "legacy" ? "舊會員建立密碼" : "重設密碼"}</h3>
-            <p>
-              {resetReason === "legacy"
-                ? "輸入舊版登入使用的 Email。我們會寄送建立密碼連結，原有會員資料、刊登與交易都會保留。"
-                : "輸入註冊 Email，我們會寄送密碼重設連結。"}
-            </p>
+            <h3>重設密碼</h3>
+            <p>輸入註冊 Email，我們會寄送密碼重設連結。</p>
             <form className="otp-form" onSubmit={submitForgotPassword}>
               <label>
                 Email
@@ -1716,7 +1712,7 @@ function LoginModal({
                 />
               </label>
               <button className="primary wide" type="submit" disabled={loading || !configured}>
-                {loading ? "寄送中..." : resetReason === "legacy" ? "寄送建立密碼連結" : "寄送密碼重設信"}
+                {loading ? "寄送中..." : "寄送密碼重設信"}
               </button>
               <button className="text-button" type="button" onClick={() => { setMode("login"); setError(""); }}>
                 返回登入
