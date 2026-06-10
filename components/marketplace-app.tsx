@@ -1595,7 +1595,7 @@ function LoginModal({
         ) : mode === "signup" && signupStep === "form" ? (
           <>
             <h3>建立新帳號</h3>
-            <p>填寫基本資料後，我們會寄送 8 位數驗證碼確認 Email。</p>
+            <p>填寫基本資料後，我們會寄送 6 位數驗證碼確認 Email。</p>
             <form className="otp-form auth-signup-form" onSubmit={submitSignup}>
               <label>
                 姓名
@@ -1661,7 +1661,7 @@ function LoginModal({
           </>
         ) : mode === "signup" ? (
           <>
-            <h3>輸入 8 位數驗證碼</h3>
+            <h3>輸入 6 位數驗證碼</h3>
             <p>驗證碼已寄到 <b>{email}</b>。沒有看到時，請檢查垃圾郵件。</p>
             <form className="otp-form" onSubmit={confirmCode}>
               <label>
@@ -1671,16 +1671,16 @@ function LoginModal({
                   className="otp-input"
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  pattern="[0-9]{8}"
-                  minLength={8}
-                  maxLength={8}
+                  pattern="[0-9]{6}"
+                  minLength={6}
+                  maxLength={6}
                   value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 8))}
-                  placeholder="輸入 8 位數字"
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="輸入 6 位數字"
                   required
                 />
               </label>
-              <button className="primary wide" type="submit" disabled={loading || code.length !== 8}>
+              <button className="primary wide" type="submit" disabled={loading || code.length !== 6}>
                 {loading ? "驗證中..." : "完成註冊"}
               </button>
               <div className="auth-link-row">
