@@ -208,6 +208,7 @@ export function MarketplaceApp() {
   const [toast, setToast] = useState("");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [contacts, setContacts] = useState<Record<string, TradeContact>>({});
   const [reports, setReports] = useState<Report[]>([]);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; label: string } | null>(null);
@@ -442,6 +443,26 @@ export function MarketplaceApp() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeMenu = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+    const closeOnDesktop = () => {
+      if (window.innerWidth > 980) setMobileMenuOpen(false);
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeMenu);
+    window.addEventListener("resize", closeOnDesktop);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeMenu);
+      window.removeEventListener("resize", closeOnDesktop);
+    };
+  }, [mobileMenuOpen]);
+
   async function dispatchEmailNotifications() {
     if (!supabase) return;
     const { data } = await supabase.auth.getSession();
@@ -570,6 +591,7 @@ export function MarketplaceApp() {
     setNotifications([]);
     setContacts({});
     setNotificationOpen(false);
+    setMobileMenuOpen(false);
     setView("home");
     setToast("已安全登出");
   }
@@ -1053,7 +1075,7 @@ export function MarketplaceApp() {
   return (
     <main>
       <header className="site-header">
-        <button className="brand" onClick={() => setView("home")} aria-label="回首頁">
+        <button className="brand" onClick={() => { setView("home"); setMobileMenuOpen(false); }} aria-label="回首頁">
           <span className="brand-mark"><BookOpen size={23} /></span>
           <span><b>虎科書流</b><small>HUST BOOKFLOW</small></span>
         </button>
@@ -1099,14 +1121,77 @@ export function MarketplaceApp() {
                   </div>
                 )}
               </div>
-              <button className="user-chip" onClick={() => setView("dashboard")}><UserRound size={17} />{currentUser.name}</button>
-              <button className="icon-button" title="登出" onClick={() => void logout()}><LogOut size={18} /></button>
+              <button className="user-chip desktop-account-action" onClick={() => setView("dashboard")}><UserRound size={17} />{currentUser.name}</button>
+              <button className="icon-button desktop-account-action" title="登出" onClick={() => void logout()}><LogOut size={18} /></button>
             </>
           ) : (
-            <button className="login-button" onClick={() => setModal("login")}><UserRound size={17} />登入 / 註冊</button>
+            <button className="login-button desktop-account-action" onClick={() => setModal("login")}><UserRound size={17} />登入 / 註冊</button>
           )}
-          <button className="mobile-menu"><Menu /></button>
+          <button
+            className={`mobile-menu ${mobileMenuOpen ? "active" : ""}`}
+            aria-label={mobileMenuOpen ? "關閉選單" : "開啟選單"}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-navigation"
+            onClick={() => {
+              setNotificationOpen(false);
+              setMobileMenuOpen((open) => !open);
+            }}
+          >
+            {mobileMenuOpen ? <X /> : <Menu />}
+          </button>
         </div>
+        {mobileMenuOpen && (
+          <div className="mobile-nav-backdrop" onClick={() => setMobileMenuOpen(false)}>
+            <div id="mobile-navigation" className="mobile-nav" onClick={(event) => event.stopPropagation()}>
+              <button
+                className={view === "home" ? "active" : ""}
+                onClick={() => { setView("home"); setMobileMenuOpen(false); }}
+              >
+                找課本
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  requireActive(() => { setEditingBook(null); setModal("bookForm"); });
+                }}
+              >
+                我要賣書
+              </button>
+              <button
+                className={view === "dashboard" ? "active" : ""}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  requireLogin(() => setView("dashboard"));
+                }}
+              >
+                我的交易
+              </button>
+              {isModerator && (
+                <button
+                  className={view === "admin" ? "active" : ""}
+                  onClick={() => { setView("admin"); setMobileMenuOpen(false); }}
+                >
+                  審核後台
+                </button>
+              )}
+              <div className="mobile-nav-separator" />
+              {currentUser ? (
+                <>
+                  <button onClick={() => { setView("dashboard"); setMobileMenuOpen(false); }}>
+                    <UserRound size={18} />會員中心
+                  </button>
+                  <button onClick={() => void logout()}>
+                    <LogOut size={18} />登出
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => { setModal("login"); setMobileMenuOpen(false); }}>
+                  <UserRound size={18} />登入 / 註冊
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {view === "home" && (

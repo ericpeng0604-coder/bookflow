@@ -50,6 +50,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .notification-empty { min-height: 150px; color: var(--muted); display: grid; place-items: center; align-content: center; gap: 8px; font-size: 12px; }
 .icon-button, .mobile-menu { border: 0; background: none; padding: 8px; cursor: pointer; }
 .mobile-menu { display: none; }
+.mobile-nav-backdrop { display: none; }
 .suspension-banner { max-width: 1120px; margin: 20px auto 0; padding: 13px 18px; border: 1px solid #e6b8ae; border-radius: 10px; background: #fff1ed; color: #8f3f35; display: flex; align-items: center; gap: 11px; }
 .suspension-banner div, .readonly-notice div { display: grid; gap: 2px; }
 .suspension-banner span, .readonly-notice span { font-size: 12px; }
@@ -273,7 +274,13 @@ footer { border-top: 1px solid var(--line); padding: 35px max(6vw, 28px); displa
 
 @media (max-width: 980px) {
   nav { display: none; }
-  .mobile-menu { display: block; }
+  .mobile-menu { display: grid; place-items: center; border-radius: 9px; }
+  .mobile-menu.active { color: var(--green); background: var(--mint); }
+  .mobile-nav-backdrop { position: fixed; z-index: 40; inset: 74px 0 0; display: block; background: rgba(14, 34, 30, .38); }
+  .mobile-nav { position: absolute; top: 0; right: 0; width: min(340px, calc(100vw - 32px)); padding: 13px; display: grid; gap: 5px; background: var(--paper); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 0 16px; box-shadow: 0 24px 50px rgba(17, 47, 40, .2); }
+  .mobile-nav button { width: 100%; min-height: 46px; padding: 10px 13px; border: 0; border-radius: 9px; display: flex; align-items: center; gap: 9px; background: transparent; font-weight: 700; text-align: left; cursor: pointer; }
+  .mobile-nav button:hover, .mobile-nav button.active { color: var(--green); background: var(--mint); }
+  .mobile-nav-separator { height: 1px; margin: 5px 4px; background: var(--line); }
   .hero { grid-template-columns: 1fr; padding-top: 55px; }
   .hero-art { display: none; }
   .book-grid { grid-template-columns: repeat(2, 1fr); }
@@ -289,6 +296,9 @@ footer { border-top: 1px solid var(--line); padding: 35px max(6vw, 28px); displa
   .site-header { height: 64px; padding: 0 17px; }
   .brand b { font-size: 17px; }
   .brand-mark { width: 35px; height: 35px; }
+  .desktop-account-action, .admin-shortcut { display: none; }
+  .mobile-nav-backdrop { top: 64px; }
+  .mobile-nav { width: 100%; border-left: 0; border-right: 0; border-radius: 0 0 14px 14px; }
   .login-button { padding: 8px 10px; font-size: 12px; }
   .user-chip { max-width: 110px; overflow: hidden; white-space: nowrap; }
   .notification-panel { position: fixed; top: 70px; left: 15px; right: 15px; width: auto; }
