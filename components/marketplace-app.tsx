@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   Bell,
+  Ban,
   BookOpen,
   Check,
   CheckCheck,
@@ -10,6 +11,8 @@ import {
   Clock3,
   GraduationCap,
   Heart,
+  EyeOff,
+  Flag,
   ImagePlus,
   LogOut,
   MapPin,
@@ -19,6 +22,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  RotateCcw,
   UserCog,
   SlidersHorizontal,
   Sparkles,
@@ -36,6 +40,9 @@ import type {
   NotificationType,
   Profile,
   PurchaseRequest,
+  Report,
+  ReportReason,
+  ReportTargetType,
   RequestStatus,
   ReviewStatus,
   TradeContact,
@@ -46,7 +53,7 @@ const STORAGE_KEY = "bookflow-market-v1";
 
 type View = "home" | "book" | "dashboard" | "admin";
 type DashboardTab = "listings" | "requests" | "received";
-type Modal = "login" | "bookForm" | "request" | null;
+type Modal = "login" | "resetPassword" | "bookForm" | "request" | "report" | null;
 
 type Store = {
   books: Book[];
@@ -74,7 +81,16 @@ const reviewLabels: Record<ReviewStatus, string> = {
   rejected: "已拒絕",
 };
 
-const blankBook: Omit<Book, "id" | "sellerId" | "createdAt" | "status" | "reviewStatus" | "reviewNote"> = {
+const reportReasonLabels: Record<ReportReason, string> = {
+  misleading: "資料不實",
+  fraud: "疑似詐騙",
+  duplicate: "重複刊登",
+  harassment: "騷擾",
+  no_show: "交易失約",
+  other: "其他",
+};
+
+const blankBook: Omit<Book, "id" | "sellerId" | "createdAt" | "status" | "reviewStatus" | "reviewNote" | "moderationVisibility"> = {
   title: "",
   author: "",
   department: "",
@@ -99,6 +115,20 @@ function timeAgo(value: string) {
   return `${days} 天前`;
 }
 
+function authErrorMessage(message: string, fallback: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("invalid login credentials")) return "Email 或密碼錯誤，請重新確認";
+  if (normalized.includes("email not confirmed")) return "這個 Email 尚未完成驗證，請先完成註冊驗證";
+  if (normalized.includes("user already registered") || normalized.includes("already been registered")) return "這個 Email 已經註冊，請直接登入";
+  if (normalized.includes("password should be at least")) return "密碼至少需要 8 個字元";
+  if (normalized.includes("signup is disabled")) return "目前暫停開放註冊";
+  if (normalized.includes("rate limit") || normalized.includes("security purposes")) return "操作次數過多，請稍後再試";
+  if (normalized.includes("expired") || normalized.includes("invalid token") || normalized.includes("token has expired")) {
+    return "驗證碼錯誤或已過期，請重新寄送";
+  }
+  return fallback;
+}
+
 function mapBook(row: Record<string, unknown>): Book {
   return {
     id: String(row.id),
@@ -117,6 +147,7 @@ function mapBook(row: Record<string, unknown>): Book {
     status: row.status as BookStatus,
     reviewStatus: (row.review_status || "pending") as ReviewStatus,
     reviewNote: String(row.review_note || ""),
+    moderationVisibility: String(row.moderation_visibility || "visible") as Book["moderationVisibility"],
     createdAt: String(row.created_at),
   };
 }
@@ -145,6 +176,24 @@ function mapNotification(row: Record<string, unknown>): Notification {
   };
 }
 
+function mapReport(row: Record<string, unknown>): Report {
+  return {
+    id: String(row.id),
+    reporterId: String(row.reporter_id),
+    reporterName: String(row.reporter_name || "使用者"),
+    targetType: row.target_type as ReportTargetType,
+    targetId: String(row.target_id),
+    targetName: String(row.target_name || "未知對象"),
+    bookId: row.book_id ? String(row.book_id) : null,
+    bookTitle: row.book_title ? String(row.book_title) : null,
+    reason: row.reason as ReportReason,
+    details: String(row.details || ""),
+    status: row.status as Report["status"],
+    resolutionNote: String(row.resolution_note || ""),
+    createdAt: String(row.created_at),
+  };
+}
+
 export function MarketplaceApp() {
   const [store, setStore] = useState<Store>({ books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null });
   const [ready, setReady] = useState(false);
@@ -160,6 +209,8 @@ export function MarketplaceApp() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [contacts, setContacts] = useState<Record<string, TradeContact>>({});
+  const [reports, setReports] = useState<Report[]>([]);
+  const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; label: string } | null>(null);
 
   async function refreshMarketplace(user: Profile | null = store.currentUser) {
     if (!supabase) return;
@@ -171,6 +222,7 @@ export function MarketplaceApp() {
       notificationResult,
       partyProfileResult,
       adminProfileResult,
+      reportsResult,
     ] = await Promise.all([
       client.from("books").select("*").order("created_at", { ascending: false }),
       client.rpc("get_public_profiles"),
@@ -185,6 +237,9 @@ export function MarketplaceApp() {
         : Promise.resolve({ data: null, error: null }),
       user?.role === "admin"
         ? client.rpc("list_profiles_for_admin")
+        : Promise.resolve({ data: null, error: null }),
+      user && ["admin", "moderator"].includes(user.role)
+        ? client.rpc("list_reports_for_moderation")
         : Promise.resolve({ data: null, error: null }),
     ]);
 
@@ -208,6 +263,14 @@ export function MarketplaceApp() {
       setToast(`讀取交易對象資料失敗：${partyProfileResult.error.message}`);
       return;
     }
+    if (adminProfileResult.error) {
+      setToast(`讀取會員管理資料失敗：${adminProfileResult.error.message}`);
+      return;
+    }
+    if (reportsResult.error) {
+      setToast(`讀取檢舉資料失敗：${reportsResult.error.message}`);
+      return;
+    }
 
     const publicProfiles: Profile[] = (publicProfileRows ?? []).map((row: Record<string, string>) => ({
       id: String(row.id),
@@ -215,6 +278,9 @@ export function MarketplaceApp() {
       email: "",
       department: String(row.department || ""),
       role: "user",
+      accountStatus: "active",
+      suspendedAt: null,
+      suspensionReason: "",
     }));
     const partyProfiles: Profile[] = (partyProfileResult.data ?? []).map((row: Record<string, string>) => ({
       id: String(row.id),
@@ -222,6 +288,9 @@ export function MarketplaceApp() {
       email: "",
       department: String(row.department || ""),
       role: "user",
+      accountStatus: "active",
+      suspendedAt: null,
+      suspensionReason: "",
     }));
     const adminProfiles: Profile[] = (adminProfileResult.data ?? []).map((row: Record<string, string>) => ({
       id: String(row.id),
@@ -229,6 +298,9 @@ export function MarketplaceApp() {
       email: String(row.email),
       department: String(row.department || ""),
       role: (row.role || "user") as UserRole,
+      accountStatus: (row.account_status || "active") as Profile["accountStatus"],
+      suspendedAt: row.suspended_at ? String(row.suspended_at) : null,
+      suspensionReason: String(row.suspension_reason || ""),
     }));
     const profileMap = new Map(publicProfiles.map((profile) => [profile.id, profile]));
     for (const profile of partyProfiles) profileMap.set(profile.id, profile);
@@ -265,6 +337,7 @@ export function MarketplaceApp() {
     }));
     setNotifications((notificationResult.data ?? []).map((row: Record<string, unknown>) => mapNotification(row)));
     setContacts(Object.fromEntries(contactEntries.filter((entry) => entry !== null)));
+    setReports((reportsResult.data ?? []).map((row: Record<string, unknown>) => mapReport(row)));
   }
 
   useEffect(() => {
@@ -293,7 +366,7 @@ export function MarketplaceApp() {
       const metadata = user.user_metadata ?? {};
       const { data: storedProfile } = await client
         .from("profiles")
-        .select("id,name,email,department,role")
+        .select("id,name,email,department,role,account_status,suspended_at,suspension_reason")
         .eq("id", user.id)
         .maybeSingle();
       const googleProfile: Profile = {
@@ -302,6 +375,9 @@ export function MarketplaceApp() {
         name: storedProfile?.name || String(metadata.full_name || metadata.name || user.email.split("@")[0]),
         department: storedProfile?.department || String(metadata.department || "未設定"),
         role: (storedProfile?.role || "user") as UserRole,
+        accountStatus: (storedProfile?.account_status || "active") as Profile["accountStatus"],
+        suspendedAt: storedProfile?.suspended_at || null,
+        suspensionReason: storedProfile?.suspension_reason || "",
       };
 
       setStore((previous) => ({
@@ -315,7 +391,8 @@ export function MarketplaceApp() {
     };
 
     void client.auth.getSession().then(({ data }) => void syncUser(data.session?.user ?? null));
-    const { data } = client.auth.onAuthStateChange((_event, session) => {
+    const { data } = client.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") setModal("resetPassword");
       window.setTimeout(() => void syncUser(session?.user ?? null), 0);
     });
 
@@ -372,6 +449,7 @@ export function MarketplaceApp() {
     const normalized = query.trim().toLowerCase();
     return store.books
       .filter((book) => book.reviewStatus === "approved")
+      .filter((book) => book.moderationVisibility === "visible")
       .filter((book) => book.status !== "sold")
       .filter((book) => department === "全部科系" || book.department === department)
       .filter((book) => maxPrice === "不限價格" || book.price <= Number(maxPrice))
@@ -404,35 +482,77 @@ export function MarketplaceApp() {
     action();
   }
 
-  async function sendEmailCode(email: string) {
-    if (!supabase) {
-      return "請先完成 Supabase Email 驗證設定";
-    }
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true,
-      },
+  function requireActive(action: () => void) {
+    requireLogin(() => {
+      if (currentUser?.accountStatus === "suspended") {
+        setToast("你的帳號目前為唯讀模式，無法進行這項操作");
+        return;
+      }
+      action();
     });
+  }
 
-    if (error) return error.message;
-    setToast("驗證碼已寄出，請檢查 Gmail 收件匣");
+  async function loginWithPassword(email: string, password: string) {
+    if (!supabase) return "請先完成 Supabase Email 驗證設定";
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return authErrorMessage(error.message, "登入失敗，請稍後再試");
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("account_status")
+      .eq("id", data.user.id)
+      .maybeSingle();
+    setModal(null);
+    setToast(profile?.account_status === "suspended" ? "已登入；你的帳號目前為唯讀模式" : "登入成功");
     return null;
   }
 
-  async function verifyEmailCode(email: string, token: string) {
+  async function signUpWithPassword(name: string, department: string, email: string, password: string) {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
-
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.signUp({
       email,
-      token,
-      type: "email",
+      password,
+      options: { data: { name, department } },
     });
+    if (error) return authErrorMessage(error.message, "註冊失敗，請稍後再試");
+    if (data.user?.identities?.length === 0) return "這個 Email 已經註冊，請直接登入";
+    setToast("註冊驗證碼已寄出，請檢查 Email 收件匣");
+    return null;
+  }
 
-    if (error) return "驗證碼錯誤或已過期，請重新確認";
+  async function verifySignupCode(email: string, token: string) {
+    if (!supabase) return "請先完成 Supabase Email 驗證設定";
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: "signup" });
+    if (error) return authErrorMessage(error.message, "驗證碼錯誤或已過期，請重新確認");
     setModal(null);
     setToast("Email 驗證成功，歡迎加入虎科書流");
+    return null;
+  }
+
+  async function resendSignupCode(email: string) {
+    if (!supabase) return "請先完成 Supabase Email 驗證設定";
+    const { error } = await supabase.auth.resend({ type: "signup", email });
+    if (error) return authErrorMessage(error.message, "重新寄送失敗，請稍後再試");
+    setToast("新的驗證碼已寄出");
+    return null;
+  }
+
+  async function requestPasswordReset(email: string) {
+    if (!supabase) return "請先完成 Supabase Email 驗證設定";
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    if (error) return authErrorMessage(error.message, "無法寄送重設信，請稍後再試");
+    setToast("密碼重設信已寄出，請檢查 Email 收件匣");
+    return null;
+  }
+
+  async function updatePassword(password: string) {
+    if (!supabase) return "請先完成 Supabase Email 驗證設定";
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return authErrorMessage(error.message, "無法更新密碼，請重新開啟重設連結");
+    setModal(null);
+    setToast("密碼已更新，之後可使用新密碼登入");
     return null;
   }
 
@@ -449,6 +569,10 @@ export function MarketplaceApp() {
   async function saveBook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!currentUser) return;
+    if (currentUser.accountStatus === "suspended") {
+      setToast("你的帳號目前為唯讀模式，不能刊登或修改商品");
+      return;
+    }
     const data = new FormData(event.currentTarget);
     const fields = Object.fromEntries(data.entries());
     const image = data.get("image");
@@ -546,6 +670,7 @@ export function MarketplaceApp() {
               status: "available",
               reviewStatus: "pending",
               reviewNote: "",
+              moderationVisibility: "visible",
               createdAt: new Date().toISOString(),
             },
             ...previous.books,
@@ -561,6 +686,10 @@ export function MarketplaceApp() {
   async function sendRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!currentUser || !selectedBook) return;
+    if (currentUser.accountStatus === "suspended") {
+      setToast("你的帳號目前為唯讀模式，不能送出購買意願");
+      return;
+    }
     const message = String(new FormData(event.currentTarget).get("message") || "").trim();
     const duplicate = store.requests.some(
       (request) =>
@@ -608,6 +737,10 @@ export function MarketplaceApp() {
   }
 
   async function respondToRequest(requestId: string, status: "accepted" | "rejected") {
+    if (currentUser?.accountStatus === "suspended") {
+      setToast("你的帳號目前為唯讀模式，不能操作交易");
+      return;
+    }
     const target = store.requests.find((request) => request.id === requestId);
     if (!target) return;
     if (supabase && currentUser) {
@@ -642,6 +775,10 @@ export function MarketplaceApp() {
 
   async function cancelRequest(requestId: string) {
     if (!currentUser) return;
+    if (currentUser.accountStatus === "suspended") {
+      setToast("你的帳號目前為唯讀模式，不能操作交易");
+      return;
+    }
     if (supabase) {
       const { error } = await supabase
         .from("purchase_requests")
@@ -665,6 +802,10 @@ export function MarketplaceApp() {
   }
 
   async function updateBookStatus(bookId: string, status: BookStatus) {
+    if (currentUser?.accountStatus === "suspended") {
+      setToast("你的帳號目前為唯讀模式，不能操作交易");
+      return;
+    }
     if (supabase && currentUser && status === "sold") {
       const { error } = await supabase.rpc("complete_trade", {
         target_book_id: bookId,
@@ -686,6 +827,10 @@ export function MarketplaceApp() {
   }
 
   function deleteBook(bookId: string) {
+    if (currentUser?.accountStatus === "suspended") {
+      setToast("你的帳號目前為唯讀模式，不能修改刊登");
+      return;
+    }
     if (supabase && currentUser) {
       void supabase.from("books").delete().eq("id", bookId).then(async ({ error }) => {
         if (error) {
@@ -740,6 +885,97 @@ export function MarketplaceApp() {
     setToast("管理權限已更新");
   }
 
+  async function submitReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !currentUser || !reportTarget) return;
+    if (currentUser.accountStatus === "suspended") {
+      setToast("你的帳號目前為唯讀模式，不能送出檢舉");
+      return;
+    }
+    const data = new FormData(event.currentTarget);
+    const { error } = await supabase.rpc("submit_report", {
+      report_target_type: reportTarget.type,
+      report_target_id: reportTarget.id,
+      report_reason: String(data.get("reason")),
+      report_details: String(data.get("details") || ""),
+    });
+    if (error) {
+      setToast(error.message.includes("pending report")
+        ? "你已對這個對象送出待處理檢舉"
+        : `送出檢舉失敗：${error.message}`);
+      return;
+    }
+    setModal(null);
+    setReportTarget(null);
+    setToast("檢舉已送交管理員審核");
+  }
+
+  function openReport(type: ReportTargetType, id: string, label: string) {
+    requireActive(() => {
+      if (id === currentUser?.id) {
+        setToast("不能檢舉自己");
+        return;
+      }
+      setReportTarget({ type, id, label });
+      setModal("report");
+    });
+  }
+
+  async function resolveReport(reportId: string, action: "dismiss" | "resolve" | "hide_book" | "suspend_user") {
+    if (!supabase || !currentUser) return;
+    const requiresReason = action === "hide_book" || action === "suspend_user";
+    const note = window.prompt(
+      requiresReason ? "請輸入處理原因（會顯示給受處分會員）" : "處理備註（可留空）",
+    );
+    if (note === null || (requiresReason && !note.trim())) return;
+    const { error } = await supabase.rpc("resolve_report", {
+      target_report_id: reportId,
+      resolution_action: action,
+      note: note.trim(),
+    });
+    if (error) {
+      setToast(`處理檢舉失敗：${error.message}`);
+      return;
+    }
+    await refreshMarketplace(currentUser);
+    setToast(action === "dismiss" ? "檢舉已駁回" : "檢舉已處理");
+  }
+
+  async function changeAccountStatus(userId: string, status: Profile["accountStatus"]) {
+    if (!supabase || !currentUser) return;
+    const reason = status === "suspended"
+      ? window.prompt("請輸入停權原因（會員仍可登入查看既有交易）")?.trim()
+      : "";
+    if (status === "suspended" && !reason) return;
+    if (status === "active" && !window.confirm("確定要解除這個帳號的停權嗎？")) return;
+    const { error } = await supabase.rpc("set_account_status", {
+      target_user_id: userId,
+      new_status: status,
+      reason: reason || "",
+    });
+    if (error) {
+      setToast(`更新帳號狀態失敗：${error.message}`);
+      return;
+    }
+    await refreshMarketplace(currentUser);
+    setToast(status === "active" ? "帳號已恢復使用" : "帳號已設為唯讀停權");
+  }
+
+  async function restoreBook(bookId: string) {
+    if (!supabase || !currentUser) return;
+    const { error } = await supabase.rpc("set_book_visibility", {
+      target_book_id: bookId,
+      new_visibility: "visible",
+      reason: "管理員恢復刊登",
+    });
+    if (error) {
+      setToast(`恢復刊登失敗：${error.message}`);
+      return;
+    }
+    await refreshMarketplace(currentUser);
+    setToast("刊登已恢復顯示");
+  }
+
   async function markNotificationRead(notificationId: string) {
     if (!supabase || !currentUser) return;
     const readAt = new Date().toISOString();
@@ -790,8 +1026,11 @@ export function MarketplaceApp() {
   const receivedRequests = currentUser
     ? store.requests.filter((request) => store.books.some((book) => book.id === request.bookId && book.sellerId === currentUser.id))
     : [];
-  const isModerator = currentUser?.role === "admin" || currentUser?.role === "moderator";
+  const isModerator = currentUser?.accountStatus === "active"
+    && (currentUser.role === "admin" || currentUser.role === "moderator");
   const pendingReviews = store.books.filter((book) => book.reviewStatus === "pending");
+  const pendingReports = reports.filter((report) => report.status === "pending");
+  const hiddenBooks = store.books.filter((book) => book.moderationVisibility === "hidden");
   const unreadNotifications = notifications.filter((notification) => !notification.readAt).length;
 
   return (
@@ -803,7 +1042,7 @@ export function MarketplaceApp() {
         </button>
         <nav>
           <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
-          <button onClick={() => requireLogin(() => { setEditingBook(null); setModal("bookForm"); })}>我要賣書</button>
+          <button onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}>我要賣書</button>
           <button onClick={() => requireLogin(() => setView("dashboard"))}>我的交易</button>
           {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
         </nav>
@@ -855,6 +1094,12 @@ export function MarketplaceApp() {
 
       {view === "home" && (
         <>
+          {currentUser?.accountStatus === "suspended" && (
+            <div className="suspension-banner">
+              <Ban size={18} />
+              <div><b>帳號目前為唯讀模式</b><span>{currentUser.suspensionReason || "請聯絡管理員了解停權原因。"}</span></div>
+            </div>
+          )}
           <section className="hero">
             <div className="hero-glow one" />
             <div className="hero-glow two" />
@@ -887,7 +1132,7 @@ export function MarketplaceApp() {
           <section className="market" id="market">
             <div className="section-heading">
               <div><span className="section-kicker">LATEST LISTINGS</span><h2>最近上架的課本</h2></div>
-              <button className="sell-cta" onClick={() => requireLogin(() => { setEditingBook(null); setModal("bookForm"); })}><Plus size={18} />刊登一本書</button>
+              <button className="sell-cta" disabled={currentUser?.accountStatus === "suspended"} onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}><Plus size={18} />刊登一本書</button>
             </div>
             <div className="filters">
               <label className="filter-search"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋課本..." /></label>
@@ -945,16 +1190,26 @@ export function MarketplaceApp() {
               <div className="seller-row">
                 <span className="avatar">{profile(selectedBook.sellerId)?.name.slice(0, 1)}</span>
                 <div><small>賣家</small><b>{profile(selectedBook.sellerId)?.name}</b><span>{profile(selectedBook.sellerId)?.department}</span></div>
+                {currentUser?.id !== selectedBook.sellerId && (
+                  <button className="report-link" onClick={() => openReport("user", selectedBook.sellerId, profile(selectedBook.sellerId)?.name || "賣家")}>
+                    <Flag size={14} />檢舉賣家
+                  </button>
+                )}
               </div>
               {currentUser?.id === selectedBook.sellerId ? (
-                <button className="primary wide" onClick={() => { setEditingBook(selectedBook); setModal("bookForm"); }}><Pencil size={18} />編輯我的刊登</button>
+                <button className="primary wide" disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(selectedBook); setModal("bookForm"); }}><Pencil size={18} />編輯我的刊登</button>
               ) : (
                 <button
                   className="primary wide"
-                  disabled={selectedBook.status !== "available"}
-                  onClick={() => requireLogin(() => setModal("request"))}
+                  disabled={selectedBook.status !== "available" || currentUser?.accountStatus === "suspended"}
+                  onClick={() => requireActive(() => setModal("request"))}
                 >
                   <MessageCircle size={18} />{selectedBook.status === "available" ? "我有興趣" : "目前洽談中"}
+                </button>
+              )}
+              {currentUser?.id !== selectedBook.sellerId && (
+                <button className="report-book-button" onClick={() => openReport("book", selectedBook.id, `《${selectedBook.title}》`)}>
+                  <Flag size={15} />檢舉這筆刊登
                 </button>
               )}
               <p className="safety-note"><ShieldCheck size={15} />為保護隱私，賣家接受購買意願後才會顯示雙方 Email。</p>
@@ -967,8 +1222,11 @@ export function MarketplaceApp() {
         <section className="dashboard">
           <div className="dashboard-head">
             <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
-            <button className="primary" onClick={() => { setEditingBook(null); setModal("bookForm"); }}><Plus size={18} />刊登課本</button>
+            <button className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}><Plus size={18} />刊登課本</button>
           </div>
+          {currentUser.accountStatus === "suspended" && (
+            <div className="readonly-notice"><Ban size={18} /><div><b>唯讀模式</b><span>{currentUser.suspensionReason || "你可以查看既有交易，但暫時不能新增或修改資料。"}</span></div></div>
+          )}
           <div className="dashboard-tabs">
             <button className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
             <button className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 <span>{myRequests.length}</span></button>
@@ -984,8 +1242,8 @@ export function MarketplaceApp() {
                   <div className="listing-main"><span className={`status ${book.status}`}>{statusLabels[book.status]}</span><h3>{book.title}</h3><p>{book.course ? `${book.course} · ` : ""}{money(book.price)}</p></div>
                   <div className="row-actions">
                     {book.status === "negotiating" && <button onClick={() => updateBookStatus(book.id, "sold")}><Check size={16} />完成交易</button>}
-                    <button onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
-                    <button className="danger" onClick={() => deleteBook(book.id)}><Trash2 size={16} />下架</button>
+                    <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
+                    <button disabled={currentUser.accountStatus === "suspended"} className="danger" onClick={() => deleteBook(book.id)}><Trash2 size={16} />下架</button>
                   </div>
                   <div className={`review-badge ${book.reviewStatus}`}>{reviewLabels[book.reviewStatus]}</div>
                   {book.reviewStatus === "rejected" && book.reviewNote && <p className="review-note">拒絕原因：{book.reviewNote}</p>}
@@ -1026,6 +1284,7 @@ export function MarketplaceApp() {
                     <span className="avatar">{buyer?.name.slice(0, 1)}</span>
                     <div className="request-main"><span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span><h3>{buyer?.name} 想買《{book.title}》</h3><p>「{request.message}」</p>{request.status === "accepted" && contact && <div className="contact-box"><Check size={16} />買家聯絡方式：<b>{contact.email}</b></div>}</div>
                     {request.status === "pending" && <div className="request-actions"><button className="accept" onClick={() => void respondToRequest(request.id, "accepted")}><Check size={16} />接受</button><button onClick={() => void respondToRequest(request.id, "rejected")}><X size={16} />婉拒</button></div>}
+                    {buyer && <button className="report-inline" onClick={() => openReport("user", buyer.id, buyer.name)}><Flag size={14} />檢舉買家</button>}
                   </div>
                 );
               })}
@@ -1040,11 +1299,33 @@ export function MarketplaceApp() {
           <div className="dashboard-head">
             <div>
               <span className="section-kicker">MODERATION</span>
-              <h1>刊登審核後台</h1>
-              <p>確認書籍內容與圖片後，決定是否公開上架。</p>
+              <h1>安全與審核後台</h1>
+              <p>處理檢舉、刊登審核、商品隱藏與會員權限。</p>
             </div>
-            <div className="admin-count">{pendingReviews.length} 筆待審核</div>
+            <div className="admin-count">{pendingReports.length + pendingReviews.length} 筆待處理</div>
           </div>
+
+          <h2 className="admin-section-title">待處理檢舉</h2>
+          <div className="reports-list">
+            {pendingReports.map((report) => (
+              <article className="report-card" key={report.id}>
+                <div className="report-card-head">
+                  <span className={`report-target ${report.targetType}`}><Flag size={14} />{report.targetType === "book" ? "商品檢舉" : "使用者檢舉"}</span>
+                  <time>{timeAgo(report.createdAt)}</time>
+                </div>
+                <h3>{report.targetName}</h3>
+                <p><b>{reportReasonLabels[report.reason]}</b>{report.details ? `：${report.details}` : ""}</p>
+                <small>檢舉人：{report.reporterName}</small>
+                <div className="report-actions">
+                  <button onClick={() => void resolveReport(report.id, "dismiss")}><X size={16} />駁回</button>
+                  <button onClick={() => void resolveReport(report.id, "resolve")}><Check size={16} />僅記錄並結案</button>
+                  {report.targetType === "book" && <button className="warn" onClick={() => void resolveReport(report.id, "hide_book")}><EyeOff size={16} />隱藏商品</button>}
+                  {currentUser.role === "admin" && <button className="danger" onClick={() => void resolveReport(report.id, "suspend_user")}><Ban size={16} />停權會員</button>}
+                </div>
+              </article>
+            ))}
+          </div>
+          {pendingReports.length === 0 && <EmptyDashboard text="目前沒有等待處理的檢舉" />}
 
           <h2 className="admin-section-title">待審核刊登</h2>
           <div className="moderation-grid">
@@ -1078,6 +1359,21 @@ export function MarketplaceApp() {
           </div>
           {pendingReviews.length === 0 && <EmptyDashboard text="目前沒有等待審核的書籍" />}
 
+          {hiddenBooks.length > 0 && (
+            <>
+              <h2 className="admin-section-title permissions-title">已隱藏商品</h2>
+              <div className="permissions-list">
+                {hiddenBooks.map((book) => (
+                  <div className="permission-row" key={book.id}>
+                    <span className="avatar"><EyeOff size={17} /></span>
+                    <div><b>{book.title}</b><small>賣家：{profile(book.sellerId)?.name || "使用者"}</small></div>
+                    <button className="restore-button" onClick={() => void restoreBook(book.id)}><RotateCcw size={15} />恢復顯示</button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           {currentUser.role === "admin" && (
             <>
               <h2 className="admin-section-title permissions-title">管理權限</h2>
@@ -1085,12 +1381,21 @@ export function MarketplaceApp() {
                 {store.profiles.map((user) => (
                   <div className="permission-row" key={user.id}>
                     <span className="avatar">{user.name.slice(0, 1)}</span>
-                    <div><b>{user.name}</b><small>{user.email}</small></div>
+                    <div>
+                      <b>{user.name}{user.accountStatus === "suspended" && <span className="suspended-tag">已停權</span>}</b>
+                      <small>{user.email}</small>
+                      {user.suspensionReason && <small className="suspension-reason">原因：{user.suspensionReason}</small>}
+                    </div>
                     <select value={user.role} disabled={user.id === currentUser.id} onChange={(event) => void changeRole(user.id, event.target.value as UserRole)}>
                       <option value="user">一般使用者</option>
                       <option value="moderator">審核員</option>
                       <option value="admin">管理員</option>
                     </select>
+                    {user.id !== currentUser.id && user.role !== "admin" && (
+                      user.accountStatus === "suspended"
+                        ? <button className="restore-button" onClick={() => void changeAccountStatus(user.id, "active")}><RotateCcw size={15} />解除停權</button>
+                        : <button className="suspend-button" onClick={() => void changeAccountStatus(user.id, "suspended")}><Ban size={15} />停權</button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1105,12 +1410,29 @@ export function MarketplaceApp() {
         <LoginModal
           configured={isSupabaseConfigured}
           onClose={() => setModal(null)}
-          onSendCode={sendEmailCode}
-          onVerifyCode={verifyEmailCode}
+          onLogin={loginWithPassword}
+          onSignUp={signUpWithPassword}
+          onVerifySignup={verifySignupCode}
+          onResendSignup={resendSignupCode}
+          onRequestReset={requestPasswordReset}
+        />
+      )}
+      {modal === "resetPassword" && (
+        <ResetPasswordModal
+          configured={isSupabaseConfigured}
+          onClose={() => setModal(null)}
+          onSubmit={updatePassword}
         />
       )}
       {modal === "bookForm" && <BookFormModal book={editingBook} onClose={() => { setModal(null); setEditingBook(null); }} onSubmit={saveBook} />}
       {modal === "request" && selectedBook && <RequestModal book={selectedBook} onClose={() => setModal(null)} onSubmit={sendRequest} />}
+      {modal === "report" && reportTarget && (
+        <ReportModal
+          target={reportTarget}
+          onClose={() => { setModal(null); setReportTarget(null); }}
+          onSubmit={submitReport}
+        />
+      )}
       {toast && <div className="toast"><Check size={17} />{toast}</div>}
     </main>
   );
@@ -1123,69 +1445,215 @@ function ModalShell({ title, subtitle, onClose, children }: { title: string; sub
 function LoginModal({
   configured,
   onClose,
-  onSendCode,
-  onVerifyCode,
+  onLogin,
+  onSignUp,
+  onVerifySignup,
+  onResendSignup,
+  onRequestReset,
 }: {
   configured: boolean;
   onClose: () => void;
-  onSendCode: (email: string) => Promise<string | null>;
-  onVerifyCode: (email: string, token: string) => Promise<string | null>;
+  onLogin: (email: string, password: string) => Promise<string | null>;
+  onSignUp: (name: string, department: string, email: string, password: string) => Promise<string | null>;
+  onVerifySignup: (email: string, token: string) => Promise<string | null>;
+  onResendSignup: (email: string) => Promise<string | null>;
+  onRequestReset: (email: string) => Promise<string | null>;
 }) {
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
+  const [signupStep, setSignupStep] = useState<"form" | "code">("form");
+  const [name, setName] = useState("");
+  const [department, setDepartment] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [code, setCode] = useState("");
-  const [step, setStep] = useState<"email" | "code">("email");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function requestCode(event: FormEvent<HTMLFormElement>) {
+  function switchMode(nextMode: "login" | "signup") {
+    setMode(nextMode);
+    setSignupStep("form");
+    setCode("");
+    setError("");
+  }
+
+  async function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError("");
-    const message = await onSendCode(email.trim());
+    const message = await onLogin(email.trim(), password);
     setLoading(false);
-    if (message) {
-      setError(message);
+    if (message) setError(message);
+  }
+
+  async function submitSignup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    if (name.trim().length > 60) {
+      setError("姓名不可超過 60 個字");
       return;
     }
-    setStep("code");
+    if (!department) {
+      setError("請選擇系所");
+      return;
+    }
+    if (password.length < 8) {
+      setError("密碼至少需要 8 個字元");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setError("兩次輸入的密碼不一致");
+      return;
+    }
+    setLoading(true);
+    const message = await onSignUp(name.trim(), department, email.trim(), password);
+    setLoading(false);
+    if (message) setError(message);
+    else setSignupStep("code");
   }
 
   async function confirmCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError("");
-    const message = await onVerifyCode(email.trim(), code.trim());
+    const message = await onVerifySignup(email.trim(), code.trim());
+    setLoading(false);
+    if (message) setError(message);
+  }
+
+  async function resendCode() {
+    setLoading(true);
+    setError("");
+    const message = await onResendSignup(email.trim());
+    setLoading(false);
+    if (message) setError(message);
+  }
+
+  async function submitForgotPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    const message = await onRequestReset(email.trim());
     setLoading(false);
     if (message) setError(message);
   }
 
   return (
-    <ModalShell title="加入虎科書流" subtitle="用 Email 驗證碼快速登入，不必記密碼" onClose={onClose}>
+    <ModalShell title="虎科書流會員" subtitle="登入既有帳號，或免費註冊新帳號" onClose={onClose}>
       <div className="email-login">
         <div className="auth-shield"><ShieldCheck size={24} /></div>
-        {step === "email" ? (
+        {mode !== "forgot" && signupStep === "form" && (
+          <div className="auth-tabs" role="tablist" aria-label="會員驗證方式">
+            <button className={mode === "login" ? "active" : ""} type="button" onClick={() => switchMode("login")}>登入</button>
+            <button className={mode === "signup" ? "active" : ""} type="button" onClick={() => switchMode("signup")}>註冊</button>
+          </div>
+        )}
+        {mode === "login" ? (
           <>
-            <h3>輸入你的 Gmail</h3>
-            <p>我們會寄送一組 8 位數驗證碼，確認這個 Email 由你本人使用。</p>
-            <form className="otp-form" onSubmit={requestCode}>
+            <h3>歡迎回來</h3>
+            <p>輸入註冊時使用的 Email 與密碼即可登入。</p>
+            <form className="otp-form" onSubmit={submitLogin}>
               <label>
                 Email
                 <input
                   autoFocus
                   type="email"
                   inputMode="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="yourname@gmail.com"
+                  placeholder="yourname@example.com"
+                  required
+                />
+              </label>
+              <label>
+                密碼
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  minLength={8}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="輸入密碼"
                   required
                 />
               </label>
               <button className="primary wide" type="submit" disabled={loading || !configured}>
-                {loading ? "寄送中..." : "寄送驗證碼"}
+                {loading ? "登入中..." : "登入"}
+              </button>
+              <button className="text-button" type="button" onClick={() => { setMode("forgot"); setError(""); }}>
+                忘記密碼？
               </button>
             </form>
           </>
-        ) : (
+        ) : mode === "signup" && signupStep === "form" ? (
+          <>
+            <h3>建立新帳號</h3>
+            <p>填寫基本資料後，我們會寄送 8 位數驗證碼確認 Email。</p>
+            <form className="otp-form auth-signup-form" onSubmit={submitSignup}>
+              <label>
+                姓名
+                <input
+                  autoFocus
+                  type="text"
+                  autoComplete="name"
+                  minLength={1}
+                  maxLength={60}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="輸入姓名"
+                  required
+                />
+              </label>
+              <label>
+                系所
+                <select value={department} onChange={(event) => setDepartment(event.target.value)} required>
+                  <option value="">請選擇系所</option>
+                  {departments.slice(1).map((item) => <option key={item}>{item}</option>)}
+                </select>
+              </label>
+              <label className="full">
+                Email
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="yourname@example.com"
+                  required
+                />
+              </label>
+              <label>
+                密碼
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="至少 8 個字元"
+                  required
+                />
+              </label>
+              <label>
+                確認密碼
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={passwordConfirm}
+                  onChange={(event) => setPasswordConfirm(event.target.value)}
+                  placeholder="再次輸入密碼"
+                  required
+                />
+              </label>
+              <button className="primary wide full" type="submit" disabled={loading || !configured}>
+                {loading ? "建立帳號中..." : "註冊並寄送驗證碼"}
+              </button>
+            </form>
+          </>
+        ) : mode === "signup" ? (
           <>
             <h3>輸入 8 位數驗證碼</h3>
             <p>驗證碼已寄到 <b>{email}</b>。沒有看到時，請檢查垃圾郵件。</p>
@@ -1207,17 +1675,119 @@ function LoginModal({
                 />
               </label>
               <button className="primary wide" type="submit" disabled={loading || code.length !== 8}>
-                {loading ? "驗證中..." : "確認並登入"}
+                {loading ? "驗證中..." : "完成註冊"}
               </button>
-              <button className="text-button" type="button" onClick={() => { setStep("email"); setCode(""); setError(""); }}>
-                更換 Email 或重新寄送
+              <div className="auth-link-row">
+                <button className="text-button" type="button" disabled={loading} onClick={() => { setSignupStep("form"); setCode(""); setError(""); }}>
+                  返回修改資料
+                </button>
+                <button className="text-button" type="button" disabled={loading} onClick={() => void resendCode()}>
+                  重新寄送驗證碼
+                </button>
+              </div>
+            </form>
+          </>
+        ) : (
+          <>
+            <h3>重設密碼</h3>
+            <p>輸入註冊 Email，我們會寄送密碼重設連結。</p>
+            <form className="otp-form" onSubmit={submitForgotPassword}>
+              <label>
+                Email
+                <input
+                  autoFocus
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="yourname@example.com"
+                  required
+                />
+              </label>
+              <button className="primary wide" type="submit" disabled={loading || !configured}>
+                {loading ? "寄送中..." : "寄送密碼重設信"}
+              </button>
+              <button className="text-button" type="button" onClick={() => { setMode("login"); setError(""); }}>
+                返回登入
               </button>
             </form>
           </>
         )}
         {error && <div className="auth-error">{error}</div>}
         {!configured && <div className="auth-warning">網站管理員尚未完成 Email 驗證設定，請先依照專案內的設定指南操作。</div>}
-        <small><ShieldCheck size={13} />虎科書流不會取得或儲存你的 Gmail 密碼。</small>
+        <small><ShieldCheck size={13} />密碼由 Supabase Auth 加密處理，網站不會讀取你的明碼密碼。</small>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ResetPasswordModal({
+  configured,
+  onClose,
+  onSubmit,
+}: {
+  configured: boolean;
+  onClose: () => void;
+  onSubmit: (password: string) => Promise<string | null>;
+}) {
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function savePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    if (password.length < 8) {
+      setError("密碼至少需要 8 個字元");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setError("兩次輸入的密碼不一致");
+      return;
+    }
+    setLoading(true);
+    const message = await onSubmit(password);
+    setLoading(false);
+    if (message) setError(message);
+  }
+
+  return (
+    <ModalShell title="設定新密碼" subtitle="完成後即可使用新密碼登入" onClose={onClose}>
+      <div className="email-login">
+        <div className="auth-shield"><ShieldCheck size={24} /></div>
+        <h3>建立新的登入密碼</h3>
+        <p>新密碼至少需要 8 個字元，並請再次輸入確認。</p>
+        <form className="otp-form" onSubmit={savePassword}>
+          <label>
+            新密碼
+            <input
+              autoFocus
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            確認新密碼
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              value={passwordConfirm}
+              onChange={(event) => setPasswordConfirm(event.target.value)}
+              required
+            />
+          </label>
+          <button className="primary wide" type="submit" disabled={loading || !configured}>
+            {loading ? "更新中..." : "更新密碼"}
+          </button>
+        </form>
+        {error && <div className="auth-error">{error}</div>}
       </div>
     </ModalShell>
   );
@@ -1238,6 +1808,42 @@ function BookFormModal({ book, onClose, onSubmit }: { book: Book | null; onClose
 
 function RequestModal({ book, onClose, onSubmit }: { book: Book; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   return <ModalShell title="送出購買意願" subtitle={`想購買《${book.title}》`} onClose={onClose}><form onSubmit={onSubmit} className="form"><div className="request-summary"><span>{book.condition}</span><b>{money(book.price)}</b><span><MapPin size={14} />{book.meetup}</span></div><label>給賣家的留言<textarea name="message" required rows={4} placeholder="介紹一下方便面交的時間，或想確認的書況..." /></label><button className="primary wide" type="submit"><MessageCircle size={17} />送出購買意願</button><p className="form-note">送出後不代表完成交易，請等待賣家接受。</p></form></ModalShell>;
+}
+
+function ReportModal({
+  target,
+  onClose,
+  onSubmit,
+}: {
+  target: { type: ReportTargetType; id: string; label: string };
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+}) {
+  return (
+    <ModalShell
+      title={target.type === "book" ? "檢舉刊登" : "檢舉使用者"}
+      subtitle={`檢舉對象：${target.label}`}
+      onClose={onClose}
+    >
+      <form onSubmit={onSubmit} className="form">
+        <label>
+          檢舉原因 *
+          <select name="reason" required defaultValue="">
+            <option value="" disabled>請選擇原因</option>
+            {Object.entries(reportReasonLabels).map(([value, label]) => (
+              <option value={value} key={value}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          補充說明
+          <textarea name="details" rows={5} maxLength={1000} placeholder="請提供管理員判斷所需的具體情況。" />
+        </label>
+        <button className="primary wide" type="submit"><Flag size={16} />送出檢舉</button>
+        <p className="form-note">檢舉不會自動下架或停權，會由管理員人工審核。</p>
+      </form>
+    </ModalShell>
+  );
 }
 
 function EmptyDashboard({ text }: { text: string }) {
