@@ -1,11 +1,14 @@
 export type BookStatus = "available" | "negotiating" | "sold";
 export type RequestStatus = "pending" | "accepted" | "rejected" | "cancelled";
+export type ReviewStatus = "pending" | "approved" | "rejected";
+export type UserRole = "user" | "moderator" | "admin";
 
 export type Profile = {
   id: string;
   name: string;
   email: string;
   department: string;
+  role: UserRole;
 };
 
 export type Book = {
@@ -23,6 +26,8 @@ export type Book = {
   meetup: string;
   description: string;
   status: BookStatus;
+  reviewStatus: ReviewStatus;
+  reviewNote: string;
   createdAt: string;
 };
 

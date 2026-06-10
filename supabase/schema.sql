@@ -9,6 +9,7 @@ create table public.profiles (
   name text not null check (char_length(name) between 1 and 60),
   email text not null,
   department text not null,
+  role text not null default 'user' check (role in ('user', 'moderator', 'admin')),
   created_at timestamptz not null default now()
 );
 
@@ -27,6 +28,10 @@ create table public.books (
   meetup text not null,
   description text not null default '',
   status public.book_status not null default 'available',
+  review_status text not null default 'pending' check (review_status in ('pending', 'approved', 'rejected')),
+  review_note text not null default '',
+  reviewed_at timestamptz,
+  reviewed_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

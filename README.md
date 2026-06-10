@@ -31,6 +31,23 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=你的-publishable-或-anon-key
 
 `schema.sql` 也會建立公開的 `book-images` Storage bucket 與安全規則。登入使用者只能上傳及管理自己資料夾內的圖片。
 
+## 啟用刊登審核後台
+
+先執行 `schema.sql`，再到 Supabase SQL Editor 執行：
+
+```text
+supabase/moderation.sql
+```
+
+這份 migration 會：
+
+- 新刊登預設為待審核，只有通過後才公開顯示。
+- 將 `ericpeng0604@gmail.com` 設為第一位管理員。
+- 建立安全的通過、拒絕與角色設定函式。
+- 讓管理員可將其他帳號設為審核員或管理員。
+
+使用者修改已通過的刊登後，該書會重新進入待審核狀態。
+
 ### 2. 啟用 Email OTP
 
 1. 開啟 Supabase Dashboard → Authentication → Providers → Email。

@@ -17,6 +17,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  UserCog,
   SlidersHorizontal,
   Sparkles,
   Trash2,
@@ -26,11 +27,11 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-data";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import type { Book, BookStatus, Profile, PurchaseRequest, RequestStatus } from "@/lib/types";
+import type { Book, BookStatus, Profile, PurchaseRequest, RequestStatus, ReviewStatus, UserRole } from "@/lib/types";
 
 const STORAGE_KEY = "bookflow-market-v1";
 
-type View = "home" | "book" | "dashboard";
+type View = "home" | "book" | "dashboard" | "admin";
 type DashboardTab = "listings" | "requests" | "received";
 type Modal = "login" | "bookForm" | "request" | null;
 
@@ -54,7 +55,13 @@ const requestLabels: Record<RequestStatus, string> = {
   cancelled: "已取消",
 };
 
-const blankBook: Omit<Book, "id" | "sellerId" | "createdAt" | "status"> = {
+const reviewLabels: Record<ReviewStatus, string> = {
+  pending: "待審核",
+  approved: "已通過",
+  rejected: "已拒絕",
+};
+
+const blankBook: Omit<Book, "id" | "sellerId" | "createdAt" | "status" | "reviewStatus" | "reviewNote"> = {
   title: "",
   author: "",
   department: "",
@@ -92,6 +99,28 @@ function timeAgo(value: string) {
   return `${days} 天前`;
 }
 
+function mapBook(row: Record<string, unknown>): Book {
+  return {
+    id: String(row.id),
+    sellerId: String(row.seller_id),
+    title: String(row.title),
+    author: String(row.author),
+    department: String(row.department || ""),
+    course: String(row.course || ""),
+    teacher: String(row.teacher || ""),
+    edition: String(row.edition || ""),
+    condition: String(row.condition),
+    price: Number(row.price),
+    imageUrl: String(row.image_url),
+    meetup: String(row.meetup),
+    description: String(row.description || ""),
+    status: row.status as BookStatus,
+    reviewStatus: (row.review_status || "pending") as ReviewStatus,
+    reviewNote: String(row.review_note || ""),
+    createdAt: String(row.created_at),
+  };
+}
+
 export function MarketplaceApp() {
   const [store, setStore] = useState<Store>({ books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null });
   const [ready, setReady] = useState(false);
@@ -105,30 +134,69 @@ export function MarketplaceApp() {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [toast, setToast] = useState("");
 
+  async function refreshMarketplace(user: Profile | null = store.currentUser) {
+    if (!supabase) return;
+    const [{ data: bookRows, error: booksError }, { data: profileRows }] = await Promise.all([
+      supabase.from("books").select("*").order("created_at", { ascending: false }),
+      user ? supabase.from("profiles").select("id,name,email,department,role") : Promise.resolve({ data: null }),
+    ]);
+
+    if (booksError) {
+      setToast(`讀取刊登失敗：${booksError.message}`);
+      return;
+    }
+
+    setStore((previous) => ({
+      ...previous,
+      books: (bookRows ?? []).map((row) => mapBook(row)),
+      profiles: profileRows
+        ? profileRows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            department: row.department,
+            role: (row.role || "user") as UserRole,
+          }))
+        : previous.profiles,
+      currentUser: user,
+    }));
+  }
+
   useEffect(() => {
     setStore(loadStore());
     setReady(true);
+    if (supabase) void refreshMarketplace(null);
+    // Initial remote load only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!ready || !supabase) return;
+    const client = supabase;
 
-    const syncUser = (user: {
+    const syncUser = async (user: {
       id: string;
       email?: string;
       user_metadata?: Record<string, unknown>;
     } | null) => {
       if (!user?.email) {
         setStore((previous) => ({ ...previous, currentUser: null }));
+        await refreshMarketplace(null);
         return;
       }
 
       const metadata = user.user_metadata ?? {};
+      const { data: storedProfile } = await client
+        .from("profiles")
+        .select("id,name,email,department,role")
+        .eq("id", user.id)
+        .maybeSingle();
       const googleProfile: Profile = {
         id: user.id,
         email: user.email,
-        name: String(metadata.full_name || metadata.name || user.email.split("@")[0]),
-        department: String(metadata.department || "未設定"),
+        name: storedProfile?.name || String(metadata.full_name || metadata.name || user.email.split("@")[0]),
+        department: storedProfile?.department || String(metadata.department || "未設定"),
+        role: (storedProfile?.role || "user") as UserRole,
       };
 
       setStore((previous) => ({
@@ -138,11 +206,12 @@ export function MarketplaceApp() {
           : [...previous.profiles, googleProfile],
         currentUser: googleProfile,
       }));
+      await refreshMarketplace(googleProfile);
     };
 
-    void supabase.auth.getSession().then(({ data }) => syncUser(data.session?.user ?? null));
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      syncUser(session?.user ?? null);
+    void client.auth.getSession().then(({ data }) => void syncUser(data.session?.user ?? null));
+    const { data } = client.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => void syncUser(session?.user ?? null), 0);
     });
 
     return () => data.subscription.unsubscribe();
@@ -161,6 +230,7 @@ export function MarketplaceApp() {
   const filteredBooks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return store.books
+      .filter((book) => book.reviewStatus === "approved")
       .filter((book) => book.status !== "sold")
       .filter((book) => department === "全部科系" || book.department === department)
       .filter((book) => maxPrice === "不限價格" || book.price <= Number(maxPrice))
@@ -287,6 +357,38 @@ export function MarketplaceApp() {
       description: String(fields.description),
     };
 
+    if (supabase) {
+      const dbPayload = {
+        seller_id: currentUser.id,
+        title: payload.title,
+        author: payload.author,
+        department: payload.department,
+        course: payload.course,
+        teacher: payload.teacher,
+        edition: payload.edition,
+        condition: payload.condition,
+        price: payload.price,
+        image_url: payload.imageUrl,
+        meetup: payload.meetup,
+        description: payload.description,
+      };
+      const { error } = editingBook
+        ? await supabase.from("books").update(dbPayload).eq("id", editingBook.id)
+        : await supabase.from("books").insert(dbPayload);
+
+      if (error) {
+        setToast(`刊登儲存失敗：${error.message}`);
+        return;
+      }
+      await refreshMarketplace(currentUser);
+      setEditingBook(null);
+      setModal(null);
+      setView("dashboard");
+      setDashboardTab("listings");
+      setToast(editingBook ? "修改已送回審核" : "刊登已送出，等待管理員審核");
+      return;
+    }
+
     setStore((previous) => ({
       ...previous,
       books: editingBook
@@ -297,6 +399,8 @@ export function MarketplaceApp() {
               id: crypto.randomUUID(),
               sellerId: currentUser.id,
               status: "available",
+              reviewStatus: "pending",
+              reviewNote: "",
               createdAt: new Date().toISOString(),
             },
             ...previous.books,
@@ -370,6 +474,17 @@ export function MarketplaceApp() {
   }
 
   function deleteBook(bookId: string) {
+    if (supabase && currentUser) {
+      void supabase.from("books").delete().eq("id", bookId).then(async ({ error }) => {
+        if (error) {
+          setToast(`下架失敗：${error.message}`);
+          return;
+        }
+        await refreshMarketplace(currentUser);
+        setToast("刊登已下架");
+      });
+      return;
+    }
     setStore((previous) => ({
       ...previous,
       books: previous.books.filter((book) => book.id !== bookId),
@@ -378,11 +493,47 @@ export function MarketplaceApp() {
     setToast("刊登已下架");
   }
 
+  async function reviewBook(bookId: string, decision: "approved" | "rejected") {
+    if (!supabase || !currentUser) return;
+    const note = decision === "rejected"
+      ? window.prompt("請輸入拒絕原因，賣家會看到這段說明：")?.trim()
+      : "";
+    if (decision === "rejected" && !note) return;
+
+    const { error } = await supabase.rpc("review_book", {
+      target_book_id: bookId,
+      decision,
+      note: note || "",
+    });
+    if (error) {
+      setToast(`審核失敗：${error.message}`);
+      return;
+    }
+    await refreshMarketplace(currentUser);
+    setToast(decision === "approved" ? "書籍已通過並公開上架" : "書籍已拒絕");
+  }
+
+  async function changeRole(userId: string, role: UserRole) {
+    if (!supabase || !currentUser) return;
+    const { error } = await supabase.rpc("set_user_role", {
+      target_user_id: userId,
+      new_role: role,
+    });
+    if (error) {
+      setToast(`權限更新失敗：${error.message}`);
+      return;
+    }
+    await refreshMarketplace(currentUser);
+    setToast("管理權限已更新");
+  }
+
   const myListings = currentUser ? store.books.filter((book) => book.sellerId === currentUser.id) : [];
   const myRequests = currentUser ? store.requests.filter((request) => request.buyerId === currentUser.id) : [];
   const receivedRequests = currentUser
     ? store.requests.filter((request) => store.books.some((book) => book.id === request.bookId && book.sellerId === currentUser.id))
     : [];
+  const isModerator = currentUser?.role === "admin" || currentUser?.role === "moderator";
+  const pendingReviews = store.books.filter((book) => book.reviewStatus === "pending");
 
   return (
     <main>
@@ -395,10 +546,12 @@ export function MarketplaceApp() {
           <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
           <button onClick={() => requireLogin(() => { setEditingBook(null); setModal("bookForm"); })}>我要賣書</button>
           <button onClick={() => requireLogin(() => setView("dashboard"))}>我的交易</button>
+          {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
         </nav>
         <div className="header-actions">
           {currentUser ? (
             <>
+              {isModerator && <button className="icon-button admin-shortcut" title="審核後台" onClick={() => setView("admin")}><UserCog size={18} /></button>}
               <button className="user-chip" onClick={() => setView("dashboard")}><UserRound size={17} />{currentUser.name}</button>
               <button className="icon-button" title="登出" onClick={() => void logout()}><LogOut size={18} /></button>
             </>
@@ -543,6 +696,8 @@ export function MarketplaceApp() {
                     <button onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
                     <button className="danger" onClick={() => deleteBook(book.id)}><Trash2 size={16} />下架</button>
                   </div>
+                  <div className={`review-badge ${book.reviewStatus}`}>{reviewLabels[book.reviewStatus]}</div>
+                  {book.reviewStatus === "rejected" && book.reviewNote && <p className="review-note">拒絕原因：{book.reviewNote}</p>}
                 </div>
               ))}
               {myListings.length === 0 && <EmptyDashboard text="你還沒有刊登任何課本" />}
@@ -583,6 +738,70 @@ export function MarketplaceApp() {
               })}
               {receivedRequests.length === 0 && <EmptyDashboard text="目前還沒有人送出購買意願" />}
             </div>
+          )}
+        </section>
+      )}
+
+      {view === "admin" && currentUser && isModerator && (
+        <section className="dashboard admin-page">
+          <div className="dashboard-head">
+            <div>
+              <span className="section-kicker">MODERATION</span>
+              <h1>刊登審核後台</h1>
+              <p>確認書籍內容與圖片後，決定是否公開上架。</p>
+            </div>
+            <div className="admin-count">{pendingReviews.length} 筆待審核</div>
+          </div>
+
+          <h2 className="admin-section-title">待審核刊登</h2>
+          <div className="moderation-grid">
+            {pendingReviews.map((book) => {
+              const seller = profile(book.sellerId);
+              return (
+                <article className="moderation-card" key={book.id}>
+                  <div className="moderation-image">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={book.imageUrl} alt={book.title} />
+                    <span className="review-badge pending">待審核</span>
+                  </div>
+                  <div className="moderation-body">
+                    <h3>{book.title}</h3>
+                    <p>{book.author} · {book.edition}</p>
+                    <dl>
+                      <div><dt>賣家</dt><dd>{seller?.name || "使用者"}<br /><small>{seller?.email}</small></dd></div>
+                      <div><dt>書況</dt><dd>{book.condition}</dd></div>
+                      <div><dt>價格</dt><dd>{money(book.price)}</dd></div>
+                      <div><dt>面交</dt><dd>{book.meetup}</dd></div>
+                    </dl>
+                    <div className="moderation-description">{book.description}</div>
+                    <div className="moderation-actions">
+                      <button className="accept" onClick={() => void reviewBook(book.id, "approved")}><Check size={17} />通過上架</button>
+                      <button className="reject" onClick={() => void reviewBook(book.id, "rejected")}><X size={17} />拒絕</button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          {pendingReviews.length === 0 && <EmptyDashboard text="目前沒有等待審核的書籍" />}
+
+          {currentUser.role === "admin" && (
+            <>
+              <h2 className="admin-section-title permissions-title">管理權限</h2>
+              <div className="permissions-list">
+                {store.profiles.map((user) => (
+                  <div className="permission-row" key={user.id}>
+                    <span className="avatar">{user.name.slice(0, 1)}</span>
+                    <div><b>{user.name}</b><small>{user.email}</small></div>
+                    <select value={user.role} disabled={user.id === currentUser.id} onChange={(event) => void changeRole(user.id, event.target.value as UserRole)}>
+                      <option value="user">一般使用者</option>
+                      <option value="moderator">審核員</option>
+                      <option value="admin">管理員</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </section>
       )}

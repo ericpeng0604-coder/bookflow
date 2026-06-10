@@ -143,6 +143,38 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .request-status.rejected, .request-status.cancelled { color: #8c9692; }
 .request-actions .accept { background: var(--green); color: white; border-color: var(--green); }
 .contact-box { display: inline-flex; gap: 6px; align-items: center; background: #edf7f2; color: var(--green); padding: 8px 10px; border-radius: 7px; margin-top: 10px; font-size: 12px; }
+.review-badge { display: inline-flex; border-radius: 20px; padding: 5px 9px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.review-badge.pending { color: #8a5a18; background: #fff0d4; }
+.review-badge.approved { color: var(--green); background: var(--mint); }
+.review-badge.rejected { color: #9a3f35; background: #fff0ed; }
+.review-note { flex-basis: 100%; margin: 0 0 0 98px; color: #9a3f35; background: #fff4f1; border-radius: 7px; padding: 8px 10px; font-size: 12px; }
+
+.admin-count { color: var(--green); background: var(--mint); padding: 9px 14px; border-radius: 20px; font-weight: 800; font-size: 13px; }
+.admin-section-title { font-size: 20px; margin: 0 0 18px; }
+.moderation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.moderation-card { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: white; display: grid; grid-template-columns: 180px 1fr; }
+.moderation-image { min-height: 310px; position: relative; background: var(--cream); }
+.moderation-image img { width: 100%; height: 100%; object-fit: cover; }
+.moderation-image .review-badge { position: absolute; top: 12px; left: 12px; }
+.moderation-body { padding: 18px; min-width: 0; }
+.moderation-body h3 { margin: 0 0 4px; }
+.moderation-body > p { margin: 0 0 14px; color: var(--muted); font-size: 12px; }
+.moderation-body dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }
+.moderation-body dl div { background: #f7f9f7; border-radius: 7px; padding: 8px; }
+.moderation-body dt { color: var(--muted); font-size: 10px; }
+.moderation-body dd { margin: 3px 0 0; font-size: 12px; font-weight: 700; word-break: break-word; }
+.moderation-body dd small { font-weight: 400; color: var(--muted); }
+.moderation-description { margin: 12px 0; padding: 10px; border-left: 3px solid var(--mint); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.moderation-actions { display: flex; gap: 8px; }
+.moderation-actions button { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 9px; display: flex; justify-content: center; align-items: center; gap: 5px; cursor: pointer; font-weight: 700; }
+.moderation-actions .accept { color: white; background: var(--green); border-color: var(--green); }
+.moderation-actions .reject { color: #9a3f35; background: white; }
+.permissions-title { margin-top: 52px; }
+.permissions-list { display: grid; gap: 9px; }
+.permission-row { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; background: white; }
+.permission-row > div { display: grid; flex: 1; }
+.permission-row small { color: var(--muted); }
+.permission-row select { border: 1px solid var(--line); border-radius: 7px; background: white; padding: 8px 10px; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(10, 26, 22, .58); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 22px; overflow-y: auto; }
 .modal { width: min(600px, 100%); max-height: calc(100vh - 44px); overflow-y: auto; background: var(--paper); border-radius: 17px; padding: 28px; position: relative; box-shadow: 0 28px 80px rgba(9, 34, 27, .3); }
@@ -198,6 +230,7 @@ footer { border-top: 1px solid var(--line); padding: 35px max(6vw, 28px); displa
   .filter-icon { display: none; }
   .detail-grid { gap: 30px; }
   .detail-image { height: 480px; }
+  .moderation-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
@@ -235,5 +268,10 @@ footer { border-top: 1px solid var(--line); padding: 35px max(6vw, 28px); displa
   .book-form { grid-template-columns: 1fr; }
   .form .full { grid-column: auto; }
   .modal { padding: 23px 18px; }
+  .moderation-card { grid-template-columns: 1fr; }
+  .moderation-image { min-height: 260px; max-height: 340px; }
+  .permission-row { flex-wrap: wrap; }
+  .permission-row select { width: 100%; }
+  .review-note { margin-left: 0; }
   footer { display: grid; gap: 16px; text-align: center; justify-items: center; }
 }
