@@ -2,8 +2,10 @@
 
 import {
   ArrowLeft,
+  Bell,
   BookOpen,
   Check,
+  CheckCheck,
   ChevronDown,
   Clock3,
   GraduationCap,
@@ -27,7 +29,18 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-data";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import type { Book, BookStatus, Profile, PurchaseRequest, RequestStatus, ReviewStatus, UserRole } from "@/lib/types";
+import type {
+  Book,
+  BookStatus,
+  Notification,
+  NotificationType,
+  Profile,
+  PurchaseRequest,
+  RequestStatus,
+  ReviewStatus,
+  TradeContact,
+  UserRole,
+} from "@/lib/types";
 
 const STORAGE_KEY = "bookflow-market-v1";
 
@@ -75,19 +88,6 @@ const blankBook: Omit<Book, "id" | "sellerId" | "createdAt" | "status" | "review
   description: "",
 };
 
-function loadStore(): Store {
-  if (typeof window === "undefined") {
-    return { books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null };
-  }
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (!saved) return { books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null };
-  try {
-    return JSON.parse(saved) as Store;
-  } catch {
-    return { books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null };
-  }
-}
-
 function money(value: number) {
   return new Intl.NumberFormat("zh-TW", { style: "currency", currency: "TWD", maximumFractionDigits: 0 }).format(value);
 }
@@ -121,6 +121,30 @@ function mapBook(row: Record<string, unknown>): Book {
   };
 }
 
+function mapRequest(row: Record<string, unknown>): PurchaseRequest {
+  return {
+    id: String(row.id),
+    bookId: String(row.book_id),
+    buyerId: String(row.buyer_id),
+    message: String(row.message),
+    status: row.status as RequestStatus,
+    createdAt: String(row.created_at),
+  };
+}
+
+function mapNotification(row: Record<string, unknown>): Notification {
+  return {
+    id: String(row.id),
+    type: row.type as NotificationType,
+    bookId: row.book_id ? String(row.book_id) : null,
+    requestId: row.request_id ? String(row.request_id) : null,
+    title: String(row.title),
+    message: String(row.message || ""),
+    readAt: row.read_at ? String(row.read_at) : null,
+    createdAt: String(row.created_at),
+  };
+}
+
 export function MarketplaceApp() {
   const [store, setStore] = useState<Store>({ books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null });
   const [ready, setReady] = useState(false);
@@ -133,37 +157,118 @@ export function MarketplaceApp() {
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>("listings");
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [toast, setToast] = useState("");
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [contacts, setContacts] = useState<Record<string, TradeContact>>({});
 
   async function refreshMarketplace(user: Profile | null = store.currentUser) {
     if (!supabase) return;
-    const [{ data: bookRows, error: booksError }, { data: profileRows }] = await Promise.all([
-      supabase.from("books").select("*").order("created_at", { ascending: false }),
-      user ? supabase.from("profiles").select("id,name,email,department,role") : Promise.resolve({ data: null }),
+    const client = supabase;
+    const [
+      { data: bookRows, error: booksError },
+      { data: publicProfileRows, error: profilesError },
+      requestResult,
+      notificationResult,
+      partyProfileResult,
+      adminProfileResult,
+    ] = await Promise.all([
+      client.from("books").select("*").order("created_at", { ascending: false }),
+      client.rpc("get_public_profiles"),
+      user
+        ? client.from("purchase_requests").select("*").order("created_at", { ascending: false })
+        : Promise.resolve({ data: null, error: null }),
+      user
+        ? client.from("notifications").select("*").order("created_at", { ascending: false }).limit(50)
+        : Promise.resolve({ data: null, error: null }),
+      user
+        ? client.rpc("get_request_party_profiles")
+        : Promise.resolve({ data: null, error: null }),
+      user?.role === "admin"
+        ? client.rpc("list_profiles_for_admin")
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     if (booksError) {
       setToast(`讀取刊登失敗：${booksError.message}`);
       return;
     }
+    if (profilesError) {
+      setToast(`讀取會員顯示資料失敗：${profilesError.message}`);
+      return;
+    }
+    if (requestResult.error) {
+      setToast(`讀取交易資料失敗：${requestResult.error.message}`);
+      return;
+    }
+    if (notificationResult.error) {
+      setToast(`讀取通知失敗：${notificationResult.error.message}`);
+      return;
+    }
+    if (partyProfileResult.error) {
+      setToast(`讀取交易對象資料失敗：${partyProfileResult.error.message}`);
+      return;
+    }
+
+    const publicProfiles: Profile[] = (publicProfileRows ?? []).map((row: Record<string, string>) => ({
+      id: String(row.id),
+      name: String(row.name),
+      email: "",
+      department: String(row.department || ""),
+      role: "user",
+    }));
+    const partyProfiles: Profile[] = (partyProfileResult.data ?? []).map((row: Record<string, string>) => ({
+      id: String(row.id),
+      name: String(row.name),
+      email: "",
+      department: String(row.department || ""),
+      role: "user",
+    }));
+    const adminProfiles: Profile[] = (adminProfileResult.data ?? []).map((row: Record<string, string>) => ({
+      id: String(row.id),
+      name: String(row.name),
+      email: String(row.email),
+      department: String(row.department || ""),
+      role: (row.role || "user") as UserRole,
+    }));
+    const profileMap = new Map(publicProfiles.map((profile) => [profile.id, profile]));
+    for (const profile of partyProfiles) profileMap.set(profile.id, profile);
+    for (const profile of adminProfiles) profileMap.set(profile.id, profile);
+    if (user) profileMap.set(user.id, user);
+
+    const requests = (requestResult.data ?? []).map((row: Record<string, unknown>) => mapRequest(row));
+    const acceptedRequests = requests.filter((request) => request.status === "accepted");
+    const contactEntries = user
+      ? await Promise.all(
+          acceptedRequests.map(async (request) => {
+            const { data } = await client.rpc("get_trade_contact", {
+              target_request_id: request.id,
+            });
+            const contact = data?.[0];
+            return contact
+              ? [request.id, {
+                  id: contact.id,
+                  name: contact.name,
+                  email: contact.email,
+                  department: contact.department,
+                } satisfies TradeContact] as const
+              : null;
+          }),
+        )
+      : [];
 
     setStore((previous) => ({
       ...previous,
       books: (bookRows ?? []).map((row) => mapBook(row)),
-      profiles: profileRows
-        ? profileRows.map((row) => ({
-            id: row.id,
-            name: row.name,
-            email: row.email,
-            department: row.department,
-            role: (row.role || "user") as UserRole,
-          }))
-        : previous.profiles,
+      requests,
+      profiles: [...profileMap.values()],
       currentUser: user,
     }));
+    setNotifications((notificationResult.data ?? []).map((row: Record<string, unknown>) => mapNotification(row)));
+    setContacts(Object.fromEntries(contactEntries.filter((entry) => entry !== null)));
   }
 
   useEffect(() => {
-    setStore(loadStore());
+    window.localStorage.removeItem(STORAGE_KEY);
     setReady(true);
     if (supabase) void refreshMarketplace(null);
     // Initial remote load only.
@@ -218,14 +323,50 @@ export function MarketplaceApp() {
   }, [ready]);
 
   useEffect(() => {
-    if (ready) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-  }, [store, ready]);
+    if (!supabase || !store.currentUser) return;
+    const client = supabase;
+    const user = store.currentUser;
+    const channel = client
+      .channel(`notifications:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        () => void refreshMarketplace(user),
+      )
+      .subscribe();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshMarketplace(user);
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      void client.removeChannel(channel);
+    };
+    // Refresh uses the latest remote state for this authenticated user.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.currentUser?.id]);
 
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 3000);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  async function dispatchEmailNotifications() {
+    if (!supabase) return;
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return;
+    await fetch("/api/notifications/email", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }).catch(() => undefined);
+  }
 
   const filteredBooks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -297,7 +438,10 @@ export function MarketplaceApp() {
 
   async function logout() {
     if (supabase) await supabase.auth.signOut();
-    setStore((previous) => ({ ...previous, currentUser: null }));
+    setStore((previous) => ({ ...previous, requests: [], currentUser: null }));
+    setNotifications([]);
+    setContacts({});
+    setNotificationOpen(false);
     setView("home");
     setToast("已安全登出");
   }
@@ -372,8 +516,9 @@ export function MarketplaceApp() {
         meetup: payload.meetup,
         description: payload.description,
       };
+      const { seller_id: _sellerId, ...updatePayload } = dbPayload;
       const { error } = editingBook
-        ? await supabase.from("books").update(dbPayload).eq("id", editingBook.id)
+        ? await supabase.from("books").update({ ...updatePayload, updated_at: new Date().toISOString() }).eq("id", editingBook.id)
         : await supabase.from("books").insert(dbPayload);
 
       if (error) {
@@ -413,10 +558,10 @@ export function MarketplaceApp() {
     setToast(editingBook ? "刊登內容已更新" : "書籍刊登成功");
   }
 
-  function sendRequest(event: FormEvent<HTMLFormElement>) {
+  async function sendRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!currentUser || !selectedBook) return;
-    const message = String(new FormData(event.currentTarget).get("message") || "");
+    const message = String(new FormData(event.currentTarget).get("message") || "").trim();
     const duplicate = store.requests.some(
       (request) =>
         request.bookId === selectedBook.id &&
@@ -426,6 +571,22 @@ export function MarketplaceApp() {
     if (duplicate) {
       setToast("你已送出過購買意願");
       setModal(null);
+      return;
+    }
+    if (supabase) {
+      const { error } = await supabase.from("purchase_requests").insert({
+        book_id: selectedBook.id,
+        buyer_id: currentUser.id,
+        message,
+      });
+      if (error) {
+        setToast(error.code === "23505" ? "你已送出過購買意願" : `送出失敗：${error.message}`);
+        return;
+      }
+      await refreshMarketplace(currentUser);
+      void dispatchEmailNotifications();
+      setModal(null);
+      setToast("購買意願已送出");
       return;
     }
     setStore((previous) => ({
@@ -446,9 +607,23 @@ export function MarketplaceApp() {
     setToast("購買意願已送出");
   }
 
-  function respondToRequest(requestId: string, status: "accepted" | "rejected") {
+  async function respondToRequest(requestId: string, status: "accepted" | "rejected") {
     const target = store.requests.find((request) => request.id === requestId);
     if (!target) return;
+    if (supabase && currentUser) {
+      const { error } = await supabase.rpc("respond_to_purchase_request", {
+        request_id: requestId,
+        response: status,
+      });
+      if (error) {
+        setToast(`回覆失敗：${error.message}`);
+        return;
+      }
+      await refreshMarketplace(currentUser);
+      void dispatchEmailNotifications();
+      setToast(status === "accepted" ? "已接受意願，雙方聯絡資訊已開放" : "已婉拒這筆意願");
+      return;
+    }
     setStore((previous) => ({
       ...previous,
       books: previous.books.map((book) =>
@@ -465,7 +640,44 @@ export function MarketplaceApp() {
     setToast(status === "accepted" ? "已接受意願，雙方聯絡資訊已開放" : "已婉拒這筆意願");
   }
 
-  function updateBookStatus(bookId: string, status: BookStatus) {
+  async function cancelRequest(requestId: string) {
+    if (!currentUser) return;
+    if (supabase) {
+      const { error } = await supabase
+        .from("purchase_requests")
+        .update({ status: "cancelled" })
+        .eq("id", requestId)
+        .eq("status", "pending");
+      if (error) {
+        setToast(`取消失敗：${error.message}`);
+        return;
+      }
+      await refreshMarketplace(currentUser);
+      setToast("購買意願已取消");
+      return;
+    }
+    setStore((previous) => ({
+      ...previous,
+      requests: previous.requests.map((request) =>
+        request.id === requestId ? { ...request, status: "cancelled" } : request,
+      ),
+    }));
+  }
+
+  async function updateBookStatus(bookId: string, status: BookStatus) {
+    if (supabase && currentUser && status === "sold") {
+      const { error } = await supabase.rpc("complete_trade", {
+        target_book_id: bookId,
+      });
+      if (error) {
+        setToast(`完成交易失敗：${error.message}`);
+        return;
+      }
+      await refreshMarketplace(currentUser);
+      void dispatchEmailNotifications();
+      setToast("已標示為售出");
+      return;
+    }
     setStore((previous) => ({
       ...previous,
       books: previous.books.map((book) => (book.id === bookId ? { ...book, status } : book)),
@@ -510,6 +722,7 @@ export function MarketplaceApp() {
       return;
     }
     await refreshMarketplace(currentUser);
+    void dispatchEmailNotifications();
     setToast(decision === "approved" ? "書籍已通過並公開上架" : "書籍已拒絕");
   }
 
@@ -527,6 +740,51 @@ export function MarketplaceApp() {
     setToast("管理權限已更新");
   }
 
+  async function markNotificationRead(notificationId: string) {
+    if (!supabase || !currentUser) return;
+    const readAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read_at: readAt })
+      .eq("id", notificationId);
+    if (error) {
+      setToast(`通知更新失敗：${error.message}`);
+      return;
+    }
+    setNotifications((previous) =>
+      previous.map((notification) =>
+        notification.id === notificationId ? { ...notification, readAt } : notification,
+      ),
+    );
+  }
+
+  async function markAllNotificationsRead() {
+    if (!supabase || !currentUser) return;
+    const readAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read_at: readAt })
+      .is("read_at", null);
+    if (error) {
+      setToast(`通知更新失敗：${error.message}`);
+      return;
+    }
+    setNotifications((previous) =>
+      previous.map((notification) => ({ ...notification, readAt: notification.readAt || readAt })),
+    );
+  }
+
+  function openNotification(notification: Notification) {
+    if (!notification.readAt) void markNotificationRead(notification.id);
+    setNotificationOpen(false);
+    if (notification.bookId) {
+      setSelectedId(notification.bookId);
+      setView("book");
+      return;
+    }
+    setView("dashboard");
+  }
+
   const myListings = currentUser ? store.books.filter((book) => book.sellerId === currentUser.id) : [];
   const myRequests = currentUser ? store.requests.filter((request) => request.buyerId === currentUser.id) : [];
   const receivedRequests = currentUser
@@ -534,6 +792,7 @@ export function MarketplaceApp() {
     : [];
   const isModerator = currentUser?.role === "admin" || currentUser?.role === "moderator";
   const pendingReviews = store.books.filter((book) => book.reviewStatus === "pending");
+  const unreadNotifications = notifications.filter((notification) => !notification.readAt).length;
 
   return (
     <main>
@@ -552,6 +811,38 @@ export function MarketplaceApp() {
           {currentUser ? (
             <>
               {isModerator && <button className="icon-button admin-shortcut" title="審核後台" onClick={() => setView("admin")}><UserCog size={18} /></button>}
+              <div className="notification-wrap">
+                <button
+                  className="icon-button notification-button"
+                  title="通知"
+                  aria-label={`通知，${unreadNotifications} 則未讀`}
+                  onClick={() => setNotificationOpen((open) => !open)}
+                >
+                  <Bell size={18} />
+                  {unreadNotifications > 0 && <span className="notification-count">{unreadNotifications > 9 ? "9+" : unreadNotifications}</span>}
+                </button>
+                {notificationOpen && (
+                  <div className="notification-panel">
+                    <div className="notification-head">
+                      <div><b>通知</b><span>{unreadNotifications} 則未讀</span></div>
+                      {unreadNotifications > 0 && <button onClick={() => void markAllNotificationsRead()}><CheckCheck size={15} />全部已讀</button>}
+                    </div>
+                    <div className="notification-list">
+                      {notifications.map((notification) => (
+                        <button
+                          className={`notification-item ${notification.readAt ? "" : "unread"}`}
+                          key={notification.id}
+                          onClick={() => openNotification(notification)}
+                        >
+                          <span className="notification-dot" />
+                          <span><b>{notification.title}</b><small>{notification.message}</small><time>{timeAgo(notification.createdAt)}</time></span>
+                        </button>
+                      ))}
+                      {notifications.length === 0 && <div className="notification-empty"><Bell size={24} /><span>目前沒有通知</span></div>}
+                    </div>
+                  </div>
+                )}
+              </div>
               <button className="user-chip" onClick={() => setView("dashboard")}><UserRound size={17} />{currentUser.name}</button>
               <button className="icon-button" title="登出" onClick={() => void logout()}><LogOut size={18} /></button>
             </>
@@ -708,12 +999,13 @@ export function MarketplaceApp() {
             <div className="dashboard-list">
               {myRequests.map((request) => {
                 const book = store.books.find((item) => item.id === request.bookId);
-                const seller = book ? profile(book.sellerId) : null;
+                const contact = contacts[request.id];
                 if (!book) return null;
                 return (
                   <div className="request-row" key={request.id}>
                     <div className="request-icon"><MessageCircle /></div>
-                    <div className="request-main"><span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span><h3>{book.title}</h3><p>「{request.message}」</p>{request.status === "accepted" && <div className="contact-box"><Check size={16} />賣家聯絡方式：<b>{seller?.email}</b></div>}</div>
+                    <div className="request-main"><span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span><h3>{book.title}</h3><p>「{request.message}」</p>{request.status === "accepted" && contact && <div className="contact-box"><Check size={16} />賣家聯絡方式：<b>{contact.email}</b></div>}</div>
+                    {request.status === "pending" && <div className="request-actions"><button onClick={() => void cancelRequest(request.id)}><X size={16} />取消意願</button></div>}
                     <small>{timeAgo(request.createdAt)}</small>
                   </div>
                 );
@@ -727,12 +1019,13 @@ export function MarketplaceApp() {
               {receivedRequests.map((request) => {
                 const book = store.books.find((item) => item.id === request.bookId);
                 const buyer = profile(request.buyerId);
+                const contact = contacts[request.id];
                 if (!book) return null;
                 return (
                   <div className="request-row" key={request.id}>
                     <span className="avatar">{buyer?.name.slice(0, 1)}</span>
-                    <div className="request-main"><span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span><h3>{buyer?.name} 想買《{book.title}》</h3><p>「{request.message}」</p>{request.status === "accepted" && <div className="contact-box"><Check size={16} />買家聯絡方式：<b>{buyer?.email}</b></div>}</div>
-                    {request.status === "pending" && <div className="request-actions"><button className="accept" onClick={() => respondToRequest(request.id, "accepted")}><Check size={16} />接受</button><button onClick={() => respondToRequest(request.id, "rejected")}><X size={16} />婉拒</button></div>}
+                    <div className="request-main"><span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span><h3>{buyer?.name} 想買《{book.title}》</h3><p>「{request.message}」</p>{request.status === "accepted" && contact && <div className="contact-box"><Check size={16} />買家聯絡方式：<b>{contact.email}</b></div>}</div>
+                    {request.status === "pending" && <div className="request-actions"><button className="accept" onClick={() => void respondToRequest(request.id, "accepted")}><Check size={16} />接受</button><button onClick={() => void respondToRequest(request.id, "rejected")}><X size={16} />婉拒</button></div>}
                   </div>
                 );
               })}

@@ -83,6 +83,9 @@ drop policy if exists "Books are publicly readable" on public.books;
 drop policy if exists "Users can create their own listings" on public.books;
 drop policy if exists "Sellers can update their own listings" on public.books;
 drop policy if exists "Sellers can delete their own listings" on public.books;
+drop policy if exists "Approved books are public and parties can review their records" on public.books;
+drop policy if exists "Users can create pending listings" on public.books;
+drop policy if exists "Sellers and moderators can delete listings" on public.books;
 
 create policy "Approved books are public and parties can review their records"
   on public.books for select

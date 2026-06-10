@@ -2,6 +2,13 @@ export type BookStatus = "available" | "negotiating" | "sold";
 export type RequestStatus = "pending" | "accepted" | "rejected" | "cancelled";
 export type ReviewStatus = "pending" | "approved" | "rejected";
 export type UserRole = "user" | "moderator" | "admin";
+export type NotificationType =
+  | "request_created"
+  | "request_accepted"
+  | "request_rejected"
+  | "trade_completed"
+  | "book_approved"
+  | "book_rejected";
 
 export type Profile = {
   id: string;
@@ -37,5 +44,23 @@ export type PurchaseRequest = {
   buyerId: string;
   message: string;
   status: RequestStatus;
+  createdAt: string;
+};
+
+export type TradeContact = {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+};
+
+export type Notification = {
+  id: string;
+  type: NotificationType;
+  bookId: string | null;
+  requestId: string | null;
+  title: string;
+  message: string;
+  readAt: string | null;
   createdAt: string;
 };

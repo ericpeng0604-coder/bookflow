@@ -30,6 +30,24 @@ nav button { border: 0; background: none; font-weight: 600; cursor: pointer; pos
 nav button.active:after { content: ""; position: absolute; height: 3px; background: var(--orange); left: 6px; right: 6px; bottom: 0; border-radius: 4px 4px 0 0; }
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .login-button, .user-chip { border: 1px solid var(--line); border-radius: 9px; background: white; padding: 9px 15px; display: flex; align-items: center; gap: 7px; font-weight: 600; cursor: pointer; }
+.notification-wrap { position: relative; }
+.notification-button { position: relative; }
+.notification-count { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 10px; display: grid; place-items: center; background: #db6849; color: white; border: 2px solid white; font-size: 9px; font-weight: 800; }
+.notification-panel { position: absolute; z-index: 45; top: calc(100% + 12px); right: 0; width: min(380px, calc(100vw - 30px)); background: white; border: 1px solid var(--line); border-radius: 13px; box-shadow: 0 22px 60px rgba(17, 47, 40, .2); overflow: hidden; }
+.notification-head { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.notification-head > div { display: flex; align-items: baseline; gap: 8px; }
+.notification-head span { color: var(--muted); font-size: 11px; }
+.notification-head button { border: 0; background: none; color: var(--green); display: flex; align-items: center; gap: 5px; font-size: 11px; cursor: pointer; }
+.notification-list { max-height: 410px; overflow-y: auto; }
+.notification-item { width: 100%; border: 0; border-bottom: 1px solid #edf1ee; background: white; padding: 13px 16px; display: grid; grid-template-columns: 8px 1fr; gap: 10px; text-align: left; cursor: pointer; }
+.notification-item:hover, .notification-item.unread { background: #f4faf7; }
+.notification-item > span:last-child { display: grid; gap: 4px; }
+.notification-item b { font-size: 13px; color: var(--ink); }
+.notification-item small { color: var(--muted); line-height: 1.45; }
+.notification-item time { color: #98a49f; font-size: 10px; }
+.notification-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; background: transparent; }
+.notification-item.unread .notification-dot { background: var(--orange); }
+.notification-empty { min-height: 150px; color: var(--muted); display: grid; place-items: center; align-content: center; gap: 8px; font-size: 12px; }
 .icon-button, .mobile-menu { border: 0; background: none; padding: 8px; cursor: pointer; }
 .mobile-menu { display: none; }
 
@@ -239,6 +257,7 @@ footer { border-top: 1px solid var(--line); padding: 35px max(6vw, 28px); displa
   .brand-mark { width: 35px; height: 35px; }
   .login-button { padding: 8px 10px; font-size: 12px; }
   .user-chip { max-width: 110px; overflow: hidden; white-space: nowrap; }
+  .notification-panel { position: fixed; top: 70px; left: 15px; right: 15px; width: auto; }
   .hero { min-height: 520px; padding: 55px 20px; }
   .hero h1 { font-size: 40px; }
   .hero-copy > p { font-size: 15px; }
