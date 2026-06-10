@@ -5,6 +5,10 @@ alter table public.profiles
   add column if not exists role text not null default 'user'
   check (role in ('user', 'moderator', 'admin'));
 
+-- Users may edit display fields only. Role changes must go through set_user_role().
+revoke update on table public.profiles from anon, authenticated;
+grant update (name, department) on table public.profiles to authenticated;
+
 insert into public.profiles (id, name, email, department, role)
 select
   users.id,
@@ -51,6 +55,7 @@ as $$
 $$;
 
 grant execute on function public.is_moderator() to anon, authenticated;
+revoke execute on function public.is_moderator() from public;
 
 create or replace function public.enforce_book_review()
 returns trigger
@@ -131,6 +136,7 @@ begin
 end;
 $$;
 
+revoke execute on function public.review_book(uuid, text, text) from public, anon;
 grant execute on function public.review_book(uuid, text, text) to authenticated;
 
 create or replace function public.set_user_role(
@@ -156,6 +162,7 @@ begin
 end;
 $$;
 
+revoke execute on function public.set_user_role(uuid, text) from public, anon;
 grant execute on function public.set_user_role(uuid, text) to authenticated;
 
 -- Bootstrap the first administrator.

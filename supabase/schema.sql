@@ -142,6 +142,7 @@ end;
 $$;
 
 grant execute on function public.respond_to_purchase_request(uuid, public.request_status) to authenticated;
+revoke execute on function public.respond_to_purchase_request(uuid, public.request_status) from public, anon;
 
 insert into storage.buckets (id, name, public)
 values ('book-images', 'book-images', true)
