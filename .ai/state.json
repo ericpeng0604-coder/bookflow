@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "project": "bookflow",
+  "owner": "none",
+  "status": "idle",
+  "taskId": "20260611-ai-collaboration",
+  "taskTitle": "建立 Codex 與 Cursor 共用交接系統",
+  "baseCommit": "6c76736b47f1fdfc8368ca179957e3764fa16a37",
+  "updatedAt": "2026-06-11T17:04:02+08:00",
+  "handoffFile": "AI_HANDOFF.md",
+  "historyFile": ".ai/history/2026-06-11-1655-ai-collaboration.md"
+}
