@@ -244,10 +244,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (
-    select 1 from public.profiles
-    where profiles.id = auth.uid() and profiles.role = 'admin'
-  ) then
+  if not public.is_verified_admin() then
     raise exception 'Admin permission required';
   end if;
 

@@ -40,6 +40,31 @@ update public.books
 set review_status = 'approved'
 where review_status = 'pending' and reviewed_at is null;
 
+do $setup$
+begin
+  if to_regprocedure('public.is_verified_admin()') is null then
+    execute $function$
+      create function public.is_verified_admin()
+      returns boolean
+      language sql
+      stable
+      security definer
+      set search_path = public
+      as $body$
+        select exists (
+          select 1 from public.profiles
+          where id = auth.uid()
+            and role = 'admin'
+        );
+      $body$
+    $function$;
+  end if;
+end
+$setup$;
+
+revoke execute on function public.is_verified_admin() from public;
+grant execute on function public.is_verified_admin() to anon, authenticated;
+
 create or replace function public.is_moderator()
 returns boolean
 language sql
@@ -50,8 +75,8 @@ as $$
   select exists (
     select 1
     from public.profiles
-    where id = auth.uid() and role in ('moderator', 'admin')
-  );
+    where id = auth.uid() and role = 'moderator'
+  ) or public.is_verified_admin();
 $$;
 
 grant execute on function public.is_moderator() to anon, authenticated;
@@ -151,10 +176,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'admin'
-  ) then
+  if not public.is_verified_admin() then
     raise exception 'Admin permission required';
   end if;
   if new_role not in ('user', 'moderator', 'admin') then

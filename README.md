@@ -66,6 +66,20 @@ supabase/reports-and-suspensions.sql
 
 停權會員仍可登入並查看既有交易，但不能刊登、修改商品或操作購買意願。
 
+## 啟用管理員登入驗證碼
+
+完成前述資料庫設定後，在 Supabase SQL Editor 執行：
+
+```text
+supabase/admin-login-verification.sql
+```
+
+管理員輸入正確密碼後，系統會透過 Supabase 寄送 8 位數 Email 驗證碼。伺服器會將驗證結果綁定到同一次密碼登入 session；每個新的登入 session 都必須重新驗證，單靠 Email 驗證碼不能繞過密碼取得管理員權限。未完成驗證時不能使用管理員或審核權限。
+
+部署環境必須設定 `SUPABASE_SERVICE_ROLE_KEY`。此金鑰只可放在 Vercel Environment Variables，絕對不能加入 `NEXT_PUBLIC_` 前綴或寫入前端程式。
+
+請在 Supabase Dashboard → Authentication → Email Templates → Magic Link 將範本改為顯示 `{{ .Token }}`，不要使用 `{{ .ConfirmationURL }}`。驗證碼長度與有效期限沿用 Authentication 的 OTP 設定。
+
 ### 2. 啟用 Email 註冊驗證
 
 1. 開啟 Supabase Dashboard → Authentication → Providers → Email。

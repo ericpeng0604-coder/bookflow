@@ -53,7 +53,7 @@ const STORAGE_KEY = "bookflow-market-v1";
 
 type View = "home" | "book" | "dashboard" | "admin";
 type DashboardTab = "listings" | "requests" | "received";
-type Modal = "login" | "resetPassword" | "bookForm" | "request" | "report" | null;
+type Modal = "login" | "adminOtp" | "resetPassword" | "bookForm" | "request" | "report" | null;
 
 type Store = {
   books: Book[];
@@ -113,6 +113,12 @@ function timeAgo(value: string) {
   if (days === 0) return "今天";
   if (days === 1) return "昨天";
   return `${days} 天前`;
+}
+
+function maskEmail(email: string) {
+  const [name, domain] = email.split("@");
+  if (!name || !domain) return email;
+  return `${name.slice(0, 2)}${"*".repeat(Math.max(2, name.length - 2))}@${domain}`;
 }
 
 function authErrorMessage(message: string, fallback: string) {
@@ -209,6 +215,7 @@ export function MarketplaceApp() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [adminOtpEmail, setAdminOtpEmail] = useState("");
   const [contacts, setContacts] = useState<Record<string, TradeContact>>({});
   const [reports, setReports] = useState<Report[]>([]);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; label: string } | null>(null);
@@ -389,6 +396,17 @@ export function MarketplaceApp() {
         suspensionReason: storedProfile.suspension_reason || "",
       };
 
+      if (googleProfile.role === "admin") {
+        const { data: isVerified } = await client.rpc("is_verified_admin");
+        if (!isVerified) {
+          setAdminOtpEmail(user.email);
+          setModal("adminOtp");
+          setStore((previous) => ({ ...previous, currentUser: null }));
+          await refreshMarketplace(null);
+          return;
+        }
+      }
+
       setStore((previous) => ({
         ...previous,
         profiles: previous.profiles.some((profile) => profile.id === googleProfile.id)
@@ -528,11 +546,59 @@ export function MarketplaceApp() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("account_status")
+      .select("role,account_status")
       .eq("id", data.user.id)
       .maybeSingle();
+    if (profile?.role === "admin") {
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser: false },
+      });
+      if (otpError) {
+        await supabase.auth.signOut();
+        return authErrorMessage(otpError.message, "無法寄送管理員驗證碼");
+      }
+      setAdminOtpEmail(email);
+      setModal("adminOtp");
+      setToast("管理員驗證碼已寄出");
+      return null;
+    }
     setModal(null);
     setToast(profile?.account_status === "suspended" ? "已登入；你的帳號目前為唯讀模式" : "登入成功");
+    return null;
+  }
+
+  async function verifyAdminOtp(code: string) {
+    if (!supabase) return "請先完成 Supabase Email 驗證設定";
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return "登入狀態已失效，請重新登入";
+
+    const response = await fetch("/api/auth/admin-otp/verify", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ code }),
+    });
+    const result = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) return result.error || "驗證碼錯誤或已過期";
+
+    setModal(null);
+    setToast("管理員身分驗證成功");
+    await supabase.auth.refreshSession();
+    return null;
+  }
+
+  async function resendAdminOtp() {
+    if (!supabase) return "請先完成 Supabase Email 驗證設定";
+    const { error } = await supabase.auth.signInWithOtp({
+      email: adminOtpEmail,
+      options: { shouldCreateUser: false },
+    });
+    if (error) return authErrorMessage(error.message, "重新寄送失敗，請稍後再試");
+    setToast("新的管理員驗證碼已寄出");
     return null;
   }
 
@@ -593,6 +659,7 @@ export function MarketplaceApp() {
     setContacts({});
     setNotificationOpen(false);
     setMobileMenuOpen(false);
+    setAdminOtpEmail("");
     setView("home");
     setToast("已安全登出");
   }
@@ -1525,6 +1592,14 @@ export function MarketplaceApp() {
           onRequestReset={requestPasswordReset}
         />
       )}
+      {modal === "adminOtp" && (
+        <AdminOtpModal
+          email={adminOtpEmail}
+          onClose={() => void logout()}
+          onVerify={verifyAdminOtp}
+          onResend={resendAdminOtp}
+        />
+      )}
       {modal === "resetPassword" && (
         <ResetPasswordModal
           configured={isSupabaseConfigured}
@@ -1548,6 +1623,76 @@ export function MarketplaceApp() {
 
 function ModalShell({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
   return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={onClose}><X /></button><div className="modal-heading"><span className="brand-mark"><BookOpen size={21} /></span><div><h2>{title}</h2><p>{subtitle}</p></div></div>{children}</div></div>;
+}
+
+function AdminOtpModal({
+  email,
+  onClose,
+  onVerify,
+  onResend,
+}: {
+  email: string;
+  onClose: () => void;
+  onVerify: (code: string) => Promise<string | null>;
+  onResend: () => Promise<string | null>;
+}) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    const message = await onVerify(code);
+    setLoading(false);
+    if (message) setError(message);
+  }
+
+  async function resend() {
+    setLoading(true);
+    setError("");
+    const message = await onResend();
+    setLoading(false);
+    if (message) setError(message);
+    else setCode("");
+  }
+
+  return (
+    <ModalShell title="管理員安全驗證" subtitle="高權限帳號需要完成第二階段驗證" onClose={onClose}>
+      <div className="email-login">
+        <div className="auth-shield"><ShieldCheck size={24} /></div>
+        <h3>輸入 8 位數驗證碼</h3>
+        <p>驗證碼已寄到 <b>{maskEmail(email)}</b>，請在有效期限內完成驗證。</p>
+        <form className="otp-form" onSubmit={submit}>
+          <label>
+            管理員驗證碼
+            <input
+              autoFocus
+              className="otp-input"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{8}"
+              minLength={8}
+              maxLength={8}
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 8))}
+              placeholder="輸入 8 位數字"
+              required
+            />
+          </label>
+          <button className="primary wide" type="submit" disabled={loading || code.length !== 8}>
+            {loading ? "驗證中..." : "完成安全驗證"}
+          </button>
+          <button className="text-button" type="button" disabled={loading} onClick={() => void resend()}>
+            重新寄送驗證碼
+          </button>
+        </form>
+        {error && <p className="auth-error">{error}</p>}
+        <div className="privacy-note"><ShieldCheck size={15} />關閉此視窗會立即登出，未驗證前無法使用管理權限。</div>
+      </div>
+    </ModalShell>
+  );
 }
 
 function LoginModal({

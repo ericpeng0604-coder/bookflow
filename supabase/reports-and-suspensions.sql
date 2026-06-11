@@ -71,12 +71,7 @@ grant select on table public.reports to authenticated;
 drop policy if exists "Admins read action logs" on public.admin_action_logs;
 create policy "Admins read action logs"
   on public.admin_action_logs for select to authenticated
-  using (
-    exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role = 'admin'
-    )
-  );
+  using (public.is_verified_admin());
 
 revoke insert, update, delete on table public.admin_action_logs from anon, authenticated;
 grant select on table public.admin_action_logs to authenticated;
@@ -97,6 +92,32 @@ $$;
 revoke execute on function public.is_active_user(uuid) from public;
 grant execute on function public.is_active_user(uuid) to anon, authenticated;
 
+do $setup$
+begin
+  if to_regprocedure('public.is_verified_admin()') is null then
+    execute $function$
+      create function public.is_verified_admin()
+      returns boolean
+      language sql
+      stable
+      security definer
+      set search_path = public
+      as $body$
+        select exists (
+          select 1 from public.profiles
+          where id = auth.uid()
+            and role = 'admin'
+            and account_status = 'active'
+        );
+      $body$
+    $function$;
+  end if;
+end
+$setup$;
+
+revoke execute on function public.is_verified_admin() from public;
+grant execute on function public.is_verified_admin() to anon, authenticated;
+
 create or replace function public.is_moderator()
 returns boolean
 language sql
@@ -108,9 +129,9 @@ as $$
     select 1
     from public.profiles
     where id = auth.uid()
-      and role in ('moderator', 'admin')
+      and role = 'moderator'
       and account_status = 'active'
-  );
+  ) or public.is_verified_admin();
 $$;
 
 revoke execute on function public.is_moderator() from public;
@@ -300,12 +321,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (
-    select 1 from public.profiles
-    where profiles.id = auth.uid()
-      and profiles.role = 'admin'
-      and profiles.account_status = 'active'
-  ) then
+  if not public.is_verified_admin() then
     raise exception 'Admin permission required';
   end if;
 
@@ -595,10 +611,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'admin' and account_status = 'active'
-  ) then
+  if not public.is_verified_admin() then
     raise exception 'Admin permission required';
   end if;
   if new_status not in ('active', 'suspended') then
@@ -664,10 +677,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'admin' and account_status = 'active'
-  ) then
+  if not public.is_verified_admin() then
     raise exception 'Admin permission required';
   end if;
   if new_role not in ('user', 'moderator', 'admin') then
