@@ -2,7 +2,7 @@
 
 ## 目前目標
 
-Codex 與 Cursor 共用同一份 GitHub 交接資料，切換 AI 時能延續工作而不遺漏決策與驗證結果。
+保護 `main` 必須經過 PR 與 AI 交接檢查，同時保留正式網站一鍵回復與自動保護流程的緊急推送能力。
 
 ## 重要背景與決策
 
@@ -11,6 +11,7 @@ Codex 與 Cursor 共用同一份 GitHub 交接資料，切換 AI 時能延續工
 - `.ai/state.json` 是狀態來源，本檔案是給人與 AI 閱讀的繁體中文摘要。
 - 不記錄完整對話、密碼、驗證碼、Token、私鑰或個人敏感資料。
 - 正式網站一鍵回復系統及其保護檔案不可因一般工作而修改。
+- 本次修改已取得使用者明確授權，救援流程改用 repository 專用 Deploy Key 推送。
 
 ## 已完成
 
@@ -18,10 +19,14 @@ Codex 與 Cursor 共用同一份 GitHub 交接資料，切換 AI 時能延續工
 - 建立 Codex 啟動／結束檢查 Hook。
 - 建立 Cursor 自動讀取規則。
 - 建立 GitHub PR 強制交接完整性檢查。
+- 建立 BookFlow 專用 Deploy Key，並將 GitHub Actions 內建 Token 權限降為唯讀。
+- 讓一鍵回復與救援保護 checkout 使用 `BOOKFLOW_RECOVERY_DEPLOY_KEY`。
 
 ## 剩餘工作
 
-- 在 GitHub 將 `AI 交接完整性` 設為 `main` 的必要檢查。
+- 將私鑰存入 GitHub Actions Secret、公鑰加入可寫入 Deploy Key。
+- 建立安全維護 PR 並以授權 trailer 合併。
+- 在 GitHub 將 `AI 交接完整性` 設為 `main` 的必要檢查，Deploy keys 為唯一 bypass。
 - 第一次在 Codex 開啟專案時，透過 `/hooks` 信任專案 Hook。
 
 ## 修改範圍
@@ -30,6 +35,8 @@ Codex 與 Cursor 共用同一份 GitHub 交接資料，切換 AI 時能延續工
 - `AI_HANDOFF.md`
 - `scripts/ai-collaboration.mjs`
 - `.github/workflows/check-ai-handoff.yml`
+- `.github/workflows/rollback-production.yml`
+- `.github/workflows/protect-rollback-workflow.yml`
 - `package.json`、`README.md`
 
 ## 驗證結果
@@ -38,19 +45,19 @@ Codex 與 Cursor 共用同一份 GitHub 交接資料，切換 AI 時能延續工
 - Codex 接手後，Cursor 重複接手會被拒絕；完成後可正常封存並解除占用。
 - CI 模擬確認程式修改缺少交接資料時失敗，補齊狀態、摘要與歷史後通過。
 - TypeScript `--noEmit` 與 Next.js production build 均通過。
+- Deploy Key 指紋：`SHA256:/oTpci98dJVDsi+1/1SDETk3bFcsxFs9P87UJbnBoXo`。
 
 ## 風險或阻礙
 
-- GitHub 規則設定屬於 repository 外部設定，必須在 GitHub 網站完成一次。
-- 2026-06-11 嘗試透過 Chrome 設定時，GitHub 規則頁連線逾時，尚未變更外部權限。
+- 在 Deploy Key、Actions Secret 與新工作流程版本都完成前，不可啟用強制 PR 規則。
 - 若 Codex 尚未信任專案 Hook，交接檔仍可手動讀取，但不會自動顯示。
 
 ## 下一個 AI 的操作
 
-1. 先執行 `npm run ai:status`。
-2. 確認沒有其他 AI 處於 `in_progress` 或 `blocked`。
-3. 執行 `npm run ai:claim -- codex "任務名稱"` 或 `npm run ai:claim -- cursor "任務名稱"`。
-4. 工作完成後更新本檔案，再執行交接或完成指令。
+1. 完成 GitHub Deploy Key 與 Actions Secret 設定。
+2. 合併安全維護 PR，確認保護 workflow 沒有回復授權變更。
+3. 建立 `main` ruleset：要求 PR、`AI 交接完整性`、禁止刪除及 force push。
+4. 只允許 Deploy keys 永久繞過規則。
 
 ## 最後基準 Commit
 

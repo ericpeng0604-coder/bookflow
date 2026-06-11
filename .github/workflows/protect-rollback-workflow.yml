@@ -8,7 +8,7 @@ on:
       - .github/workflows/rollback-production.yml
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: protect-production-rollback
@@ -26,6 +26,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          ssh-key: ${{ secrets.BOOKFLOW_RECOVERY_DEPLOY_KEY }}
 
       - name: 檢查是否為明確授權變更
         id: approval
@@ -85,4 +86,3 @@ jobs:
             echo ""
             echo "未授權的 \`.github/workflows/rollback-production.yml\` 變更已撤銷。"
           } >> "$GITHUB_STEP_SUMMARY"
-
