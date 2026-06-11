@@ -1,0 +1,224 @@
+name: 回復正式網站上一版本
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 我確認要將正式網站回復上一個程式版本
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  statuses: read
+
+concurrency:
+  group: production-rollback
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: 建立安全還原版本
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 確認還原操作
+        if: ${{ !inputs.confirm }}
+        run: |
+          echo "必須勾選確認選項才能回復正式網站。" >&2
+          exit 1
+
+      - name: 下載完整版本紀錄
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: 設定 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 找出要還原的版本
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          starting_sha="$(git rev-parse origin/main)"
+          mapfile -t previous_targets < <(
+            git log origin/main --format=%B |
+              sed -nE 's/^Rollback-Target: ([0-9a-f]{40})$/\1/p'
+          )
+
+          target_sha=""
+          while read -r candidate; do
+            message="$(git show -s --format=%B "$candidate")"
+
+            if grep -q '^Rollback-Ignore: true$' <<< "$message"; then
+              continue
+            fi
+
+            already_reverted=false
+            for previous_target in "${previous_targets[@]}"; do
+              if [[ "$candidate" == "$previous_target" ]]; then
+                already_reverted=true
+                break
+              fi
+            done
+            if [[ "$already_reverted" == true ]]; then
+              continue
+            fi
+
+            target_sha="$candidate"
+            break
+          done < <(git rev-list origin/main)
+
+          if [[ -z "$target_sha" ]]; then
+            echo "找不到可回復的程式版本。" >&2
+            exit 1
+          fi
+
+          target_subject="$(git show -s --format=%s "$target_sha")"
+          target_short="$(git rev-parse --short "$target_sha")"
+
+          {
+            echo "starting_sha=$starting_sha"
+            echo "target_sha=$target_sha"
+            echo "target_short=$target_short"
+            echo "target_subject=$target_subject"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## 準備回復版本"
+            echo ""
+            echo "- 執行前 main：\`$starting_sha\`"
+            echo "- 撤銷版本：\`$target_short\` $target_subject"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 套用還原內容
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+
+          parent_count="$(git show -s --format=%P "$TARGET_SHA" | wc -w)"
+          if [[ "$parent_count" -eq 0 ]]; then
+            echo "根提交無法使用一鍵還原。" >&2
+            exit 1
+          elif [[ "$parent_count" -gt 1 ]]; then
+            git revert -m 1 --no-commit "$TARGET_SHA"
+          else
+            git revert --no-commit "$TARGET_SHA"
+          fi
+
+          if git diff --cached --quiet; then
+            echo "此版本沒有可套用的還原內容，已停止。" >&2
+            exit 1
+          fi
+
+      - name: 安裝相依套件
+        run: npm ci
+
+      - name: TypeScript 檢查
+        run: npm exec tsc -- --noEmit
+
+      - name: 建立正式版本
+        run: npm run build
+
+      - name: 確認 main 未被其他更新取代
+        shell: bash
+        env:
+          STARTING_SHA: ${{ steps.target.outputs.starting_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          latest_sha="$(git rev-parse origin/main)"
+
+          if [[ "$latest_sha" != "$STARTING_SHA" ]]; then
+            echo "檢查期間 main 已有新版本，為避免覆蓋他人更新，本次還原已停止。" >&2
+            exit 1
+          fi
+
+      - name: 建立並推送還原提交
+        id: push
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.target_sha }}
+          TARGET_SHORT: ${{ steps.target.outputs.target_short }}
+          TARGET_SUBJECT: ${{ steps.target.outputs.target_subject }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "BookFlow Rollback"
+          git config user.email "actions@users.noreply.github.com"
+          git commit \
+            -m "Rollback $TARGET_SHORT: $TARGET_SUBJECT" \
+            -m "Rollback-Target: $TARGET_SHA" \
+            -m "Rollback-Ignore: true"
+
+          rollback_sha="$(git rev-parse HEAD)"
+          git push origin HEAD:main
+          echo "rollback_sha=$rollback_sha" >> "$GITHUB_OUTPUT"
+
+          {
+            echo ""
+            echo "## 已建立還原提交"
+            echo ""
+            echo "- 新提交：\`$rollback_sha\`"
+            echo "- Supabase 資料未修改"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 等待 Vercel 部署
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROLLBACK_SHA: ${{ steps.push.outputs.rollback_sha }}
+        run: |
+          set -euo pipefail
+
+          api_url="https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${ROLLBACK_SHA}/status"
+          deployment_state="missing"
+          deployment_url=""
+
+          for attempt in {1..60}; do
+            response="$(curl --fail --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$api_url")"
+
+            deployment_state="$(jq -r '
+              [.statuses[] | select(.context | ascii_downcase | contains("vercel"))][0].state // "missing"
+            ' <<< "$response")"
+            deployment_url="$(jq -r '
+              [.statuses[] | select(.context | ascii_downcase | contains("vercel"))][0].target_url // ""
+            ' <<< "$response")"
+
+            if [[ "$deployment_state" == "success" ]]; then
+              {
+                echo ""
+                echo "## 正式網站已回復"
+                echo ""
+                echo "- Vercel 部署：成功"
+                if [[ -n "$deployment_url" ]]; then
+                  echo "- [查看部署結果]($deployment_url)"
+                fi
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            if [[ "$deployment_state" == "failure" || "$deployment_state" == "error" ]]; then
+              echo "Vercel 部署失敗，請開啟部署紀錄查看原因：$deployment_url" >&2
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          echo "等待 Vercel 部署逾時，最後狀態：$deployment_state" >&2
+          exit 1
