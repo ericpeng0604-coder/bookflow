@@ -1,0 +1,88 @@
+name: 保護一鍵還原系統
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/rollback-production.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: protect-production-rollback
+  cancel-in-progress: false
+
+jobs:
+  protect:
+    name: 檢查救援工作流程變更
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 下載完整版本紀錄
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: 檢查是否為明確授權變更
+        id: approval
+        shell: bash
+        env:
+          PUSHED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          message="$(git show -s --format=%B "$PUSHED_SHA")"
+          if grep -qx 'Rollback-Workflow-Approved: true' <<< "$message"; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+            echo "此變更含有明確授權標記，保留新的救援工作流程。" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+            echo "偵測到未授權的救援工作流程變更，準備自動恢復上一份內容。" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 自動恢復受保護檔案
+        if: ${{ steps.approval.outputs.authorized != 'true' }}
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          PUSHED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$BEFORE_SHA" == "0000000000000000000000000000000000000000" ]]; then
+            echo "缺少可恢復的上一版本，已停止。" >&2
+            exit 1
+          fi
+
+          git fetch origin main
+          current_sha="$(git rev-parse origin/main)"
+          if [[ "$current_sha" != "$PUSHED_SHA" ]]; then
+            echo "main 已有更新，為避免覆蓋新變更，本次自動恢復已停止。" >&2
+            exit 1
+          fi
+
+          git checkout "$BEFORE_SHA" -- .github/workflows/rollback-production.yml
+          if git diff --cached --quiet; then
+            echo "受保護檔案已是原始內容，不需要恢復。" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git config user.name "BookFlow Recovery Guard"
+          git config user.email "actions@users.noreply.github.com"
+          git commit \
+            -m "Restore protected rollback workflow" \
+            -m "Rollback-Workflow-Approved: true" \
+            -m "Rollback-Ignore: true"
+          git push origin HEAD:main
+
+          {
+            echo ""
+            echo "## 已自動恢復"
+            echo ""
+            echo "未授權的 \`.github/workflows/rollback-production.yml\` 變更已撤銷。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
