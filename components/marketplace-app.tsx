@@ -222,6 +222,24 @@ export function MarketplaceApp() {
   const bookSavingRef = useRef(false);
   const [bookSaving, setBookSaving] = useState(false);
 
+  async function recoverAdminVerification(message: string, user: Profile | null) {
+    const permissionExpired = message.includes("Verified admin permission required")
+      || message.includes("Moderator permission required");
+    if (!permissionExpired || user?.role !== "admin" || !supabase) return false;
+
+    setAdminOtpEmail(user.email);
+    setStore((previous) => ({ ...previous, currentUser: null }));
+    setModal("adminOtp");
+    const { error } = await supabase.auth.signInWithOtp({
+      email: user.email,
+      options: { shouldCreateUser: false },
+    });
+    setToast(error
+      ? "管理員驗證已失效，請按「重新寄送驗證碼」後再試"
+      : "管理員驗證已失效，新的 8 位驗證碼已寄出");
+    return true;
+  }
+
   async function refreshMarketplace(user: Profile | null = store.currentUser) {
     if (!supabase) return;
     const client = supabase;
@@ -274,10 +292,12 @@ export function MarketplaceApp() {
       return;
     }
     if (adminProfileResult.error) {
+      if (await recoverAdminVerification(adminProfileResult.error.message, user)) return;
       setToast(`讀取會員管理資料失敗：${adminProfileResult.error.message}`);
       return;
     }
     if (reportsResult.error) {
+      if (await recoverAdminVerification(reportsResult.error.message, user)) return;
       setToast(`讀取檢舉資料失敗：${reportsResult.error.message}`);
       return;
     }
@@ -585,9 +605,8 @@ export function MarketplaceApp() {
     const result = await response.json().catch(() => ({})) as { error?: string };
     if (!response.ok) return result.error || "驗證碼錯誤或已過期";
 
-    setModal(null);
     setToast("管理員身分驗證成功");
-    await supabase.auth.refreshSession();
+    window.location.reload();
     return null;
   }
 
@@ -975,6 +994,7 @@ export function MarketplaceApp() {
       note: note || "",
     });
     if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
       setToast(`審核失敗：${error.message}`);
       return;
     }
@@ -990,6 +1010,7 @@ export function MarketplaceApp() {
       new_role: role,
     });
     if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
       setToast(`權限更新失敗：${error.message}`);
       return;
     }
@@ -1046,6 +1067,7 @@ export function MarketplaceApp() {
       note: note.trim(),
     });
     if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
       setToast(`處理檢舉失敗：${error.message}`);
       return;
     }
@@ -1066,6 +1088,7 @@ export function MarketplaceApp() {
       reason: reason || "",
     });
     if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
       setToast(`更新帳號狀態失敗：${error.message}`);
       return;
     }
@@ -1081,6 +1104,7 @@ export function MarketplaceApp() {
       reason: "管理員恢復刊登",
     });
     if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
       setToast(`恢復刊登失敗：${error.message}`);
       return;
     }
