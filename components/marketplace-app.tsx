@@ -538,6 +538,7 @@ export function MarketplaceApp() {
 
   async function signUpWithPassword(name: string, department: string, email: string, password: string) {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
+    if (!departments.slice(1).includes(department)) return "請從選單選擇正確的系所";
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -659,6 +660,11 @@ export function MarketplaceApp() {
         meetup: String(fields.meetup),
         description: String(fields.description),
       };
+
+      if (payload.department && !departments.slice(1).includes(payload.department)) {
+        setToast("請從選單選擇正確的科系");
+        return;
+      }
 
       if (supabase) {
         const dbPayload = {
@@ -1595,7 +1601,7 @@ function LoginModal({
       setError("姓名不可超過 60 個字");
       return;
     }
-    if (!department) {
+    if (!departments.slice(1).includes(department)) {
       setError("請選擇系所");
       return;
     }
