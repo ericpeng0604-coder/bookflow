@@ -147,3 +147,33 @@ Repository 的預設 Actions 權限維持唯讀。一鍵還原與救援監控工
 如果工作停在建置檢查，代表上一版無法正常建置，因此不會推送或影響正式網站。如果顯示 main 已有新版本，代表檢查期間有人更新程式；重新執行一次即可，系統不會覆蓋那次更新。
 
 目前原型不包含付款、物流、站內聊天或評價。
+
+## Codex 與 Cursor 工作交接
+
+專案使用 `AI_HANDOFF.md`、`.ai/state.json` 與 `.ai/history/`，讓 Codex 和 Cursor 在不同工作階段共用目前進度。一次只讓一個 AI 工作，切換前應先完成交接並把 PR 合併到 `main`。
+
+常用指令：
+
+```text
+npm run ai:status
+npm run ai:claim -- codex "任務名稱"
+npm run ai:claim -- cursor "任務名稱"
+npm run ai:handoff -- codex cursor
+npm run ai:handoff -- cursor codex
+npm run ai:complete -- codex
+npm run ai:check
+```
+
+第一次由 Codex 開啟本專案時，使用 `/hooks` 檢查並信任 `.codex/hooks.json`。Cursor 會透過 `.cursor/rules/ai-handoff.mdc` 自動讀取相同規則。
+
+GitHub 的 `main` 規則應要求 PR 通過 **AI 交接完整性**，並禁止一般直接推送與強制推送。為維持緊急救援功能，只讓 GitHub Actions 繞過該規則；不要讓一般管理員或 AI 使用的帳號繞過。
+
+第一次設定順序：
+
+1. 先將本功能透過 `ai/codex/任務名稱` 分支建立 PR，讓 GitHub 註冊 **AI 交接完整性** 檢查。
+2. 到 **Settings → Rules → Rulesets** 新增針對預設分支的規則。
+3. 啟用必須使用 PR、必須通過 **AI 交接完整性**、禁止 force push 與禁止刪除分支。
+4. 個人帳號不設定 bypass；若 bypass 清單可選 **GitHub Actions** GitHub App，將它設為 `Always allow`，讓正式網站救援工作流程仍能推送回復 commit。
+5. Codex 使用 `ai/codex/任務名稱`，Cursor 使用 `ai/cursor/任務名稱`；目前 PR 合併後，下一個 AI 才能接手。
+
+如果 bypass 清單沒有 GitHub Actions，先不要啟用「必須使用 PR」；否則現有一鍵回復工作流程會被擋住。需先另外為救援工作流程建立可被規則辨識的 GitHub App 或專用 deploy key，再啟用該規則。

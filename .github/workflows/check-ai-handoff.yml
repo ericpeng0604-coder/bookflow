@@ -1,0 +1,42 @@
+name: AI 交接完整性
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-handoff-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: AI 交接完整性
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 讀取程式碼
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 設定 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 驗證交接資料
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ai-collaboration.mjs check-ci "$BASE_SHA" "$HEAD_SHA"
+
+      - name: 手動檢查目前資料
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: node scripts/ai-collaboration.mjs check

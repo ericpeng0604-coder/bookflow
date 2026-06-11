@@ -1,0 +1,27 @@
+---
+description: BookFlow 的 Codex 與 Cursor 共用交接規則
+alwaysApply: true
+---
+
+# AI 交接規則
+
+開始任何工作前：
+
+1. 讀取 `.ai/state.json` 與 `AI_HANDOFF.md`。
+2. 執行 `npm run ai:status`。
+3. 若另一個 AI 的狀態為 `in_progress` 或 `blocked`，停止修改並告知使用者目前負責人。
+4. 尚未接手時，執行 `npm run ai:claim -- cursor "任務名稱"`。
+
+工作期間：
+
+- 一次只允許一個 AI 修改專案。
+- 不得把完整聊天、密碼、OTP、Token、私鑰、環境變數值或個資寫入交接檔。
+- 不得在一般任務修改正式網站回復工作流程、保護工作流程、CODEOWNERS 或 `AGENTS.md`。
+- 保持 `AI_HANDOFF.md` 的各必要章節完整，記錄實際完成內容及驗證結果。
+
+工作結束：
+
+- 交給 Codex：更新 `AI_HANDOFF.md`，執行 `npm run ai:handoff -- cursor codex`。
+- 任務完成：更新 `AI_HANDOFF.md`，執行 `npm run ai:complete -- cursor`。
+- 確認 `npm run ai:check` 通過後才可提交或建立 PR。
+- 切換 AI 前，先將目前 PR 合併至 `main`，讓下一個 AI 從最新 `main` 開始。

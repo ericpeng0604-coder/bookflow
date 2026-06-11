@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/ai-collaboration.mjs\" hook-start",
+            "commandWindows": "powershell.exe -NoProfile -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root 'scripts/ai-collaboration.mjs') hook-start\"",
+            "timeout": 15,
+            "statusMessage": "載入 BookFlow AI 交接狀態"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/ai-collaboration.mjs\" hook-stop",
+            "commandWindows": "powershell.exe -NoProfile -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root 'scripts/ai-collaboration.mjs') hook-stop\"",
+            "timeout": 15,
+            "statusMessage": "檢查 BookFlow AI 交接狀態"
+          }
+        ]
+      }
+    ]
+  }
+}
