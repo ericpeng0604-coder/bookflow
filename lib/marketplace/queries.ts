@@ -94,7 +94,28 @@ export async function fetchPublicProfiles(client: SupabaseClient) {
 export async function fetchMyBooks(client: SupabaseClient) {
   const { data, error } = await client.rpc("list_my_books");
   if (error) throw error;
-  return (data ?? []).map((row: Record<string, unknown>) => mapBook(row));
+  const books: Book[] = (data ?? []).map((row: Record<string, unknown>) => mapBook(row));
+  if (books.length === 0) return books;
+
+  const { data: preferences, error: preferenceError } = await client
+    .from("book_contact_preferences")
+    .select("book_id,method,value")
+    .in("book_id", books.map((book) => book.id));
+  if (preferenceError) {
+    if (["PGRST205", "42P01"].includes(preferenceError.code || "")) return books;
+    throw preferenceError;
+  }
+
+  const preferenceMap = new Map(
+    (preferences ?? []).map((row) => [
+      String(row.book_id),
+      {
+        contactMethod: String(row.method || "none") as Book["contactMethod"],
+        contactValue: String(row.value || ""),
+      },
+    ]),
+  );
+  return books.map((book) => ({ ...book, ...preferenceMap.get(book.id) }));
 }
 
 export async function fetchPendingReviews(client: SupabaseClient) {
@@ -166,6 +187,9 @@ export async function fetchTradeContactsBatch(client: SupabaseClient, requestIds
 
   const contacts: Record<string, TradeContact> = {};
   for (const row of data ?? []) {
+    if (!["email", "line"].includes(String(row.method)) || !String(row.value || "").trim()) {
+      continue;
+    }
     contacts[String(row.request_id)] = mapTradeContact(row);
   }
   return contacts;

@@ -13,6 +13,7 @@
     "ai:complete": "node scripts/ai-collaboration.mjs complete",
     "ai:block": "node scripts/ai-collaboration.mjs block",
     "ai:check": "node scripts/ai-collaboration.mjs check",
+    "setup:check": "node scripts/setup-health-check.mjs",
     "load-test:marketplace": "node scripts/load-test-marketplace.mjs",
     "check:filters": "node scripts/check-filters.mjs"
   },

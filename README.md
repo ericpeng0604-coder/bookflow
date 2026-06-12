@@ -1,5 +1,24 @@
 # 虎科書流
 
+## 一鍵 setup health check
+
+在專案根目錄執行：
+
+```text
+npm run setup:check
+```
+
+它會檢查 Supabase、Resend、管理員 OTP、通知 Email 的環境變數與必要
+migration，並以唯讀請求探測 Supabase/Resend 是否可用；不會寄信或建立
+OTP。若只想檢查本機檔案與設定，可執行：
+
+```text
+npm run setup:check -- --no-network
+```
+
+輸出中的 `FAIL` 必須修正，`WARN` 是啟用相關功能前要補的設定，`TODO`
+則是必須到 Supabase Dashboard 人工確認的 Auth redirect 與 Email Template。
+
 單一校園使用的二手課本交易原型，以 Next.js、TypeScript 與 Supabase 製作。
 
 ## 開啟網站
