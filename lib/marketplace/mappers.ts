@@ -11,6 +11,7 @@ import type {
   RequestStatus,
   ReviewStatus,
   TradeContact,
+  ContactMethod,
   UserRole,
 } from "@/lib/types";
 
@@ -29,6 +30,8 @@ export function mapBook(row: Record<string, unknown>): Book {
     imageUrl: String(row.image_url),
     meetup: String(row.meetup),
     description: String(row.description || ""),
+    contactMethod: String(row.contact_method || "none") as ContactMethod,
+    contactValue: String(row.contact_value || ""),
     status: row.status as BookStatus,
     reviewStatus: (row.review_status || "pending") as ReviewStatus,
     reviewNote: String(row.review_note || ""),
@@ -113,7 +116,8 @@ export function mapTradeContact(row: Record<string, unknown>): TradeContact {
   return {
     id: String(row.id),
     name: String(row.name),
-    email: String(row.email),
+    method: String(row.method) as TradeContact["method"],
+    value: String(row.value),
     department: String(row.department),
   };
 }

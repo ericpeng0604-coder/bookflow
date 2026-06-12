@@ -138,6 +138,36 @@ recipients, authentication, authorization, rate limits, and replay protection.
 messages. Any custom email endpoint must authenticate the caller, restrict the
 recipient, rate-limit requests, and prevent replay before it is enabled.
 
+### LESSON-008: Consent-gated contact data must not live in public rows
+
+**Observed problem:** A proposed per-listing LINE ID field was initially placed
+on the publicly readable `books` table, so API callers could bypass the UI and
+read it before consent.
+
+**Cause:** Display-level hiding was mistaken for data-level access control.
+
+**Detection:** Trace sensitive fields through table grants, RLS policies, RPCs,
+and direct REST access instead of checking only whether the UI renders them.
+
+**Prevention rule:** Store consent-gated contact data in a private RLS-protected
+table and expose it only through an authorization-aware RPC after consent.
+
+### LESSON-009: Local completion is not online implementation
+
+**Observed problem:** A locally completed UI fix was described as finished while
+the production website still served the previous version.
+
+**Cause:** Code completion, repository publication, database migration, and
+production deployment were not clearly distinguished.
+
+**Detection:** Before reporting a user-facing feature as implemented, compare
+the local commit, remote branch, deployment status, production behavior, and
+required migration state.
+
+**Prevention rule:** Explicitly label any uncommitted, unpushed, undeployed, or
+unmigrated work as "not yet implemented online" and list the remaining release
+step. Claim online implementation only after production verification.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

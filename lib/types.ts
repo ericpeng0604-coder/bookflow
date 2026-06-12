@@ -4,6 +4,7 @@ export type ReviewStatus = "pending" | "approved" | "rejected";
 export type UserRole = "user" | "moderator" | "admin";
 export type AccountStatus = "active" | "suspended";
 export type ModerationVisibility = "visible" | "hidden";
+export type ContactMethod = "none" | "email" | "line";
 export type ReportTargetType = "book" | "user";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
 export type ReportReason =
@@ -21,7 +22,8 @@ export type NotificationType =
   | "book_approved"
   | "book_rejected"
   | "book_hidden"
-  | "account_suspended";
+  | "account_suspended"
+  | "trade_message";
 
 export type Profile = {
   id: string;
@@ -48,6 +50,8 @@ export type Book = {
   imageUrl: string;
   meetup: string;
   description: string;
+  contactMethod: ContactMethod;
+  contactValue: string;
   status: BookStatus;
   reviewStatus: ReviewStatus;
   reviewNote: string;
@@ -67,7 +71,8 @@ export type PurchaseRequest = {
 export type TradeContact = {
   id: string;
   name: string;
-  email: string;
+  method: Exclude<ContactMethod, "none">;
+  value: string;
   department: string;
 };
 

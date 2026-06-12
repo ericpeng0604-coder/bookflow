@@ -74,7 +74,7 @@ const STORAGE_KEY = "bookflow-market-v1";
 
 type View = "home" | "book" | "dashboard" | "admin";
 type DashboardTab = "listings" | "requests" | "received" | "favorites";
-type Modal = "login" | "adminOtp" | "resetPassword" | "bookForm" | "request" | "report" | null;
+type Modal = "login" | "adminOtp" | "resetPassword" | "bookForm" | "contactSettings" | "request" | "report" | null;
 
 type Store = {
   books: Book[];
@@ -90,6 +90,13 @@ const REQUEST_PHRASES = [
   "請問書況還有保留嗎？我想這週內完成交易。",
   "我可以在校內面交，請問你通常方便什麼時段？",
   "想確認一下是否有劃線或筆記，謝謝！",
+];
+
+const CHAT_PHRASES = [
+  "你好，請問方便約什麼時間面交？",
+  "我可以配合校內面交，請告訴我方便的地點。",
+  "好的，謝謝，我會準時到。",
+  "抱歉，我想調整面交時間，可以再討論嗎？",
 ];
 
 const statusLabels: Record<BookStatus, string> = {
@@ -132,6 +139,8 @@ const blankBook: Omit<Book, "id" | "sellerId" | "createdAt" | "status" | "review
   imageUrl: "",
   meetup: "",
   description: "",
+  contactMethod: "none",
+  contactValue: "",
 };
 
 function money(value: number) {
@@ -171,6 +180,7 @@ export function MarketplaceApp() {
   const [view, setView] = useState<View>("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [heroQuery, setHeroQuery] = useState("");
   const [department, setDepartment] = useState(departments[0]);
   const [maxPrice, setMaxPrice] = useState(NO_MAX_PRICE);
   const [modal, setModal] = useState<Modal>(null);
@@ -466,7 +476,17 @@ export function MarketplaceApp() {
           table: "notifications",
           filter: `recipient_id=eq.${user.id}`,
         },
-        () => void loadNotificationFeed(),
+        (payload) => {
+          const notification = payload.new as Record<string, unknown>;
+          if (
+            payload.eventType === "INSERT"
+            && notification.type === "trade_message"
+            && notification.actor_id !== user.id
+          ) {
+            setToast("收到新的聊天訊息");
+          }
+          void loadNotificationFeed();
+        },
       )
       .subscribe();
     const refreshWhenVisible = () => {
@@ -592,6 +612,12 @@ export function MarketplaceApp() {
     setDetailMenuOpen(false);
     setView("book");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function submitHeroSearch() {
+    setQuery(heroQuery);
+    setHeroQuery("");
+    document.getElementById("market")?.scrollIntoView({ behavior: "smooth" });
   }
 
   function requireLogin(action: () => void) {
@@ -800,6 +826,8 @@ export function MarketplaceApp() {
         imageUrl,
         meetup: String(fields.meetup),
         description: String(fields.description),
+        contactMethod: editingBook?.contactMethod ?? "none",
+        contactValue: editingBook?.contactValue ?? "",
       };
 
       if (payload.department && !departments.slice(1).includes(payload.department)) {
@@ -920,6 +948,41 @@ export function MarketplaceApp() {
     }));
     setModal(null);
     setToast("購買意願已送出");
+  }
+
+  async function saveContactSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !editingBook) return;
+
+    const fields = new FormData(event.currentTarget);
+    const method = String(fields.get("contactMethod") || "none") as Book["contactMethod"];
+    const value = String(fields.get("contactValue") || "").trim();
+    if (!["none", "email", "line"].includes(method)) {
+      setToast("聯絡方式設定不正確");
+      return;
+    }
+    if (method === "line" && !value) {
+      setToast("請填寫 LINE ID");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("book_contact_preferences")
+      .upsert({
+        book_id: editingBook.id,
+        method,
+        value: method === "line" ? value : "",
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "book_id" });
+    if (error) {
+      setToast(`聯絡方式儲存失敗：${error.message}`);
+      return;
+    }
+
+    await reloadAfterUserMutation();
+    setEditingBook(null);
+    setModal(null);
+    setToast(method === "none" ? "已關閉額外聯絡方式分享" : "聯絡方式設定已更新");
   }
 
   async function respondToRequest(requestId: string, status: "accepted" | "rejected") {
@@ -1238,6 +1301,13 @@ export function MarketplaceApp() {
       setDashboardTab("listings");
       return;
     }
+    if (notification.type === "trade_message" && notification.requestId) {
+      const request = store.requests.find((item) => item.id === notification.requestId);
+      setView("dashboard");
+      setDashboardTab(request?.buyerId === currentUser?.id ? "requests" : "received");
+      setExpandedChatRequestId(notification.requestId);
+      return;
+    }
     if (notification.bookId) {
       setSelectedId(notification.bookId);
       setDetailBook(null);
@@ -1421,12 +1491,19 @@ export function MarketplaceApp() {
               <p>在校園裡找到你需要的課本，省下一筆，也讓學長姐的筆記繼續發揮價值。</p>
               <div className="hero-search">
                 <Search size={21} />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋書名、課程或老師..." />
-                <button onClick={() => document.getElementById("market")?.scrollIntoView({ behavior: "smooth" })}>開始找書</button>
+                <input
+                  value={heroQuery}
+                  onChange={(event) => setHeroQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") submitHeroSearch();
+                  }}
+                  placeholder="搜尋書名、課程或老師..."
+                />
+                <button onClick={submitHeroSearch}>開始找書</button>
               </div>
               <div className="hero-trust">
                 <span><ShieldCheck size={16} /> 校園面交更安心</span>
-                <span><MessageCircle size={16} /> 接受後交換聯絡方式</span>
+                <span><MessageCircle size={16} /> 接受後依賣家設定分享聯絡方式</span>
                 <span><GraduationCap size={16} /> 依課程快速找到課本</span>
               </div>
             </div>
@@ -1583,6 +1660,7 @@ export function MarketplaceApp() {
                   <div className="row-actions">
                     {book.status === "negotiating" && <button onClick={() => updateBookStatus(book.id, "sold")}><Check size={16} />完成交易</button>}
                     <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
+                    <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("contactSettings"); }}><MessageCircle size={16} />聯絡方式</button>
                     <button disabled={currentUser.accountStatus === "suspended"} className="danger" onClick={() => deleteBook(book.id)}><Trash2 size={16} />下架</button>
                   </div>
                   <div className={`review-badge ${book.reviewStatus}`}>{reviewLabels[book.reviewStatus]}</div>
@@ -1607,7 +1685,13 @@ export function MarketplaceApp() {
                       <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
                       <h3>{book.title}</h3>
                       <p>「{request.message}」</p>
-                      {request.status === "accepted" && contact && <div className="contact-box"><Check size={16} />賣家聯絡方式：<b>{contact.email}</b></div>}
+                      {request.status === "accepted" && contact && (
+                        <div className="contact-box">
+                          <Check size={16} />
+                          賣家{contact.method === "line" ? " LINE ID" : " Email"}：<b>{contact.value}</b>
+                        </div>
+                      )}
+                      {request.status === "accepted" && !contact && <div className="contact-note">賣家尚未分享額外聯絡方式，請先使用站內聊天室。</div>}
                       {request.status === "accepted" && supabase && currentUser && (
                         <>
                           <button className="chat-toggle" type="button" onClick={() => setExpandedChatRequestId((current) => (current === request.id ? null : request.id))}>
@@ -1634,7 +1718,6 @@ export function MarketplaceApp() {
                 const book = (supabase ? [...myBooks, ...requestBooks, ...marketplaceBooks] : store.books)
                   .find((item) => item.id === request.bookId);
                 const buyer = profile(request.buyerId);
-                const contact = contacts[request.id];
                 if (!book) return null;
                 return (
                   <div className="request-row" key={request.id}>
@@ -1643,7 +1726,7 @@ export function MarketplaceApp() {
                       <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
                       <h3>{buyer?.name} 想買《{book.title}》</h3>
                       <p>「{request.message}」</p>
-                      {request.status === "accepted" && contact && <div className="contact-box"><Check size={16} />買家聯絡方式：<b>{contact.email}</b></div>}
+                      {request.status === "accepted" && <div className="contact-note">為保護買家隱私，請先使用站內聊天室聯絡。</div>}
                       {request.status === "accepted" && supabase && currentUser && (
                         <>
                           <button className="chat-toggle" type="button" onClick={() => setExpandedChatRequestId((current) => (current === request.id ? null : request.id))}>
@@ -1843,6 +1926,13 @@ export function MarketplaceApp() {
         />
       )}
       {modal === "bookForm" && <BookFormModal book={editingBook} saving={bookSaving} onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }} onSubmit={saveBook} />}
+      {modal === "contactSettings" && editingBook && (
+        <ContactSettingsModal
+          book={editingBook}
+          onClose={() => { setModal(null); setEditingBook(null); }}
+          onSubmit={saveContactSettings}
+        />
+      )}
       {modal === "request" && selectedBook && <RequestModal book={selectedBook} onClose={() => setModal(null)} onSubmit={sendRequest} />}
       {modal === "report" && reportTarget && (
         <ReportModal
@@ -2295,6 +2385,54 @@ function BookFormModal({ book, saving, onClose, onSubmit }: { book: Book | null;
   return <ModalShell title={book ? "編輯刊登" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}><form onSubmit={onSubmit} className="form book-form"><fieldset disabled={saving} className="book-form-fields"><label className="full">書名 *<input name="title" required defaultValue={value.title} placeholder="例如：資料結構：使用 C++" /></label><label>作者 *<input name="author" required defaultValue={value.author} /></label><label>版本 *<input name="edition" required defaultValue={value.edition} placeholder="例如：第 2 版" /></label><label>科系（選填）<select name="department" defaultValue={value.department}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label><label>課程（選填）<input name="course" defaultValue={value.course} /></label><label>授課老師（選填）<input name="teacher" defaultValue={value.teacher} /></label><label>書況 *<select name="condition" required defaultValue={value.condition}><option>近全新</option><option>書況良好</option><option>有筆記</option><option>使用痕跡明顯</option><option>損壞嚴重</option></select></label><label>價格（NT$）*<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label><label className="full">面交地點 *<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label><label className="full">封面圖片 *<span className="image-upload"><input name="image" required={!book} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} /><ImagePlus size={22} /><b>{book ? "選擇新圖片（不選則保留原圖）" : "選擇圖片檔"}</b><small>支援 JPG、PNG、WebP，最大 5MB</small></span></label>{preview && <div className="image-preview full"><img src={preview} alt="書籍封面預覽" /></div>}<label className="full">書況說明 *<textarea name="description" required rows={3} defaultValue={value.description} /></label><button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button></fieldset></form></ModalShell>;
 }
 
+function ContactSettingsModal({
+  book,
+  onClose,
+  onSubmit,
+}: {
+  book: Book;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+}) {
+  const [method, setMethod] = useState<Book["contactMethod"]>(book.contactMethod);
+
+  return (
+    <ModalShell title="額外聯絡方式" subtitle={`設定「${book.title}」成交後要提供給買家的資料`} onClose={onClose}>
+      <form className="form" onSubmit={onSubmit}>
+        <label>
+          分享方式
+          <select
+            name="contactMethod"
+            value={method}
+            onChange={(event) => setMethod(event.target.value as Book["contactMethod"])}
+          >
+            <option value="none">不分享，僅使用站內聊天室</option>
+            <option value="email">分享帳號 Email</option>
+            <option value="line">分享 LINE ID</option>
+          </select>
+        </label>
+        {method === "line" && (
+          <label>
+            LINE ID
+            <input
+              name="contactValue"
+              defaultValue={book.contactMethod === "line" ? book.contactValue : ""}
+              placeholder="請輸入你的 LINE ID"
+              maxLength={100}
+              required
+            />
+          </label>
+        )}
+        <div className="privacy-note">
+          <ShieldCheck size={17} />
+          <span>只有你接受購買要求後，買家才會看到這項資料。買家的 Email 不會自動顯示給你。</span>
+        </div>
+        <button className="primary wide" type="submit">儲存聯絡方式設定</button>
+      </form>
+    </ModalShell>
+  );
+}
+
 function RequestModal({ book, onClose, onSubmit }: { book: Book; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const [message, setMessage] = useState(REQUEST_PHRASES[0]);
 
@@ -2469,6 +2607,16 @@ function TradeChatPanel({
           </div>
         ))}
         <div ref={bottomRef} />
+      </div>
+      <div className="trade-chat-phrases">
+        <small>常用語句</small>
+        <div>
+          {CHAT_PHRASES.map((phrase) => (
+            <button type="button" key={phrase} onClick={() => setDraft(phrase)}>
+              {phrase}
+            </button>
+          ))}
+        </div>
       </div>
       <form className="trade-chat-compose" onSubmit={(event) => void submitMessage(event)}>
         <input

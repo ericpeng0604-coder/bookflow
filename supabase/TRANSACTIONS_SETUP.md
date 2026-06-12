@@ -18,6 +18,15 @@ supabase/trade-messages.sql
 
 聊天室只允許已接受交易的買賣雙方讀取與傳送訊息。
 
+接著執行：
+
+```text
+supabase/chat-notifications-and-contact-privacy.sql
+```
+
+這會為聊天訊息建立站內通知，並把額外聯絡方式改成由賣家逐筆刊登選擇：
+不分享、帳號 Email，或 LINE ID。買家的 Email 不會自動公開。
+
 ## 2. Vercel 環境變數
 
 站內通知不需要新增環境變數。Email 通知目前保持關閉：
