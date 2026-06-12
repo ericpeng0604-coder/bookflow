@@ -37,7 +37,6 @@ import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import {
   BOOK_IMAGE_CACHE_CONTROL,
   compressBookImage,
-  extractStoragePath,
 } from "@/lib/marketplace/image-upload";
 import { readFavoriteIds, toggleFavoriteId } from "@/lib/marketplace/favorites";
 import { isAllDepartments, NO_MAX_PRICE, buildMarketplaceFilters } from "@/lib/marketplace/filters";
@@ -65,6 +64,7 @@ import type {
   ReportTargetType,
   RequestStatus,
   ReviewStatus,
+  SellerLifecycle,
   TradeContact,
   TradeMessage,
   UserRole,
@@ -129,7 +129,20 @@ const reportReasonLabels: Record<ReportReason, string> = {
   other: "其他",
 };
 
-const blankBook: Omit<Book, "id" | "sellerId" | "createdAt" | "status" | "reviewStatus" | "reviewNote" | "moderationVisibility"> = {
+const blankBook: Omit<
+  Book,
+  | "id"
+  | "sellerId"
+  | "createdAt"
+  | "status"
+  | "reviewStatus"
+  | "reviewNote"
+  | "moderationVisibility"
+  | "lifecycleState"
+  | "listingConfirmedAt"
+  | "archivedAt"
+  | "archiveReason"
+> = {
   title: "",
   author: "",
   department: "",
@@ -154,6 +167,14 @@ function timeAgo(value: string) {
   if (days === 0) return "今天";
   if (days === 1) return "昨天";
   return `${days} 天前`;
+}
+
+function dateLabel(value: string) {
+  return new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
 }
 
 function maskEmail(email: string) {
@@ -210,6 +231,9 @@ export function MarketplaceApp() {
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [pendingReviews, setPendingReviews] = useState<Book[]>([]);
   const [hiddenBooks, setHiddenBooks] = useState<Book[]>([]);
+  const [sellerLifecycle, setSellerLifecycle] = useState<SellerLifecycle | null>(null);
+  const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
+  const [lifecycleSaving, setLifecycleSaving] = useState(false);
   const bookSavingRef = useRef(false);
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
@@ -253,6 +277,7 @@ export function MarketplaceApp() {
     }));
     setNotifications(workspace.notifications);
     setContacts(workspace.contacts);
+    setSellerLifecycle(workspace.sellerLifecycle);
   }, []);
 
   const loadMarketplaceBooks = useCallback(async (options?: { append?: boolean }) => {
@@ -413,6 +438,8 @@ export function MarketplaceApp() {
         setRequestBooks([]);
         setNotifications([]);
         setContacts({});
+        setSellerLifecycle(null);
+        setSelectedArchivedIds(new Set());
         return;
       }
 
@@ -441,6 +468,8 @@ export function MarketplaceApp() {
         suspendedAt: storedProfile.suspended_at || null,
         suspensionReason: storedProfile.suspension_reason || "",
       };
+
+      await client.rpc("record_user_activity");
 
       if (googleProfile.role === "admin") {
         const { data: isVerified } = await client.rpc("is_verified_admin");
@@ -585,6 +614,7 @@ export function MarketplaceApp() {
     return store.books
       .filter((book) => book.reviewStatus === "approved")
       .filter((book) => book.moderationVisibility === "visible")
+      .filter((book) => book.lifecycleState === "active")
       .filter((book) => book.status !== "sold")
       .filter((book) => isAllDepartments(department) || book.department === department)
       .filter((book) => !maxPrice || book.price <= Number(maxPrice))
@@ -866,7 +896,9 @@ export function MarketplaceApp() {
         setModal(null);
         setView("dashboard");
         setDashboardTab("listings");
-        setToast(editingBook ? "修改已送回審核" : "刊登已送出，等待管理員審核");
+        setToast(editingBook
+          ? "修改已送回審核"
+          : "刊登已送出。這次上架也已確認你目前公開的課本仍在販售，90 天後會再提醒。");
         return;
       }
 
@@ -883,6 +915,10 @@ export function MarketplaceApp() {
                 reviewStatus: "pending",
                 reviewNote: "",
                 moderationVisibility: "visible",
+                lifecycleState: "active",
+                listingConfirmedAt: new Date().toISOString(),
+                archivedAt: null,
+                archiveReason: "",
                 createdAt: new Date().toISOString(),
               },
               ...previous.books,
@@ -1085,20 +1121,16 @@ export function MarketplaceApp() {
     }
     if (supabase && currentUser) {
       const client = supabase;
-      const targetBook = myBooks.find((book) => book.id === bookId);
-      void client.from("books").delete().eq("id", bookId).then(async ({ error }) => {
+      void client.rpc("set_listing_lifecycle", {
+        target_book_id: bookId,
+        new_state: "withdrawn",
+      }).then(async ({ error }) => {
         if (error) {
           setToast(`下架失敗：${error.message}`);
           return;
         }
-        if (targetBook?.imageUrl) {
-          const storagePath = extractStoragePath(targetBook.imageUrl);
-          if (storagePath) {
-            await client.storage.from("book-images").remove([storagePath]).catch(() => undefined);
-          }
-        }
         await reloadAfterUserMutation();
-        setToast("刊登已下架");
+        setToast("刊登已下架，交易紀錄與圖片會依保留政策處理");
       });
       return;
     }
@@ -1108,6 +1140,62 @@ export function MarketplaceApp() {
       requests: previous.requests.filter((request) => request.bookId !== bookId),
     }));
     setToast("刊登已下架");
+  }
+
+  async function confirmAllListings() {
+    if (!supabase || !currentUser || lifecycleSaving) return;
+    setLifecycleSaving(true);
+    try {
+      const { error } = await supabase.rpc("confirm_all_active_listings");
+      if (error) {
+        setToast(`確認失敗：${error.message}`);
+        return;
+      }
+      await reloadAfterUserMutation();
+      setToast("已確認目前公開課本仍在販售，下一次將在 90 天週期前提醒");
+    } finally {
+      setLifecycleSaving(false);
+    }
+  }
+
+  async function reviewArchivedListings(action: "keep" | "withdraw") {
+    if (!supabase || selectedArchivedIds.size === 0 || lifecycleSaving) return;
+    setLifecycleSaving(true);
+    const selected = [...selectedArchivedIds];
+    try {
+      const { error } = await supabase.rpc("review_archived_listings", {
+        keep_book_ids: action === "keep" ? selected : [],
+        withdraw_book_ids: action === "withdraw" ? selected : [],
+      });
+      if (error) {
+        setToast(`更新失敗：${error.message}`);
+        return;
+      }
+      setSelectedArchivedIds(new Set());
+      await reloadAfterUserMutation();
+      setToast(action === "keep" ? "已恢復勾選的課本" : "已將勾選的課本正式下架");
+    } finally {
+      setLifecycleSaving(false);
+    }
+  }
+
+  async function restoreWithdrawnListing(bookId: string) {
+    if (!supabase || lifecycleSaving) return;
+    setLifecycleSaving(true);
+    try {
+      const { error } = await supabase.rpc("set_listing_lifecycle", {
+        target_book_id: bookId,
+        new_state: "active",
+      });
+      if (error) {
+        setToast(`恢復失敗：${error.message}`);
+        return;
+      }
+      await reloadAfterUserMutation();
+      setToast("課本已恢復販售");
+    } finally {
+      setLifecycleSaving(false);
+    }
   }
 
   async function reviewBook(bookId: string, decision: "approved" | "rejected") {
@@ -1298,6 +1386,11 @@ export function MarketplaceApp() {
       setDashboardTab("listings");
       return;
     }
+    if (notification.type === "listing_lifecycle") {
+      setView("dashboard");
+      setDashboardTab("listings");
+      return;
+    }
     if (notification.type === "trade_completed") {
       setView("dashboard");
       setDashboardTab("listings");
@@ -1353,6 +1446,11 @@ export function MarketplaceApp() {
     && (currentUser.role === "admin" || currentUser.role === "moderator");
   const pendingReports = reports.filter((report) => report.status === "pending");
   const unreadNotifications = notifications.filter((notification) => !notification.readAt).length;
+  const activeAvailableListings = myListings.filter((book) => book.lifecycleState === "active" && book.status === "available");
+  const archivedListings = myListings.filter((book) => book.lifecycleState === "archived");
+  const nextConfirmationAt = sellerLifecycle
+    ? new Date(new Date(sellerLifecycle.listingsConfirmedAt).getTime() + 90 * 86400000).toISOString()
+    : null;
 
   return (
     <main>
@@ -1645,6 +1743,45 @@ export function MarketplaceApp() {
           {currentUser.accountStatus === "suspended" && (
             <div className="readonly-notice"><Ban size={18} /><div><b>唯讀模式</b><span>{currentUser.suspensionReason || "你可以查看既有交易，但暫時不能新增或修改資料。"}</span></div></div>
           )}
+          {activeAvailableListings.length > 0 && (
+            <div className="listing-confirmation-panel">
+              <div>
+                <b>定期確認課本仍在販售</b>
+                <span>
+                  {nextConfirmationAt
+                    ? `目前 ${activeAvailableListings.length} 本公開販售中，下次確認日為 ${dateLabel(nextConfirmationAt)}。`
+                    : `目前 ${activeAvailableListings.length} 本公開販售中。`}
+                  系統會提前一週提醒，逾期 30 天才暫時封存。
+                </span>
+              </div>
+              <button className="primary" disabled={lifecycleSaving} onClick={() => void confirmAllListings()}>
+                <CheckCheck size={17} />全部仍在販售
+              </button>
+            </div>
+          )}
+          {archivedListings.length > 0 && (
+            <div className="archived-review-panel">
+              <div>
+                <b>有 {archivedListings.length} 本課本因逾期暫時封存</b>
+                <span>勾選後選擇恢復販售或正式下架；系統不會自動讓舊書重新公開。</span>
+              </div>
+              <div className="archived-review-actions">
+                <button
+                  disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
+                  onClick={() => void reviewArchivedListings("keep")}
+                >
+                  <RotateCcw size={16} />恢復勾選項目
+                </button>
+                <button
+                  className="danger"
+                  disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
+                  onClick={() => void reviewArchivedListings("withdraw")}
+                >
+                  <Trash2 size={16} />勾選項目已下架
+                </button>
+              </div>
+            </div>
+          )}
           <div className="dashboard-tabs">
             <button className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
             <button className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 <span>{myRequests.length}</span></button>
@@ -1655,15 +1792,60 @@ export function MarketplaceApp() {
           {dashboardTab === "listings" && (
             <div className="dashboard-list">
               {myListings.map((book) => (
-                <div className="listing-row" key={book.id}>
+                <div className={`listing-row lifecycle-${book.lifecycleState}`} key={book.id}>
+                  {book.lifecycleState === "archived" && (
+                    <label className="listing-select">
+                      <input
+                        type="checkbox"
+                        checked={selectedArchivedIds.has(book.id)}
+                        onChange={(event) => {
+                          setSelectedArchivedIds((previous) => {
+                            const next = new Set(previous);
+                            if (event.target.checked) next.add(book.id);
+                            else next.delete(book.id);
+                            return next;
+                          });
+                        }}
+                      />
+                      <span>選取</span>
+                    </label>
+                  )}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={book.imageUrl} alt="" />
-                  <div className="listing-main"><span className={`status ${book.status}`}>{statusLabels[book.status]}</span><h3>{book.title}</h3><p>{book.course ? `${book.course} · ` : ""}{money(book.price)}</p></div>
+                  {book.imageUrl
+                    ? <img src={book.imageUrl} alt="" />
+                    : <div className="listing-image-placeholder"><BookOpen size={24} /></div>}
+                  <div className="listing-main">
+                    <div className="listing-badges">
+                      <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
+                      {book.lifecycleState !== "active" && (
+                        <span className={`lifecycle-badge ${book.lifecycleState}`}>
+                          {book.lifecycleState === "archived" ? "暫時封存" : "已下架"}
+                        </span>
+                      )}
+                    </div>
+                    <h3>{book.title}</h3>
+                    <p>{book.course ? `${book.course} · ` : ""}{money(book.price)}</p>
+                    {book.lifecycleState === "archived" && (
+                      <small className="archive-note">
+                        {book.archivedAt ? `${dateLabel(book.archivedAt)}封存 · ` : ""}
+                        回來確認後才會再次公開
+                      </small>
+                    )}
+                  </div>
                   <div className="row-actions">
-                    {book.status === "negotiating" && <button onClick={() => updateBookStatus(book.id, "sold")}><Check size={16} />完成交易</button>}
-                    <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
-                    <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("contactSettings"); }}><MessageCircle size={16} />聯絡方式</button>
-                    <button disabled={currentUser.accountStatus === "suspended"} className="danger" onClick={() => deleteBook(book.id)}><Trash2 size={16} />下架</button>
+                    {book.lifecycleState === "active" && book.status === "negotiating" && <button onClick={() => updateBookStatus(book.id, "sold")}><Check size={16} />完成交易</button>}
+                    {book.lifecycleState === "active" && (
+                      <>
+                        <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
+                        <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("contactSettings"); }}><MessageCircle size={16} />聯絡方式</button>
+                        <button disabled={currentUser.accountStatus === "suspended"} className="danger" onClick={() => deleteBook(book.id)}><Trash2 size={16} />下架</button>
+                      </>
+                    )}
+                    {book.lifecycleState === "withdrawn" && (
+                      <button disabled={lifecycleSaving || currentUser.accountStatus === "suspended"} onClick={() => void restoreWithdrawnListing(book.id)}>
+                        <RotateCcw size={16} />恢復販售
+                      </button>
+                    )}
                   </div>
                   <div className={`review-badge ${book.reviewStatus}`}>{reviewLabels[book.reviewStatus]}</div>
                   {book.reviewStatus === "rejected" && book.reviewNote && <p className="review-note">拒絕原因：{book.reviewNote}</p>}

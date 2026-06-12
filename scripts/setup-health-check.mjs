@@ -222,6 +222,10 @@ console.log(`模式：${noNetwork ? "僅本機" : "本機 + 唯讀遠端探測"}
 const supabaseUrl = required("NEXT_PUBLIC_SUPABASE_URL", "Supabase env");
 const anonKey = required("NEXT_PUBLIC_SUPABASE_ANON_KEY", "Supabase env");
 const serviceRoleKey = required("SUPABASE_SERVICE_ROLE_KEY", "管理員 OTP");
+const cronSecret = required("CRON_SECRET", "刊登生命週期");
+if (cronSecret && cronSecret.length < 24) {
+  add("WARN", "刊登生命週期", "CRON_SECRET 長度偏短。", "請使用至少 24 個隨機字元。");
+}
 
 const parsedSupabaseUrl = parseUrl(supabaseUrl);
 if (supabaseUrl && (!parsedSupabaseUrl || parsedSupabaseUrl.protocol !== "https:")) {
@@ -280,9 +284,15 @@ sourceContains(
 );
 sourceContains(
   "app/api/notifications/email/route.ts",
-  ["EMAIL_NOTIFICATIONS_ENABLED", "RESEND_API_KEY", "APP_URL", "email_sent_at"],
+  ["deliverNotificationEmails", "SUPABASE_SERVICE_ROLE_KEY"],
   "通知 Email",
   "通知 Email API",
+);
+sourceContains(
+  "lib/server/notification-email.ts",
+  ["EMAIL_NOTIFICATIONS_ENABLED", "RESEND_API_KEY", "APP_URL", "email_sent_at", "email_next_attempt_at"],
+  "通知 Email",
+  "通知 Email 佇列",
 );
 sourceContains(
   "supabase/transactions-and-notifications.sql",
@@ -295,6 +305,30 @@ sourceContains(
   ["{{ .Token }}"],
   "Auth Email",
   "註冊驗證信範本",
+);
+sourceContains(
+  "app/api/cron/listing-lifecycle/route.ts",
+  ["CRON_SECRET", "process_listing_lifecycle", "deliverNotificationEmails"],
+  "刊登生命週期",
+  "每日排程 API",
+);
+sourceContains(
+  "supabase/listing-lifecycle.sql",
+  ["lifecycle_state", "record_user_activity", "process_listing_lifecycle", "review_archived_listings"],
+  "刊登生命週期",
+  "刊登生命週期 migration",
+);
+sourceContains(
+  "supabase/listing-lifecycle-rollback.sql",
+  ["reset_confirmation_after_new_listing", "lifecycle_emergency_neutralized"],
+  "刊登生命週期",
+  "非破壞性回復腳本",
+);
+sourceContains(
+  "vercel.json",
+  ["/api/cron/listing-lifecycle", "15 1 * * *"],
+  "刊登生命週期",
+  "Vercel Cron 設定",
 );
 
 const redirectUrls = new Set(["http://localhost:3000"]);

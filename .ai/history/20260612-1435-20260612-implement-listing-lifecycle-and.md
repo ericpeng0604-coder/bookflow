@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：Implement listing lifecycle and inactive seller management
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`eb06be4550ff3fbea8db35194626dae25c6c4c03`
+- 封存時間：2026-06-12T14:35:39.406Z
+
+---
 # BookFlow AI 交接
 
 ## 目前目標

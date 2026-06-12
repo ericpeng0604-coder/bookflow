@@ -4,6 +4,7 @@ export type ReviewStatus = "pending" | "approved" | "rejected";
 export type UserRole = "user" | "moderator" | "admin";
 export type AccountStatus = "active" | "suspended";
 export type ModerationVisibility = "visible" | "hidden";
+export type ListingLifecycleState = "active" | "archived" | "withdrawn";
 export type ContactMethod = "none" | "email" | "line";
 export type ReportTargetType = "book" | "user";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
@@ -23,7 +24,8 @@ export type NotificationType =
   | "book_rejected"
   | "book_hidden"
   | "account_suspended"
-  | "trade_message";
+  | "trade_message"
+  | "listing_lifecycle";
 
 export type Profile = {
   id: string;
@@ -56,7 +58,17 @@ export type Book = {
   reviewStatus: ReviewStatus;
   reviewNote: string;
   moderationVisibility: ModerationVisibility;
+  lifecycleState: ListingLifecycleState;
+  listingConfirmedAt: string;
+  archivedAt: string | null;
+  archiveReason: string;
   createdAt: string;
+};
+
+export type SellerLifecycle = {
+  lastActiveAt: string;
+  listingsConfirmedAt: string;
+  firstListingNoticeAt: string | null;
 };
 
 export type PurchaseRequest = {
