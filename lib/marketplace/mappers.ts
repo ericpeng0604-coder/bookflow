@@ -36,6 +36,10 @@ export function mapBook(row: Record<string, unknown>): Book {
     reviewStatus: (row.review_status || "pending") as ReviewStatus,
     reviewNote: String(row.review_note || ""),
     moderationVisibility: String(row.moderation_visibility || "visible") as Book["moderationVisibility"],
+    lifecycleState: String(row.lifecycle_state || "active") as Book["lifecycleState"],
+    listingConfirmedAt: String(row.listing_confirmed_at || row.created_at),
+    archivedAt: row.archived_at ? String(row.archived_at) : null,
+    archiveReason: String(row.archive_reason || ""),
     createdAt: String(row.created_at),
   };
 }

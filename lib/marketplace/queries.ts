@@ -10,7 +10,7 @@ import {
   mapRequest,
   mapTradeContact,
 } from "@/lib/marketplace/mappers";
-import type { Book, Profile, TradeContact } from "@/lib/types";
+import type { Book, Profile, SellerLifecycle, TradeContact } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 
@@ -159,6 +159,21 @@ export async function fetchNotifications(client: SupabaseClient) {
   return (data ?? []).map((row) => mapNotification(row));
 }
 
+export async function fetchSellerLifecycle(client: SupabaseClient) {
+  const { data, error } = await client.rpc("list_seller_lifecycle");
+  if (error) {
+    if (["PGRST202", "42883"].includes(error.code || "")) return null;
+    throw error;
+  }
+  const row = data?.[0];
+  if (!row) return null;
+  return {
+    lastActiveAt: String(row.last_active_at),
+    listingsConfirmedAt: String(row.listings_confirmed_at),
+    firstListingNoticeAt: row.first_listing_notice_at ? String(row.first_listing_notice_at) : null,
+  } satisfies SellerLifecycle;
+}
+
 export async function fetchPartyProfiles(client: SupabaseClient) {
   const { data, error } = await client.rpc("get_request_party_profiles");
   if (error) throw error;
@@ -201,11 +216,12 @@ export async function loadUserWorkspaceData(client: SupabaseClient, _user: Profi
     .filter((request) => request.status === "accepted")
     .map((request) => request.id);
 
-  const [myBooks, partyProfiles, notifications, contacts] = await Promise.all([
+  const [myBooks, partyProfiles, notifications, contacts, sellerLifecycle] = await Promise.all([
     fetchMyBooks(client),
     fetchPartyProfiles(client),
     fetchNotifications(client),
     fetchTradeContactsBatch(client, acceptedIds),
+    fetchSellerLifecycle(client),
   ]);
 
   const requestBookIds = [...new Set(requests.map((request) => request.bookId))];
@@ -219,6 +235,7 @@ export async function loadUserWorkspaceData(client: SupabaseClient, _user: Profi
     partyProfiles,
     notifications,
     contacts,
+    sellerLifecycle,
   };
 }
 

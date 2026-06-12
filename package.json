@@ -15,7 +15,8 @@
     "ai:check": "node scripts/ai-collaboration.mjs check",
     "setup:check": "node scripts/setup-health-check.mjs",
     "load-test:marketplace": "node scripts/load-test-marketplace.mjs",
-    "check:filters": "node scripts/check-filters.mjs"
+    "check:filters": "node scripts/check-filters.mjs",
+    "check:lifecycle": "node scripts/check-listing-lifecycle.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.0",
