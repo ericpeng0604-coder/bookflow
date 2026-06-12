@@ -71,6 +71,14 @@ export type TradeContact = {
   department: string;
 };
 
+export type TradeMessage = {
+  id: string;
+  requestId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+};
+
 export type Notification = {
   id: string;
   type: NotificationType;

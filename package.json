@@ -6,13 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "ai:status": "node scripts/ai-collaboration.mjs status",
     "ai:claim": "node scripts/ai-collaboration.mjs claim",
     "ai:handoff": "node scripts/ai-collaboration.mjs handoff",
     "ai:complete": "node scripts/ai-collaboration.mjs complete",
     "ai:block": "node scripts/ai-collaboration.mjs block",
-    "ai:check": "node scripts/ai-collaboration.mjs check"
+    "ai:check": "node scripts/ai-collaboration.mjs check",
+    "load-test:marketplace": "node scripts/load-test-marketplace.mjs",
+    "check:filters": "node scripts/check-filters.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.0",
@@ -25,6 +27,8 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^15.3.0",
     "playwright": "^1.60.0",
     "typescript": "^5.7.0"
   }

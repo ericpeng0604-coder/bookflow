@@ -10,6 +10,14 @@ supabase/transactions-and-notifications.sql
 
 看到 `Success. No rows returned` 即完成。這份 SQL 可以重複執行。
 
+雙方配對後若要啟用站內聊天室，接著執行：
+
+```text
+supabase/trade-messages.sql
+```
+
+聊天室只允許已接受交易的買賣雙方讀取與傳送訊息。
+
 ## 2. Vercel 環境變數
 
 站內通知不需要新增環境變數。Email 通知目前保持關閉：
