@@ -95,6 +95,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .dollar { font-weight: 800; color: var(--green); }
 .result-line { color: var(--muted); font-size: 13px; margin: 20px 2px; }
 .result-line b { color: var(--green); }
+.load-more-wrap { display: flex; justify-content: center; margin: 28px 0 8px; }
 .book-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; }
 .book-card { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: white; cursor: pointer; transition: .2s ease; }
 .book-card:hover { transform: translateY(-5px); box-shadow: var(--shadow); border-color: #bfd2ca; }
@@ -106,7 +107,34 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .status.available { background: var(--mint); color: var(--green); }
 .status.negotiating { background: #fff0d4; color: #9a631b; }
 .status.sold { background: #eee; color: #666; }
-.heart { position: absolute; top: 12px; right: 12px; width: 33px; height: 33px; border-radius: 50%; border: 0; background: rgba(255,255,255,.9); display: grid; place-items: center; cursor: pointer; }
+.heart { position: absolute; top: 12px; right: 12px; width: 33px; height: 33px; border-radius: 50%; border: 0; background: rgba(255,255,255,.9); color: #8aa39a; display: grid; place-items: center; cursor: pointer; transition: color .15s ease, transform .15s ease; }
+.heart.active { color: #d64545; transform: scale(1.05); }
+.detail-action-row { display: flex; gap: 10px; align-items: stretch; }
+.detail-action-row .wide { flex: 1; }
+.detail-more-wrap { position: relative; }
+.detail-more-button { width: 42px; height: 42px; border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 10px; display: grid; place-items: center; cursor: pointer; }
+.detail-more-menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 150px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; z-index: 5; }
+.detail-more-menu button { width: 100%; border: 0; background: none; text-align: left; padding: 10px 12px; font-size: 12px; color: #7a4a44; cursor: pointer; }
+.detail-more-menu button:hover { background: #faf6f5; }
+.phrase-list { margin-bottom: 12px; }
+.phrase-list small { display: block; color: var(--muted); margin-bottom: 8px; }
+.phrase-chips { display: grid; gap: 8px; }
+.phrase-chip { border: 1px solid var(--line); background: #f8fbf9; color: var(--ink); border-radius: 10px; padding: 10px 12px; text-align: left; font-size: 12px; line-height: 1.5; cursor: pointer; }
+.phrase-chip.active { border-color: #9ec7b8; background: #edf6f2; color: var(--green); }
+.chat-toggle { margin-top: 10px; border: 1px solid #cfe0d9; background: #f4faf7; color: var(--green); border-radius: 8px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.trade-chat { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; overflow: hidden; }
+.trade-chat-log { max-height: 220px; overflow-y: auto; padding: 12px; display: grid; gap: 10px; }
+.trade-chat-empty { margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
+.trade-chat-error { margin: 0; color: #983f35; background: #fff4f1; border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+.trade-chat-bubble { max-width: 88%; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--line); }
+.trade-chat-bubble.mine { margin-left: auto; background: #edf6f2; border-color: #cfe0d9; }
+.trade-chat-bubble small { display: block; color: var(--muted); font-size: 10px; margin-bottom: 4px; }
+.trade-chat-bubble p { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.trade-chat-compose { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); background: #fff; }
+.trade-chat-compose input { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.trade-chat-compose button { border: 0; border-radius: 8px; background: var(--green); color: #fff; padding: 0 14px; font-weight: 600; cursor: pointer; }
+.trade-chat-compose button:disabled { opacity: .5; cursor: not-allowed; }
+.auth-hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: -4px; }
 .card-body { padding: 17px; }
 .course-tag { color: var(--green); font-size: 11px; font-weight: 700; background: #edf6f2; padding: 4px 8px; border-radius: 4px; }
 .card-body h3 { margin: 12px 0 5px; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -152,6 +180,8 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .dashboard-tabs button.active:after { content: ""; position: absolute; height: 3px; left: 0; right: 0; bottom: -1px; background: var(--green); }
 .dashboard-tabs span { background: #edf2ef; padding: 2px 7px; margin-left: 4px; border-radius: 12px; font-size: 11px; }
 .dashboard-list { display: grid; gap: 12px; }
+.favorites-grid { margin-top: 4px; }
+.favorites-grid .empty { grid-column: 1 / -1; }
 .listing-row, .request-row { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 16px; }
 .listing-row > img { width: 82px; height: 92px; object-fit: cover; border-radius: 7px; }
 .listing-main, .request-main { flex: 1; }
@@ -169,6 +199,8 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .request-status.rejected, .request-status.cancelled { color: #8c9692; }
 .request-actions .accept { background: var(--green); color: white; border-color: var(--green); }
 .report-inline { border: 0; background: none; color: #9a4d43; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-size: 11px; }
+.request-report-button { margin-left: auto; align-self: flex-end; width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent; color: #9ca9a4; display: grid; place-items: center; cursor: pointer; }
+.request-report-button:hover { background: #f5f7f6; color: #8f4a42; }
 .contact-box { display: inline-flex; gap: 6px; align-items: center; background: #edf7f2; color: var(--green); padding: 8px 10px; border-radius: 7px; margin-top: 10px; font-size: 12px; }
 .review-badge { display: inline-flex; border-radius: 20px; padding: 5px 9px; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .review-badge.pending { color: #8a5a18; background: #fff0d4; }

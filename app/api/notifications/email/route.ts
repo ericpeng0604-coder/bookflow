@@ -10,12 +10,26 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
+function configuredAppUrl() {
+  const value = process.env.APP_URL;
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const resendKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
+  const appUrl = configuredAppUrl();
   const enabled = process.env.EMAIL_NOTIFICATIONS_ENABLED === "true";
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
 
@@ -35,7 +49,7 @@ export async function POST(request: Request) {
   if (!enabled) {
     return NextResponse.json({ enabled: false, sent: 0 });
   }
-  if (!serviceRoleKey || !resendKey || !from) {
+  if (!serviceRoleKey || !resendKey || !from || !appUrl) {
     return NextResponse.json({ error: "Email service is not configured" }, { status: 503 });
   }
 
@@ -57,13 +71,22 @@ export async function POST(request: Request) {
   }
 
   let sent = 0;
+  const recipientIds = [...new Set((notifications ?? []).map((notification) => notification.recipient_id))];
+  const { data: recipients, error: recipientError } = recipientIds.length
+    ? await admin.from("profiles").select("id,email").in("id", recipientIds)
+    : { data: [], error: null };
+
+  if (recipientError) {
+    return NextResponse.json({ error: recipientError.message }, { status: 500 });
+  }
+
+  const recipientEmails = new Map(
+    (recipients ?? []).map((recipient) => [recipient.id, recipient.email]),
+  );
+
   for (const notification of notifications ?? []) {
-    const { data: recipient } = await admin
-      .from("profiles")
-      .select("email")
-      .eq("id", notification.recipient_id)
-      .maybeSingle();
-    if (!recipient?.email) continue;
+    const email = recipientEmails.get(notification.recipient_id);
+    if (!email) continue;
 
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -73,13 +96,13 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         from,
-        to: [recipient.email],
+        to: [email],
         subject: `虎科書流｜${notification.title}`,
         html: `
           <div style="font-family:Arial,sans-serif;line-height:1.7;color:#17352f">
             <h2>${escapeHtml(notification.title)}</h2>
             <p>${escapeHtml(notification.message)}</p>
-            <p><a href="${escapeHtml(request.headers.get("origin") || "")}" style="color:#16745f">開啟虎科書流查看詳情</a></p>
+            <p><a href="${escapeHtml(appUrl)}" style="color:#16745f">開啟虎科書流查看詳情</a></p>
           </div>
         `,
       }),

@@ -1,0 +1,132 @@
+---
+description: Mandatory safety checks before changing, testing, or deploying BookFlow
+alwaysApply: true
+---
+
+# Mandatory Safety Workflow
+
+Follow these rules before doing any work in this repository.
+
+## Before Editing
+
+1. Read `AGENTS.md` and follow all repository safety rules.
+2. Read `AI_WORK_MANUAL.md` and apply all relevant recorded lessons.
+3. Read `.ai/state.json` and `AI_HANDOFF.md` when they exist.
+4. Inspect `git status` and the relevant diff. Preserve existing user or AI
+   changes unless the user explicitly asks to remove them.
+5. State which files and behavior will be changed before editing.
+
+## Protected Recovery Files
+
+Do not change, delete, rename, format, or regenerate these files:
+
+- `.github/workflows/rollback-production.yml`
+- `.github/workflows/protect-rollback-workflow.yml`
+- `.github/CODEOWNERS`
+
+Only touch them when the user explicitly requests a rollback or recovery-system
+change. Follow the additional approval and commit rules in `AGENTS.md`.
+
+## Database and Supabase
+
+1. Creating or reviewing a migration file is allowed.
+2. Do not connect to, migrate, seed, reset, or otherwise modify any remote
+   Supabase project without the user's explicit approval for that exact action.
+3. Never assume a remote project is staging. Show the project/environment name
+   and ask for confirmation before any remote database operation.
+4. Before proposing a migration for deployment, explain its effects, locking
+   risk, compatibility risk, repeatability, deployment order, and rollback.
+5. Prefer local validation first, then staging, then production.
+6. Production migrations must be a separate, explicitly approved step.
+
+## Testing and Load Tests
+
+1. Run available local checks such as type checking, build, tests, and
+   `npm run ai:check` before recommending deployment.
+2. Do not run a load test until the target URL is displayed and verified.
+3. Never run a load test against production without explicit user approval.
+4. On local or staging environments, increase concurrency gradually:
+   5-10, then 50, then 100, then 200.
+5. Stop when errors, latency, or resource usage become unsafe.
+
+## Quality Gates and Definition of Done
+
+Code changes are not complete merely because files were edited or every plan
+item was checked off.
+
+1. Inspect every added or modified text file for broken encoding, replacement
+   characters, malformed strings, and corrupted user-facing text. Fix all
+   mojibake before reporting completion.
+2. Run the repository's real validation commands, including type checking,
+   production build, linting, tests, and project-specific checks when they
+   exist.
+3. Report each command, its exit code, and a short result summary. A command
+   that could not run is `NOT VERIFIED`, not passed.
+4. Do not claim that a feature works, a build passes, or a capacity target is
+   supported without successful evidence from the relevant validation.
+5. Review the final diff for accidental changes, generated files, secrets,
+   debug code, and unrelated edits.
+6. For user-facing changes, verify the main workflow and important empty,
+   loading, error, permission, and retry states.
+7. If validation fails, fix the problem and rerun the failed checks. If the
+   environment prevents validation, stop and clearly list the unverified work.
+
+## Database Performance and Authorization
+
+Any database change must be reviewed for correctness, performance, and access
+control before staging or production use.
+
+1. For every new or changed query, RPC, function, policy, or migration:
+   - identify the expected callers and roles;
+   - verify anonymous, authenticated, owner, moderator, admin, and service-role
+     behavior as applicable;
+   - confirm unauthorized roles cannot read or modify protected data;
+   - verify row-level security behavior instead of assuming it.
+2. Review query plans and indexes for filtering, sorting, joins, pagination,
+   full-text search, and count queries. Do not add an index only by intuition;
+   use representative data and `EXPLAIN`/`EXPLAIN ANALYZE` where safe.
+3. Check migration locking, runtime, compatibility, repeatability, deployment
+   order, and rollback behavior.
+4. Test both allowed and denied permission cases in a local or staging
+   environment before production.
+5. A new load-test script is tooling, not proof of capacity. Capacity claims
+   require recorded staging results such as concurrency, request count,
+   latency, error rate, and relevant database or application resource usage.
+
+## Staging Gate
+
+Changes that affect the database, authorization, shared queries, performance,
+uploads, notifications, or other production-critical behavior must pass
+staging before production.
+
+1. Deploy to staging only after local quality gates pass.
+2. Confirm staging configuration and target identifiers before running
+   migrations or tests.
+3. Apply migrations in the documented order and run smoke tests immediately.
+4. Verify representative user roles and end-to-end workflows.
+5. Run performance tests gradually and record the results.
+6. Test rollback or otherwise validate the rollback procedure.
+7. Stop and report results. Production remains a separate explicitly approved
+   action even when staging passes.
+
+## Deployment
+
+1. Do not deploy automatically after code changes or successful tests.
+2. Stop after local verification and report:
+   - changed files and purpose;
+   - commands run and results;
+   - remaining risks;
+   - database migration and rollback steps;
+   - staging and production checklist.
+3. Wait for explicit approval before staging changes, production changes,
+   production database operations, or production load testing.
+
+## Safety Priority
+
+If a task conflicts with these rules, pause the risky action, explain the
+conflict, and ask for explicit confirmation. Never treat a broad request such
+as "finish everything" as permission to modify production.
+
+When a verified mistake or recurring failure reveals a reusable lesson, fix the
+immediate issue and update `AI_WORK_MANUAL.md` using its lesson template. Do not
+record secrets, personal data, unsupported assumptions, or duplicate lessons.

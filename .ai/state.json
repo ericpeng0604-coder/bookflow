@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260611-recovery-deploy-key",
-  "taskTitle": "讓救援工作流程使用專用 Deploy Key",
-  "baseCommit": "5777ce70ab63a9e152ee62820c47f0dd952ace73",
-  "updatedAt": "2026-06-11T20:20:00+08:00",
+  "taskId": "20260612-deploy-marketplace-chat-favorites-and-no",
+  "taskTitle": "Deploy marketplace chat favorites and notification fixes",
+  "baseCommit": "d51043aa5e7b594483402dc58a922539c8c35237",
+  "updatedAt": "2026-06-12T08:20:55.738Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/2026-06-11-recovery-deploy-key.md"
+  "historyFile": ".ai/history/20260612-0820-20260612-deploy-marketplace-chat-favorit.md"
 }
