@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：Deploy marketplace chat favorites and notification fixes
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`d51043aa5e7b594483402dc58a922539c8c35237`
+- 封存時間：2026-06-12T08:20:55.735Z
+
+---
 # BookFlow AI 交接
 
 ## 目前目標
