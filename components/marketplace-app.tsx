@@ -99,6 +99,8 @@ const CHAT_PHRASES = [
   "抱歉，我想調整面交時間，可以再討論嗎？",
 ];
 
+const HIDDEN_REQUEST_MESSAGES = new Set(["通用語句提供選擇"]);
+
 const statusLabels: Record<BookStatus, string> = {
   available: "販售中",
   negotiating: "洽談中",
@@ -1684,7 +1686,7 @@ export function MarketplaceApp() {
                     <div className="request-main">
                       <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
                       <h3>{book.title}</h3>
-                      <p>「{request.message}」</p>
+                      {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
                       {request.status === "accepted" && contact && (
                         <div className="contact-box">
                           <Check size={16} />
@@ -1725,7 +1727,7 @@ export function MarketplaceApp() {
                     <div className="request-main">
                       <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
                       <h3>{buyer?.name} 想買《{book.title}》</h3>
-                      <p>「{request.message}」</p>
+                      {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
                       {request.status === "accepted" && <div className="contact-note">為保護買家隱私，請先使用站內聊天室聯絡。</div>}
                       {request.status === "accepted" && supabase && currentUser && (
                         <>
