@@ -114,10 +114,14 @@ build its application link, allowing a caller-controlled destination.
 configuration.
 
 **Detection:** Review email, webhook, redirect, and notification URLs for values
-derived from `Origin`, `Host`, or forwarded-host headers.
+derived from `Origin`, `Host`, or forwarded-host headers. Before deployment,
+open the configured public URL and verify that its visible brand and application
+match the intended project.
 
 **Prevention rule:** Build externally delivered application links from a
 validated server-side environment variable, never directly from request headers.
+Do not infer the canonical domain from a similar project name; verify the domain
+against the live application before saving or deploying it.
 
 ### LESSON-007: Public email endpoints need abuse controls
 
