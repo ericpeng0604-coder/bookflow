@@ -75,3 +75,18 @@
 ## 最後基準 Commit
 
 `d51043aa5e7b594483402dc58a922539c8c35237`
+
+## Release Update 2026-06-12
+
+- PR #5 publishes the setup health check, independent hero search input,
+  trade-chat quick phrases, chat notifications, and seller-controlled contact
+  sharing.
+- Production database still requires
+  `supabase/chat-notifications-and-contact-privacy.sql`.
+- Contact data is stored in the private `book_contact_preferences` table and is
+  exposed only to an accepted buyer when the seller selects Email or LINE ID.
+- Verified locally: TypeScript, filter checks, ESLint with zero errors, Next.js
+  production build, and browser page load without runtime errors.
+- Do not report these features as implemented online until PR #5 is merged,
+  Vercel production is Ready, the migration is applied, and production behavior
+  is checked.

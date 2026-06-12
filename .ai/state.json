@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260612-deploy-marketplace-chat-favorites-and-no",
-  "taskTitle": "Deploy marketplace chat favorites and notification fixes",
-  "baseCommit": "d51043aa5e7b594483402dc58a922539c8c35237",
-  "updatedAt": "2026-06-12T08:20:55.738Z",
+  "taskId": "20260612-release-chat-contact-health-check",
+  "taskTitle": "Release chat notifications contact privacy and setup health check",
+  "baseCommit": "15387dce57c495d80751e615eb028de4e5322593",
+  "updatedAt": "2026-06-12T12:56:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
   "historyFile": ".ai/history/20260612-0820-20260612-deploy-marketplace-chat-favorit.md"
 }
