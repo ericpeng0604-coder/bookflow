@@ -168,6 +168,22 @@ required migration state.
 unmigrated work as "not yet implemented online" and list the remaining release
 step. Claim online implementation only after production verification.
 
+### LESSON-010: Deployment probes must match the installed shell version
+
+**Observed problem:** A production endpoint probe waited through repeated
+failures because it used a PowerShell parameter unavailable on the installed
+Windows PowerShell version.
+
+**Cause:** The probe assumed PowerShell 7 behavior without checking the local
+runtime.
+
+**Detection:** Treat an immediate unknown-parameter error as a probe failure,
+not a deployment failure, and check `$PSVersionTable.PSVersion` when command
+compatibility is uncertain.
+
+**Prevention rule:** Use Windows PowerShell-compatible HTTP error handling in
+repository deployment checks unless the runtime version has been verified.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
