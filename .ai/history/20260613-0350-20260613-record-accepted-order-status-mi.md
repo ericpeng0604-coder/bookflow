@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：Record accepted order status migration fix
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`1a4ae9d0bd2d5ba84ed1e89353c445613d458d62`
+- 封存時間：2026-06-13T03:50:23.700Z
+
+---
 # BookFlow AI 交接
 
 ## 目前目標
