@@ -37,6 +37,13 @@ alter table public.purchase_requests
 
 alter table public.purchase_requests
   drop constraint if exists purchase_requests_status_check;
+
+update public.purchase_requests
+set status = 'reserved',
+    reservation_expires_at = coalesce(reservation_expires_at, now() + interval '7 days'),
+    updated_at = now()
+where status = 'accepted';
+
 alter table public.purchase_requests
   add constraint purchase_requests_status_check check (
     status in (
@@ -51,9 +58,8 @@ set title_snapshot = b.title,
     edition_snapshot = b.edition,
     image_snapshot = b.image_url,
     meetup_snapshot = b.meetup,
-    status = case when pr.status = 'accepted' then 'reserved' else pr.status end,
     reservation_expires_at = case
-      when pr.status = 'accepted' then coalesce(pr.reservation_expires_at, now() + interval '7 days')
+      when pr.status = 'reserved' then coalesce(pr.reservation_expires_at, now() + interval '7 days')
       else pr.reservation_expires_at
     end,
     updated_at = now()

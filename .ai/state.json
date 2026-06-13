@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260613-record-legacy-trigger-migration-fix",
-  "taskTitle": "Record legacy trigger migration fix",
-  "baseCommit": "0a9daf72c884db40149cce1fa499fc3896c13145",
-  "updatedAt": "2026-06-13T03:42:42.620Z",
+  "taskId": "20260613-record-accepted-order-status-migration-f",
+  "taskTitle": "Record accepted order status migration fix",
+  "baseCommit": "1a4ae9d0bd2d5ba84ed1e89353c445613d458d62",
+  "updatedAt": "2026-06-13T03:50:23.700Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260613-0342-20260613-record-legacy-trigger-migration.md"
+  "historyFile": ".ai/history/20260613-0350-20260613-record-accepted-order-status-mi.md"
 }
