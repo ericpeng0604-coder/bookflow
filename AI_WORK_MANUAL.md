@@ -184,6 +184,23 @@ compatibility is uncertain.
 **Prevention rule:** Use Windows PowerShell-compatible HTTP error handling in
 repository deployment checks unless the runtime version has been verified.
 
+### LESSON-011: Column type migrations must drop every dependent RLS policy
+
+**Observed problem:** A production migration could not change an order status
+column from an enum to text because one older RLS update policy still referenced
+that column.
+
+**Cause:** The migration removed the policies created by the main schema but
+missed a later policy variant introduced by the suspension hardening migration.
+
+**Detection:** Before altering a column type, inspect `pg_policy`, constraints,
+indexes, views, triggers, and functions for dependencies, including names from
+all historical migrations.
+
+**Prevention rule:** Treat column type changes as repository-wide dependency
+migrations. Drop every dependent policy variant before the change and recreate
+only the policies required by the new authorization model.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

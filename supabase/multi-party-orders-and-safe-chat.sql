@@ -7,6 +7,7 @@ drop policy if exists "Trading parties can read requests" on public.purchase_req
 drop policy if exists "Active buyers can create valid requests" on public.purchase_requests;
 drop policy if exists "Buyers can create valid requests" on public.purchase_requests;
 drop policy if exists "Buyers can cancel pending requests" on public.purchase_requests;
+drop policy if exists "Active buyers can cancel pending requests" on public.purchase_requests;
 drop policy if exists "Trade participants read messages" on public.trade_messages;
 drop policy if exists "Trade participants send messages" on public.trade_messages;
 drop index if exists public.purchase_requests_one_active_per_buyer;
@@ -788,6 +789,7 @@ $$;
 drop policy if exists "Active buyers can create valid requests" on public.purchase_requests;
 drop policy if exists "Buyers can create valid requests" on public.purchase_requests;
 drop policy if exists "Buyers can cancel pending requests" on public.purchase_requests;
+drop policy if exists "Active buyers can cancel pending requests" on public.purchase_requests;
 revoke insert, update, delete on public.purchase_requests from authenticated;
 grant select on public.purchase_requests to authenticated;
 create policy "Trading parties can read requests"
