@@ -3,6 +3,9 @@
 
 drop function if exists public.respond_to_purchase_request(uuid, public.request_status);
 drop function if exists public.complete_trade(uuid);
+drop trigger if exists purchase_request_created_notification on public.purchase_requests;
+drop trigger if exists purchase_request_status_notification on public.purchase_requests;
+drop trigger if exists trade_message_notification on public.trade_messages;
 drop policy if exists "Trading parties can read requests" on public.purchase_requests;
 drop policy if exists "Active buyers can create valid requests" on public.purchase_requests;
 drop policy if exists "Buyers can create valid requests" on public.purchase_requests;

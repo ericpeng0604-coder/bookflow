@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260613-fix-legacy-purchase-request-policy-migra",
-  "taskTitle": "Fix legacy purchase request policy migration",
-  "baseCommit": "936223354859ac3b033e7b9bc2e83ba0f422c1e1",
-  "updatedAt": "2026-06-13T03:37:05.786Z",
+  "taskId": "20260613-record-legacy-trigger-migration-fix",
+  "taskTitle": "Record legacy trigger migration fix",
+  "baseCommit": "0a9daf72c884db40149cce1fa499fc3896c13145",
+  "updatedAt": "2026-06-13T03:42:42.620Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260613-0337-20260613-fix-legacy-purchase-request-pol.md"
+  "historyFile": ".ai/history/20260613-0342-20260613-record-legacy-trigger-migration.md"
 }

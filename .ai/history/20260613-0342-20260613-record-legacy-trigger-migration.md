@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：Record legacy trigger migration fix
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`0a9daf72c884db40149cce1fa499fc3896c13145`
+- 封存時間：2026-06-13T03:42:42.619Z
+
+---
 # BookFlow AI 交接
 
 ## 目前目標
