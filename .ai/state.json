@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260613-release-multi-party-orders-and-safe-chat",
-  "taskTitle": "Release multi-party orders and safe chat",
-  "baseCommit": "dc0c40d3ee7b47fecf8308ee9894f9baddb3d5af",
-  "updatedAt": "2026-06-13T03:28:19.408Z",
+  "taskId": "20260613-fix-legacy-purchase-request-policy-migra",
+  "taskTitle": "Fix legacy purchase request policy migration",
+  "baseCommit": "936223354859ac3b033e7b9bc2e83ba0f422c1e1",
+  "updatedAt": "2026-06-13T03:37:05.786Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260613-0328-20260613-release-multi-party-orders-and-.md"
+  "historyFile": ".ai/history/20260613-0337-20260613-fix-legacy-purchase-request-pol.md"
 }
