@@ -9,8 +9,9 @@ import {
   mapReport,
   mapRequest,
   mapTradeContact,
+  mapConversation,
 } from "@/lib/marketplace/mappers";
-import type { Book, Profile, SellerLifecycle, TradeContact } from "@/lib/types";
+import type { Book, Conversation, Profile, SellerLifecycle, TradeContact } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 
@@ -159,6 +160,27 @@ export async function fetchNotifications(client: SupabaseClient) {
   return (data ?? []).map((row) => mapNotification(row));
 }
 
+export async function fetchConversations(client: SupabaseClient) {
+  const { data, error } = await client.rpc("list_my_conversations");
+  if (error) {
+    if (["PGRST202", "42883"].includes(error.code || "")) return [] as Conversation[];
+    throw error;
+  }
+  return (data ?? []).map((row: Record<string, unknown>) => mapConversation(row));
+}
+
+export async function fetchFavoriteIds(client: SupabaseClient) {
+  const { data, error } = await client
+    .from("favorites")
+    .select("book_id")
+    .order("created_at", { ascending: false });
+  if (error) {
+    if (["PGRST205", "42P01"].includes(error.code || "")) return [] as string[];
+    throw error;
+  }
+  return (data ?? []).map((row) => String(row.book_id));
+}
+
 export async function fetchSellerLifecycle(client: SupabaseClient) {
   const { data, error } = await client.rpc("list_seller_lifecycle");
   if (error) {
@@ -212,19 +234,25 @@ export async function fetchTradeContactsBatch(client: SupabaseClient, requestIds
 
 export async function loadUserWorkspaceData(client: SupabaseClient, _user: Profile) {
   const requests = await fetchUserRequests(client);
-  const acceptedIds = requests
-    .filter((request) => request.status === "accepted")
+  const selectedIds = requests
+    .filter((request) => ["reserved", "awaiting_confirmation", "completed"].includes(request.status))
     .map((request) => request.id);
 
-  const [myBooks, partyProfiles, notifications, contacts, sellerLifecycle] = await Promise.all([
+  const [myBooks, partyProfiles, notifications, contacts, sellerLifecycle, conversations, favoriteIds] = await Promise.all([
     fetchMyBooks(client),
     fetchPartyProfiles(client),
     fetchNotifications(client),
-    fetchTradeContactsBatch(client, acceptedIds),
+    fetchTradeContactsBatch(client, selectedIds),
     fetchSellerLifecycle(client),
+    fetchConversations(client),
+    fetchFavoriteIds(client),
   ]);
 
-  const requestBookIds = [...new Set(requests.map((request) => request.bookId))];
+  const requestBookIds = [...new Set([
+    ...requests.map((request) => request.bookId),
+    ...conversations.map((conversation: Conversation) => conversation.bookId),
+    ...favoriteIds,
+  ])];
   const missingBookIds = requestBookIds.filter((bookId) => !myBooks.some((book: Book) => book.id === bookId));
   const requestBooks = missingBookIds.length > 0 ? await fetchBooksByIds(client, missingBookIds) : [];
 
@@ -236,6 +264,8 @@ export async function loadUserWorkspaceData(client: SupabaseClient, _user: Profi
     notifications,
     contacts,
     sellerLifecycle,
+    conversations,
+    favoriteIds,
   };
 }
 

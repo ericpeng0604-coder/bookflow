@@ -122,23 +122,50 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .phrase-chip { border: 1px solid var(--line); background: #f8fbf9; color: var(--ink); border-radius: 10px; padding: 10px 12px; text-align: left; font-size: 12px; line-height: 1.5; cursor: pointer; }
 .phrase-chip.active { border-color: #9ec7b8; background: #edf6f2; color: var(--green); }
 .chat-toggle { margin-top: 10px; border: 1px solid #cfe0d9; background: #f4faf7; color: var(--green); border-radius: 8px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.detail-primary-actions { flex: 1; display: grid; grid-template-columns: .7fr 1.3fr; gap: 9px; }
+.detail-primary-actions .chat-toggle { margin-top: 0; justify-content: center; }
+.conversation-layout { display: grid; grid-template-columns: minmax(240px, 330px) 1fr; gap: 14px; min-height: 520px; }
+.conversation-list, .conversation-panel { border: 1px solid var(--line); border-radius: 12px; background: white; overflow: hidden; }
+.conversation-list { display: flex; flex-direction: column; }
+.conversation-item { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: white; padding: 12px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; text-align: left; cursor: pointer; }
+.conversation-item:hover, .conversation-item.active { background: #f1f8f5; }
+.conversation-item > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; }
+.conversation-item small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-item em { min-width: 21px; height: 21px; border-radius: 999px; display: grid; place-items: center; background: var(--orange); color: white; font-style: normal; font-size: 10px; }
+.conversation-panel .trade-chat { margin: 0; border: 0; border-radius: 0; height: 100%; }
 .trade-chat { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; overflow: hidden; }
-.trade-chat-log { max-height: 220px; overflow-y: auto; padding: 12px; display: grid; gap: 10px; }
+.trade-chat-head { padding: 12px; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); background: white; }
+.trade-chat-head > div:first-child { display: grid; gap: 3px; }
+.trade-chat-head small { color: var(--muted); font-size: 10px; }
+.trade-chat-head > div:last-child { display: flex; gap: 5px; align-items: flex-start; }
+.trade-chat-head button, .message-tools button { border: 0; background: none; color: var(--muted); font-size: 10px; cursor: pointer; display: inline-flex; gap: 3px; align-items: center; }
+.trade-chat-log { max-height: 390px; min-height: 260px; overflow-y: auto; padding: 12px; display: grid; gap: 10px; align-content: start; }
 .trade-chat-empty { margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
 .trade-chat-error { margin: 0; color: #983f35; background: #fff4f1; border-radius: 8px; padding: 8px 10px; font-size: 12px; }
 .trade-chat-bubble { max-width: 88%; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--line); }
 .trade-chat-bubble.mine { margin-left: auto; background: #edf6f2; border-color: #cfe0d9; }
 .trade-chat-bubble small { display: block; color: var(--muted); font-size: 10px; margin-bottom: 4px; }
 .trade-chat-bubble p { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.trade-chat-bubble .recalled { color: #8f9995; font-style: italic; }
+.message-tools { display: flex; justify-content: flex-end; gap: 6px; margin-top: 5px; }
+.chat-images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-top: 7px; }
+.chat-images img { width: 100%; height: 130px; object-fit: cover; border-radius: 7px; }
 .trade-chat-phrases { padding: 10px; border-top: 1px solid var(--line); background: #f7faf8; }
 .trade-chat-phrases small { display: block; margin-bottom: 7px; color: var(--muted); }
 .trade-chat-phrases > div { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
 .trade-chat-phrases button { flex: 0 0 auto; max-width: 240px; border: 1px solid #cfe0d9; border-radius: 999px; background: white; color: var(--green); padding: 7px 10px; font-size: 11px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trade-chat-phrases button:hover { background: #edf6f2; }
 .trade-chat-compose { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); background: #fff; }
+.chat-image-picker { width: 40px; border: 1px solid var(--line); border-radius: 8px; display: grid; place-items: center; color: var(--green); cursor: pointer; position: relative; }
+.chat-image-picker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .trade-chat-compose input { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
 .trade-chat-compose button { border: 0; border-radius: 8px; background: var(--green); color: #fff; padding: 0 14px; font-weight: 600; cursor: pointer; }
 .trade-chat-compose button:disabled { opacity: .5; cursor: not-allowed; }
+.selected-images { align-self: center; color: var(--muted); font-size: 10px; }
+.chat-readonly { margin: 0; padding: 13px; text-align: center; color: var(--muted); background: #f5f7f6; font-size: 11px; }
+.order-timeline { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.order-timeline span { color: #8d9893; background: #f0f2f1; border-radius: 999px; padding: 5px 8px; font-size: 10px; }
+.order-timeline span.done { color: var(--green); background: var(--mint); }
 .auth-hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: -4px; }
 .card-body { padding: 17px; }
 .course-tag { color: var(--green); font-size: 11px; font-weight: 700; background: #edf6f2; padding: 4px 8px; border-radius: 4px; }
@@ -218,8 +245,9 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .request-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; background: var(--mint); color: var(--green); }
 .request-status { font-size: 11px; font-weight: 700; }
 .request-status.pending { color: #9a631b; }
-.request-status.accepted { color: var(--green); }
-.request-status.rejected, .request-status.cancelled { color: #8c9692; }
+.request-status.waitlisted { color: #7a6a31; }
+.request-status.reserved, .request-status.awaiting_confirmation, .request-status.completed { color: var(--green); }
+.request-status.rejected, .request-status.cancelled, .request-status.expired { color: #8c9692; }
 .request-actions .accept { background: var(--green); color: white; border-color: var(--green); }
 .report-inline { border: 0; background: none; color: #9a4d43; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-size: 11px; }
 .request-report-button { margin-left: auto; align-self: flex-end; width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent; color: #9ca9a4; display: grid; place-items: center; cursor: pointer; }
@@ -388,6 +416,9 @@ footer { border-top: 1px solid var(--line); padding: 35px max(6vw, 28px); displa
   .dashboard-tabs { overflow-x: auto; gap: 20px; }
   .dashboard-tabs button { white-space: nowrap; }
   .listing-row, .request-row { align-items: flex-start; flex-wrap: wrap; }
+  .conversation-layout { grid-template-columns: 1fr; }
+  .conversation-list { max-height: 250px; overflow-y: auto; }
+  .detail-primary-actions { grid-template-columns: 1fr; width: 100%; }
   .listing-main, .request-main { min-width: calc(100% - 110px); }
   .row-actions, .request-actions { width: 100%; justify-content: flex-end; }
   .book-form { grid-template-columns: 1fr; }

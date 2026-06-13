@@ -1,5 +1,13 @@
 export type BookStatus = "available" | "negotiating" | "sold";
-export type RequestStatus = "pending" | "accepted" | "rejected" | "cancelled";
+export type RequestStatus =
+  | "pending"
+  | "waitlisted"
+  | "reserved"
+  | "awaiting_confirmation"
+  | "completed"
+  | "rejected"
+  | "cancelled"
+  | "expired";
 export type ReviewStatus = "pending" | "approved" | "rejected";
 export type UserRole = "user" | "moderator" | "admin";
 export type AccountStatus = "active" | "suspended";
@@ -25,6 +33,11 @@ export type NotificationType =
   | "book_hidden"
   | "account_suspended"
   | "trade_message"
+  | "order_reminder"
+  | "order_expired"
+  | "reservation_cancelled"
+  | "handoff_confirmation"
+  | "book_sold"
   | "listing_lifecycle";
 
 export type Profile = {
@@ -77,7 +90,18 @@ export type PurchaseRequest = {
   buyerId: string;
   message: string;
   status: RequestStatus;
+  titleSnapshot: string;
+  priceSnapshot: number;
+  editionSnapshot: string;
+  imageSnapshot: string;
+  meetupSnapshot: string;
+  reservationExpiresAt: string | null;
+  sellerHandoffAt: string | null;
+  buyerConfirmedAt: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type TradeContact = {
@@ -90,9 +114,34 @@ export type TradeContact = {
 
 export type TradeMessage = {
   id: string;
-  requestId: string;
+  conversationId: string;
   senderId: string;
   body: string;
+  imagePaths: string[];
+  recalledAt: string | null;
+  createdAt: string;
+};
+
+export type ConversationStatus = "active" | "closed";
+
+export type Conversation = {
+  id: string;
+  bookId: string;
+  buyerId: string;
+  sellerId: string;
+  status: ConversationStatus;
+  closedReason: string;
+  lastMessageAt: string;
+  unreadCount: number;
+  createdAt: string;
+};
+
+export type OrderEvent = {
+  id: string;
+  requestId: string;
+  eventType: string;
+  actorId: string | null;
+  details: Record<string, unknown>;
   createdAt: string;
 };
 
