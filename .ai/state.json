@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260613-record-accepted-order-status-migration-f",
-  "taskTitle": "Record accepted order status migration fix",
-  "baseCommit": "1a4ae9d0bd2d5ba84ed1e89353c445613d458d62",
-  "updatedAt": "2026-06-13T03:50:23.700Z",
+  "taskId": "20260613-record-completed-production-release",
+  "taskTitle": "Record completed production release",
+  "baseCommit": "c9ceb8f8622e12eb0fac2a9c748951f2c3a321ee",
+  "updatedAt": "2026-06-13T03:56:23.552Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260613-0350-20260613-record-accepted-order-status-mi.md"
+  "historyFile": ".ai/history/20260613-0356-20260613-record-completed-production-rel.md"
 }
