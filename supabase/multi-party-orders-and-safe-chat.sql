@@ -345,6 +345,52 @@ begin
 end;
 $$;
 
+create or replace function public.open_order_conversation(target_request_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_request public.purchase_requests;
+  target_book public.books;
+  existing_id uuid;
+  created_id uuid;
+begin
+  if auth.uid() is null or not public.is_active_user() then
+    raise exception 'Active account required';
+  end if;
+  select * into target_request
+  from public.purchase_requests
+  where id = target_request_id;
+  select * into target_book
+  from public.books
+  where id = target_request.book_id;
+  if target_request.id is null
+    or auth.uid() not in (target_request.buyer_id, target_book.seller_id)
+    or target_request.status not in ('pending', 'waitlisted', 'reserved', 'awaiting_confirmation') then
+    raise exception 'Active order participant required';
+  end if;
+  if exists (
+    select 1 from public.user_blocks
+    where (blocker_id = target_request.buyer_id and blocked_id = target_book.seller_id)
+       or (blocker_id = target_book.seller_id and blocked_id = target_request.buyer_id)
+  ) then
+    raise exception 'Conversation is blocked';
+  end if;
+  select id into existing_id
+  from public.conversations
+  where book_id = target_request.book_id
+    and buyer_id = target_request.buyer_id
+    and status = 'active';
+  if existing_id is not null then return existing_id; end if;
+  insert into public.conversations (book_id, buyer_id, seller_id)
+  values (target_request.book_id, target_request.buyer_id, target_book.seller_id)
+  returning id into created_id;
+  return created_id;
+end;
+$$;
+
 create or replace function public.list_my_conversations()
 returns table (
   id uuid, book_id uuid, buyer_id uuid, seller_id uuid, status text,
@@ -526,13 +572,37 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare target_book public.books; created_id uuid;
+declare target_book public.books; existing_request public.purchase_requests; created_id uuid;
 begin
   if auth.uid() is null or not public.is_active_user() then raise exception 'Active account required'; end if;
   select * into target_book from public.books where id = target_book_id for update;
   if target_book.id is null or target_book.seller_id = auth.uid()
-    or target_book.status <> 'available' or target_book.lifecycle_state <> 'active'
+    or target_book.lifecycle_state <> 'active'
     or target_book.review_status <> 'approved' or target_book.moderation_visibility <> 'visible' then
+    raise exception 'Book is not accepting orders';
+  end if;
+  select * into existing_request
+  from public.purchase_requests
+  where book_id = target_book_id
+    and buyer_id = auth.uid()
+    and status in ('pending', 'waitlisted', 'reserved', 'awaiting_confirmation')
+  for update;
+  if existing_request.id is not null then
+    update public.purchase_requests
+    set message = left(coalesce(request_message, ''), 500),
+        updated_at = now()
+    where id = existing_request.id;
+    insert into public.order_events (request_id, event_type, actor_id)
+    values (existing_request.id, 'request_updated', auth.uid());
+    insert into public.notifications (
+      recipient_id, actor_id, type, book_id, request_id, title, message
+    ) values (
+      target_book.seller_id, auth.uid(), 'request_created', target_book.id, existing_request.id,
+      '買家修改了訂單', '「' || target_book.title || '」的購買意願內容已更新'
+    );
+    return existing_request.id;
+  end if;
+  if target_book.status <> 'available' then
     raise exception 'Book is not accepting orders';
   end if;
   insert into public.purchase_requests (
@@ -544,6 +614,7 @@ begin
   ) returning id into created_id;
   insert into public.order_events (request_id, event_type, actor_id)
   values (created_id, 'requested', auth.uid());
+  perform public.open_order_conversation(created_id);
   return created_id;
 end;
 $$;
@@ -891,6 +962,7 @@ create trigger trade_message_notification
   after insert on public.trade_messages for each row execute procedure public.notify_chat_message();
 
 revoke execute on function public.start_conversation(uuid) from public, anon;
+revoke execute on function public.open_order_conversation(uuid) from public, anon;
 revoke execute on function public.list_my_conversations() from public, anon;
 revoke execute on function public.mark_conversation_read(uuid) from public, anon;
 revoke execute on function public.send_chat_message(uuid, text, text[]) from public, anon;
@@ -907,6 +979,7 @@ revoke execute on function public.finish_trade(uuid, uuid, boolean) from public,
 revoke execute on function public.process_trade_deadlines(timestamptz) from public, anon, authenticated;
 
 grant execute on function public.start_conversation(uuid) to authenticated;
+grant execute on function public.open_order_conversation(uuid) to authenticated;
 grant execute on function public.list_my_conversations() to authenticated;
 grant execute on function public.mark_conversation_read(uuid) to authenticated;
 grant execute on function public.send_chat_message(uuid, text, text[]) to authenticated;

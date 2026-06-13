@@ -235,6 +235,7 @@ export function MarketplaceApp() {
   const [modal, setModal] = useState<Modal>(null);
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>("listings");
   const [editingBook, setEditingBook] = useState<Book | null>(null);
+  const [editingRequest, setEditingRequest] = useState<PurchaseRequest | null>(null);
   const [toast, setToast] = useState("");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -668,7 +669,6 @@ export function MarketplaceApp() {
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
-    const previousOverflow = document.body.style.overflow;
     const closeMenu = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMobileMenuOpen(false);
     };
@@ -676,11 +676,9 @@ export function MarketplaceApp() {
       if (window.innerWidth > 980) setMobileMenuOpen(false);
     };
 
-    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeMenu);
     window.addEventListener("resize", closeOnDesktop);
     return () => {
-      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeMenu);
       window.removeEventListener("resize", closeOnDesktop);
     };
@@ -1071,17 +1069,12 @@ export function MarketplaceApp() {
       return;
     }
     const message = String(new FormData(event.currentTarget).get("message") || "").trim();
-    const duplicate = store.requests.some(
+    const duplicate = store.requests.find(
       (request) =>
         request.bookId === selectedBook.id &&
         request.buyerId === currentUser.id &&
         ["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status),
     );
-    if (duplicate) {
-      setToast("你已送出過購買意願");
-      setModal(null);
-      return;
-    }
     if (supabase) {
       const { error } = await supabase.rpc("create_purchase_request", {
         target_book_id: selectedBook.id,
@@ -1094,7 +1087,22 @@ export function MarketplaceApp() {
       await reloadAfterUserMutation();
       void dispatchNotificationDeliveries();
       setModal(null);
-      setToast("購買意願已送出");
+      setEditingRequest(null);
+      setToast(duplicate || editingRequest ? "訂單內容已更新" : "購買意願已送出");
+      return;
+    }
+    if (duplicate) {
+      setStore((previous) => ({
+        ...previous,
+        requests: previous.requests.map((request) =>
+          request.id === duplicate.id
+            ? { ...request, message, updatedAt: new Date().toISOString() }
+            : request,
+        ),
+      }));
+      setModal(null);
+      setEditingRequest(null);
+      setToast("訂單內容已更新");
       return;
     }
     setStore((previous) => ({
@@ -1123,6 +1131,7 @@ export function MarketplaceApp() {
       ],
     }));
     setModal(null);
+    setEditingRequest(null);
     setToast("購買意願已送出");
   }
 
@@ -1229,6 +1238,21 @@ export function MarketplaceApp() {
   async function startConversation(bookId: string) {
     if (!supabase || !currentUser) return;
     const { data, error } = await supabase.rpc("start_conversation", { target_book_id: bookId });
+    if (error) {
+      setToast(`無法開啟聊聊：${error.message}`);
+      return;
+    }
+    await loadUserWorkspace(currentUser);
+    setView("dashboard");
+    setDashboardTab("chats");
+    void openConversation(String(data));
+  }
+
+  async function openOrderConversation(requestId: string) {
+    if (!supabase || !currentUser) return;
+    const { data, error } = await supabase.rpc("open_order_conversation", {
+      target_request_id: requestId,
+    });
     if (error) {
       setToast(`無法開啟聊聊：${error.message}`);
       return;
@@ -2150,6 +2174,17 @@ export function MarketplaceApp() {
                       {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
                         <button onClick={() => void cancelRequest(request.id)}><X size={16} />取消訂單</button>
                       )}
+                      {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
+                        <button onClick={() => {
+                          setEditingRequest(request);
+                          setSelectedId(request.bookId);
+                          setDetailBook(null);
+                          setModal("request");
+                        }}><Pencil size={16} />編輯</button>
+                      )}
+                      {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
+                        <button onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />聊聊</button>
+                      )}
                       {request.status === "awaiting_confirmation" && (
                         <button className="accept" onClick={() => void buyerConfirmTrade(request.id)}><CheckCheck size={16} />確認收到</button>
                       )}
@@ -2180,6 +2215,9 @@ export function MarketplaceApp() {
                       <OrderTimeline request={request} />
                     </div>
                     <div className="request-actions">
+                      {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
+                        <button onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />聊聊</button>
+                      )}
                       {["pending", "waitlisted"].includes(request.status) && book.status === "available" && (
                         <button className="accept" onClick={() => void respondToRequest(request.id, "accepted")}><Check size={16} />選定買家</button>
                       )}
@@ -2387,7 +2425,14 @@ export function MarketplaceApp() {
           onSubmit={saveContactSettings}
         />
       )}
-      {modal === "request" && selectedBook && <RequestModal book={selectedBook} onClose={() => setModal(null)} onSubmit={sendRequest} />}
+      {modal === "request" && selectedBook && (
+        <RequestModal
+          book={selectedBook}
+          request={editingRequest}
+          onClose={() => { setModal(null); setEditingRequest(null); }}
+          onSubmit={sendRequest}
+        />
+      )}
       {modal === "report" && reportTarget && (
         <ReportModal
           target={reportTarget}
@@ -2887,8 +2932,18 @@ function ContactSettingsModal({
   );
 }
 
-function RequestModal({ book, onClose, onSubmit }: { book: Book; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  const [message, setMessage] = useState(REQUEST_PHRASES[0]);
+function RequestModal({
+  book,
+  request,
+  onClose,
+  onSubmit,
+}: {
+  book: Book;
+  request?: PurchaseRequest | null;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const [message, setMessage] = useState(request?.message || REQUEST_PHRASES[0]);
 
   return (
     <ModalShell title="確認下訂" subtitle={`想購買《${book.title}》`} onClose={onClose}>
@@ -2920,7 +2975,10 @@ function RequestModal({ book, onClose, onSubmit }: { book: Book; onClose: () => 
             placeholder="介紹一下方便面交的時間，或想確認的書況..."
           />
         </label>
-        <button className="primary wide" type="submit"><MessageCircle size={17} />確認下訂</button>
+        <button className="primary wide" type="submit">
+          {request ? <Pencil size={17} /> : <MessageCircle size={17} />}
+          {request ? "儲存訂單修改" : "確認下訂"}
+        </button>
         <p className="form-note">下訂後仍需等待賣家選定，不代表交易完成。</p>
       </form>
     </ModalShell>
