@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260613-optimize-marketplace-capacity-and-deploy",
-  "taskTitle": "optimize marketplace capacity and deploy",
-  "baseCommit": "ab964ad250f4494c066a4e4cf95889486dafa9f7",
-  "updatedAt": "2026-06-13T12:18:45.535Z",
+  "taskId": "20260613-deploy-optimized-book-cover-compression",
+  "taskTitle": "deploy optimized book cover compression",
+  "baseCommit": "a2ae3bb6aa42a86bbd8a0857b56dc7eff2a13388",
+  "updatedAt": "2026-06-13T16:12:45.320Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260613-1218-20260613-optimize-marketplace-capacity-a.md"
+  "historyFile": ".ai/history/20260613-1612-20260613-deploy-optimized-book-cover-com.md"
 }

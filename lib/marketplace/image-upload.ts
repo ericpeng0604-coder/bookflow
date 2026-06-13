@@ -1,6 +1,6 @@
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const MAX_WIDTH = 1200;
-const TARGET_BYTES = 700 * 1024;
+const MAX_WIDTH = 1000;
+const TARGET_BYTES = 400 * 1024;
 const INITIAL_QUALITY = 0.8;
 const MIN_QUALITY = 0.55;
 
