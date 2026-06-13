@@ -13,6 +13,8 @@ const checks = [
   ["idempotent notification keys", /notifications_dedupe_key_idx|on conflict \(dedupe_key\)/],
   ["private chat image bucket", /'chat-images', 'chat-images', false/],
   ["message recall deadline", /interval '10 minutes'/],
+  ["repeat order updates active request", /event_type, actor_id\)\s*values \(existing_request\.id, 'request_updated'/],
+  ["order parties can open chat", /function public\.open_order_conversation\(target_request_id uuid\)/],
   ["hourly Supabase cron", /process-trade-deadlines-hourly/],
 ];
 

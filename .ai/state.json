@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260613-implement-chat-read-state-30-day-confirm",
-  "taskTitle": "Implement chat read state, 30-day confirmations, and browser push",
-  "baseCommit": "a9837d67195415409c03d45b0f18ef9bf5464e67",
-  "updatedAt": "2026-06-13T05:53:54.114Z",
+  "taskId": "20260613-deploy-order-editing-and-seller-chat",
+  "taskTitle": "deploy order editing and seller chat",
+  "baseCommit": "cfac9d20849e7c75ef3bea9645ec6a705bc88987",
+  "updatedAt": "2026-06-13T10:40:03.755Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260613-0553-20260613-implement-chat-read-state-30-da.md"
+  "historyFile": ".ai/history/20260613-1040-20260613-deploy-order-editing-and-seller.md"
 }
