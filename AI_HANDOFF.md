@@ -18,6 +18,7 @@
 - 已確認失敗原因是舊版 `Active buyers can cancel pending requests` 規則仍依賴
   `status` 欄位。
 - 遷移現在會在型別變更前移除該舊規則，並在新授權模型階段再次清理。
+- 遷移也會在型別變更前移除舊版訂單通知 Trigger，之後依新版流程重建。
 - 交易工作流程檢查通過 11/11，差異檢查通過。
 - 已在 `AI_WORK_MANUAL.md` 記錄欄位型別遷移的 RLS 相依檢查規則。
 
