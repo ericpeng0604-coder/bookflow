@@ -87,6 +87,7 @@ export function mapNotification(row: Record<string, unknown>): Notification {
     type: row.type as NotificationType,
     bookId: row.book_id ? String(row.book_id) : null,
     requestId: row.request_id ? String(row.request_id) : null,
+    conversationId: row.conversation_id ? String(row.conversation_id) : null,
     title: String(row.title),
     message: String(row.message || ""),
     readAt: row.read_at ? String(row.read_at) : null,

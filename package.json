@@ -17,19 +17,22 @@
     "load-test:marketplace": "node scripts/load-test-marketplace.mjs",
     "check:filters": "node scripts/check-filters.mjs",
     "check:lifecycle": "node scripts/check-listing-lifecycle.mjs",
-    "check:trade": "node scripts/check-trade-workflow.mjs"
+    "check:trade": "node scripts/check-trade-workflow.mjs",
+    "check:push": "node scripts/check-browser-push.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.0",
     "lucide-react": "^0.468.0",
     "next": "^15.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.3.0",
     "playwright": "^1.60.0",

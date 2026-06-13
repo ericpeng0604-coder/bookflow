@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { deliverNotificationEmails } from "@/lib/server/notification-email";
+import { deliverBrowserPush } from "@/lib/server/notification-push";
 
 function storagePath(imageUrl: string) {
   if (!imageUrl) return null;
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
       .from("books")
       .update({
         image_url: "",
-        meetup: "已封存",
+        meetup: "資料已依保留政策移除",
         description: "",
         lifecycle_state: "withdrawn",
         sanitized_at: now.toISOString(),
@@ -121,11 +122,19 @@ export async function GET(request: Request) {
     console.error("Lifecycle email delivery failed", error);
   }
 
+  let push = { enabled: false, sent: 0, failed: 0, skipped: 0 };
+  try {
+    push = await deliverBrowserPush(admin, { limit: 100 });
+  } catch (error) {
+    push = { enabled: true, sent: 0, failed: 1, skipped: 0 };
+    console.error("Lifecycle browser push delivery failed", error);
+  }
+
   return NextResponse.json({
     ok: true,
     lifecycle,
     cleanup: { deleted, sanitized, failed: cleanupFailed },
     email,
+    push,
   });
 }
-

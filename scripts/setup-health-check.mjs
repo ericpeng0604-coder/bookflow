@@ -149,7 +149,7 @@ async function checkSupabaseRemote(supabaseUrl, anonKey, serviceRoleKey) {
       options: { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } },
       missingCodes: ["PGRST205"],
     });
-    for (const table of ["conversations", "favorites", "order_events", "chat_reports"]) {
+    for (const table of ["conversations", "favorites", "order_events", "chat_reports", "push_subscriptions"]) {
       probes.push({
         area: "交易與聊聊",
         label: `${table} table`,
@@ -232,8 +232,24 @@ const supabaseUrl = required("NEXT_PUBLIC_SUPABASE_URL", "Supabase env");
 const anonKey = required("NEXT_PUBLIC_SUPABASE_ANON_KEY", "Supabase env");
 const serviceRoleKey = required("SUPABASE_SERVICE_ROLE_KEY", "管理員 OTP");
 const cronSecret = required("CRON_SECRET", "刊登生命週期");
+const vapidPublicKey = required("WEB_PUSH_VAPID_PUBLIC_KEY", "瀏覽器推播");
+const vapidPrivateKey = required("WEB_PUSH_VAPID_PRIVATE_KEY", "瀏覽器推播");
+const vapidSubject = required("WEB_PUSH_SUBJECT", "瀏覽器推播");
+const pushDispatchSecret = required("PUSH_DISPATCH_SECRET", "瀏覽器推播");
 if (cronSecret && cronSecret.length < 24) {
   add("WARN", "刊登生命週期", "CRON_SECRET 長度偏短。", "請使用至少 24 個隨機字元。");
+}
+if (pushDispatchSecret && pushDispatchSecret.length < 24) {
+  add("WARN", "瀏覽器推播", "PUSH_DISPATCH_SECRET 長度偏短。", "請使用至少 24 個隨機字元。");
+}
+if (vapidPublicKey && vapidPublicKey.length < 40) {
+  add("FAIL", "瀏覽器推播", "WEB_PUSH_VAPID_PUBLIC_KEY 格式不完整。", "請產生一組有效的 VAPID keys。");
+}
+if (vapidPrivateKey && vapidPrivateKey.length < 20) {
+  add("FAIL", "瀏覽器推播", "WEB_PUSH_VAPID_PRIVATE_KEY 格式不完整。", "請產生一組有效的 VAPID keys。");
+}
+if (vapidSubject && !/^(mailto:|https:\/\/)/i.test(vapidSubject)) {
+  add("FAIL", "瀏覽器推播", "WEB_PUSH_SUBJECT 必須是 mailto: 或 https:// URL。");
 }
 
 const parsedSupabaseUrl = parseUrl(supabaseUrl);
@@ -258,9 +274,7 @@ const resendKey = emailEnabled
 const resendFrom = emailEnabled
   ? required("RESEND_FROM_EMAIL", "Resend env")
   : optionalWhenDisabled("RESEND_FROM_EMAIL", "Resend env");
-const appUrl = emailEnabled
-  ? required("APP_URL", "通知 Email")
-  : optionalWhenDisabled("APP_URL", "通知 Email");
+const appUrl = required("APP_URL", "通知連結");
 
 if (resendKey && !resendKey.startsWith("re_")) {
   add("WARN", "Resend env", "RESEND_API_KEY 格式不像 Resend API key。", "確認使用的是 Resend 建立的 re_... key。");
@@ -317,9 +331,27 @@ sourceContains(
 );
 sourceContains(
   "app/api/cron/listing-lifecycle/route.ts",
-  ["CRON_SECRET", "process_listing_lifecycle", "deliverNotificationEmails"],
+  ["CRON_SECRET", "process_listing_lifecycle", "deliverNotificationEmails", "deliverBrowserPush"],
   "刊登生命週期",
   "每日排程 API",
+);
+sourceContains(
+  "supabase/browser-push-and-30-day-confirmation.sql",
+  ["push_subscriptions", "listing-30:", "listing-60:", "listing-90:", "listing-113:", "dispatch-browser-push-hourly"],
+  "瀏覽器推播",
+  "瀏覽器推播 migration",
+);
+sourceContains(
+  "app/api/notifications/push/subscription/route.ts",
+  ["push_subscriptions", "auth.getUser"],
+  "瀏覽器推播",
+  "推播訂閱 API",
+);
+sourceContains(
+  "lib/server/notification-push.ts",
+  ["WEB_PUSH_VAPID_PRIVATE_KEY", "push_sent_at", "increment_push_subscription_failure"],
+  "瀏覽器推播",
+  "推播派送器",
 );
 sourceContains(
   "supabase/listing-lifecycle.sql",
@@ -366,6 +398,12 @@ add(
   "Auth Email",
   "請確認 Email provider、Confirm email，以及 Confirm signup/Magic Link 範本含 {{ .Token }}；Password recovery 範本保留 {{ .ConfirmationURL }}。",
   "到 Authentication > Providers 與 Email Templates 人工確認。",
+);
+add(
+  "MANUAL",
+  "瀏覽器推播",
+  "確認 Supabase Vault 已建立 bookflow_push_dispatch_url 與 bookflow_push_dispatch_secret。",
+  "URL 指向正式站 /api/cron/push；secret 必須與 PUSH_DISPATCH_SECRET 相同。",
 );
 
 await checkSupabaseRemote(supabaseUrl, anonKey, serviceRoleKey);

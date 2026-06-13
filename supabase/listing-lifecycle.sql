@@ -49,7 +49,7 @@ select distinct
   b.seller_id,
   'listing_lifecycle',
   '課本刊登有效期限說明',
-  '新增課本會確認目前公開刊登仍在販售。系統會在 90 天前一週提醒，120 天仍未確認才暫時封存。',
+  '新增課本會確認目前公開刊登仍在販售。之後每 30 天提醒確認，120 天仍未確認才暫時封存。',
   'first-listing-policy:' || b.seller_id::text
 from public.books b
 where b.status <> 'sold'
@@ -150,7 +150,7 @@ begin
       'listing_lifecycle',
       new.id,
       '課本刊登有效期限說明',
-      '新增課本會確認目前公開刊登仍在販售。系統會在 90 天前一週提醒，120 天仍未確認才暫時封存。',
+      '新增課本會確認目前公開刊登仍在販售。之後每 30 天提醒確認，120 天仍未確認才暫時封存。',
       'first-listing-policy:' || new.seller_id::text
     ) on conflict (dedupe_key) where dedupe_key is not null do nothing;
 
@@ -369,16 +369,46 @@ begin
       notification_count := notification_count + changed_count;
     end if;
 
-    if seller.listings_confirmed_at <= reference_time - interval '83 days'
-      and seller.listings_confirmed_at > reference_time - interval '113 days' then
+    if seller.listings_confirmed_at <= reference_time - interval '30 days'
+      and seller.listings_confirmed_at > reference_time - interval '60 days' then
       insert into public.notifications (
         recipient_id, type, title, message, dedupe_key
       ) values (
         seller.id,
         'listing_lifecycle',
         '請確認課本仍在販售',
-        '你的刊登確認週期即將到期。請登入後按一次「全部仍在販售」，即可延長所有公開課本 90 天。',
-        'listing-83:' || seller.id::text || ':' || cycle_key
+        '你的 30 天確認週期已到。請登入後按一次「全部仍在販售」。',
+        'listing-30:' || seller.id::text || ':' || cycle_key
+      ) on conflict (dedupe_key) where dedupe_key is not null do nothing;
+      get diagnostics changed_count = row_count;
+      notification_count := notification_count + changed_count;
+    end if;
+
+    if seller.listings_confirmed_at <= reference_time - interval '60 days'
+      and seller.listings_confirmed_at > reference_time - interval '90 days' then
+      insert into public.notifications (
+        recipient_id, type, title, message, dedupe_key
+      ) values (
+        seller.id,
+        'listing_lifecycle',
+        '課本仍在販售嗎？',
+        '你已 60 天未確認公開課本。按「全部仍在販售」可重新開始 30 天確認週期。',
+        'listing-60:' || seller.id::text || ':' || cycle_key
+      ) on conflict (dedupe_key) where dedupe_key is not null do nothing;
+      get diagnostics changed_count = row_count;
+      notification_count := notification_count + changed_count;
+    end if;
+
+    if seller.listings_confirmed_at <= reference_time - interval '90 days'
+      and seller.listings_confirmed_at > reference_time - interval '113 days' then
+      insert into public.notifications (
+        recipient_id, type, title, message, dedupe_key
+      ) values (
+        seller.id,
+        'listing_lifecycle',
+        '課本確認已逾期 90 天',
+        '請確認公開課本是否仍在販售；滿 120 天仍未確認時將暫時封存。',
+        'listing-90:' || seller.id::text || ':' || cycle_key
       ) on conflict (dedupe_key) where dedupe_key is not null do nothing;
       get diagnostics changed_count = row_count;
       notification_count := notification_count + changed_count;
