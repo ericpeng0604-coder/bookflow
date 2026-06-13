@@ -22,6 +22,7 @@ supabase/trade-messages.sql
 
 ```text
 supabase/chat-notifications-and-contact-privacy.sql
+supabase/multi-party-orders-and-safe-chat.sql
 ```
 
 這會為聊天訊息建立站內通知，並把額外聯絡方式改成由賣家逐筆刊登選擇：

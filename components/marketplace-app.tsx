@@ -38,9 +38,20 @@ import {
   BOOK_IMAGE_CACHE_CONTROL,
   compressBookImage,
 } from "@/lib/marketplace/image-upload";
-import { readFavoriteIds, toggleFavoriteId } from "@/lib/marketplace/favorites";
+import {
+  clearLegacyFavorites,
+  legacyFavoritesNeedSync,
+  readFavoriteIds,
+} from "@/lib/marketplace/favorites";
 import { isAllDepartments, NO_MAX_PRICE, buildMarketplaceFilters } from "@/lib/marketplace/filters";
-import { fetchTradeMessages, sendTradeMessage } from "@/lib/marketplace/trade-chat";
+import {
+  fetchTradeMessages,
+  markConversationRead,
+  recallTradeMessage,
+  sendTradeMessage,
+  signChatImage,
+  uploadChatImages,
+} from "@/lib/marketplace/trade-chat";
 import {
   fetchBookById,
   fetchBooksByIds,
@@ -56,6 +67,7 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   Book,
   BookStatus,
+  Conversation,
   Notification,
   Profile,
   PurchaseRequest,
@@ -73,7 +85,7 @@ import type {
 const STORAGE_KEY = "bookflow-market-v1";
 
 type View = "home" | "book" | "dashboard" | "admin";
-type DashboardTab = "listings" | "requests" | "received" | "favorites";
+type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites";
 type Modal = "login" | "adminOtp" | "resetPassword" | "bookForm" | "contactSettings" | "request" | "report" | null;
 
 type Store = {
@@ -103,15 +115,19 @@ const HIDDEN_REQUEST_MESSAGES = new Set(["通用語句提供選擇"]);
 
 const statusLabels: Record<BookStatus, string> = {
   available: "販售中",
-  negotiating: "洽談中",
+  negotiating: "已保留",
   sold: "已售出",
 };
 
 const requestLabels: Record<RequestStatus, string> = {
-  pending: "等待回覆",
-  accepted: "已接受",
-  rejected: "已婉拒",
+  pending: "等待賣家處理",
+  waitlisted: "候補中",
+  reserved: "賣家已選定",
+  awaiting_confirmation: "等待買家確認",
+  completed: "交易完成",
+  rejected: "未被選定",
   cancelled: "已取消",
+  expired: "已失效",
 };
 
 const reviewLabels: Record<ReviewStatus, string> = {
@@ -227,7 +243,8 @@ export function MarketplaceApp() {
   const [detailBook, setDetailBook] = useState<Book | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => new Set());
   const [favoriteBookCache, setFavoriteBookCache] = useState<Book[]>([]);
-  const [expandedChatRequestId, setExpandedChatRequestId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [pendingReviews, setPendingReviews] = useState<Book[]>([]);
   const [hiddenBooks, setHiddenBooks] = useState<Book[]>([]);
@@ -278,6 +295,8 @@ export function MarketplaceApp() {
     setNotifications(workspace.notifications);
     setContacts(workspace.contacts);
     setSellerLifecycle(workspace.sellerLifecycle);
+    setConversations(workspace.conversations);
+    setFavoriteIds(new Set(workspace.favoriteIds));
   }, []);
 
   const loadMarketplaceBooks = useCallback(async (options?: { append?: boolean }) => {
@@ -470,6 +489,17 @@ export function MarketplaceApp() {
       };
 
       await client.rpc("record_user_activity");
+
+      if (legacyFavoritesNeedSync()) {
+        const legacyIds = [...readFavoriteIds()];
+        if (legacyIds.length > 0) {
+          await client.from("favorites").upsert(
+            legacyIds.map((bookId) => ({ user_id: user.id, book_id: bookId })),
+            { onConflict: "user_id,book_id", ignoreDuplicates: true },
+          );
+        }
+        clearLegacyFavorites();
+      }
 
       if (googleProfile.role === "admin") {
         const { data: isVerified } = await client.rpc("is_verified_admin");
@@ -947,7 +977,7 @@ export function MarketplaceApp() {
       (request) =>
         request.bookId === selectedBook.id &&
         request.buyerId === currentUser.id &&
-        ["pending", "accepted"].includes(request.status),
+        ["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status),
     );
     if (duplicate) {
       setToast("你已送出過購買意願");
@@ -955,10 +985,9 @@ export function MarketplaceApp() {
       return;
     }
     if (supabase) {
-      const { error } = await supabase.from("purchase_requests").insert({
-        book_id: selectedBook.id,
-        buyer_id: currentUser.id,
-        message,
+      const { error } = await supabase.rpc("create_purchase_request", {
+        target_book_id: selectedBook.id,
+        request_message: message,
       });
       if (error) {
         setToast(error.code === "23505" ? "你已送出過購買意願" : `送出失敗：${error.message}`);
@@ -980,7 +1009,18 @@ export function MarketplaceApp() {
           buyerId: currentUser.id,
           message,
           status: "pending",
+          titleSnapshot: selectedBook.title,
+          priceSnapshot: selectedBook.price,
+          editionSnapshot: selectedBook.edition,
+          imageSnapshot: selectedBook.imageUrl,
+          meetupSnapshot: selectedBook.meetup,
+          reservationExpiresAt: null,
+          sellerHandoffAt: null,
+          buyerConfirmedAt: null,
+          cancelledAt: null,
+          cancellationReason: "",
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
       ],
     }));
@@ -1041,8 +1081,7 @@ export function MarketplaceApp() {
       }
       await reloadAfterUserMutation();
       void dispatchEmailNotifications();
-      if (status === "accepted") setExpandedChatRequestId(requestId);
-      setToast(status === "accepted" ? "已接受意願，可開始聊天" : "已婉拒這筆意願");
+      setToast(status === "accepted" ? "已選定買家，保留期限為 7 天" : "已婉拒這筆請求");
       return;
     }
     setStore((previous) => ({
@@ -1050,13 +1089,11 @@ export function MarketplaceApp() {
       books: previous.books.map((book) =>
         book.id === target.bookId && status === "accepted" ? { ...book, status: "negotiating" } : book,
       ),
-      requests: previous.requests.map((request) => {
-        if (request.id === requestId) return { ...request, status };
-        if (status === "accepted" && request.bookId === target.bookId && request.status === "pending") {
-          return { ...request, status: "rejected" };
-        }
-        return request;
-      }),
+      requests: previous.requests.map((request) =>
+        request.id === requestId
+          ? { ...request, status: status === "accepted" ? "reserved" : "rejected" }
+          : request,
+      ),
     }));
     setToast(status === "accepted" ? "已接受意願，雙方聯絡資訊已開放" : "已婉拒這筆意願");
   }
@@ -1067,12 +1104,13 @@ export function MarketplaceApp() {
       setToast("你的帳號目前為唯讀模式，不能操作交易");
       return;
     }
+    const reason = window.prompt("請填寫取消原因（至少 2 個字）");
+    if (!reason?.trim()) return;
     if (supabase) {
-      const { error } = await supabase
-        .from("purchase_requests")
-        .update({ status: "cancelled" })
-        .eq("id", requestId)
-        .eq("status", "pending");
+      const { error } = await supabase.rpc("cancel_purchase_request", {
+        target_request_id: requestId,
+        reason: reason.trim(),
+      });
       if (error) {
         setToast(`取消失敗：${error.message}`);
         return;
@@ -1089,29 +1127,39 @@ export function MarketplaceApp() {
     }));
   }
 
-  async function updateBookStatus(bookId: string, status: BookStatus) {
-    if (currentUser?.accountStatus === "suspended") {
-      setToast("你的帳號目前為唯讀模式，不能操作交易");
+  async function startConversation(bookId: string) {
+    if (!supabase || !currentUser) return;
+    const { data, error } = await supabase.rpc("start_conversation", { target_book_id: bookId });
+    if (error) {
+      setToast(`無法開啟聊聊：${error.message}`);
       return;
     }
-    if (supabase && currentUser && status === "sold") {
-      const { error } = await supabase.rpc("complete_trade", {
-        target_book_id: bookId,
-      });
-      if (error) {
-        setToast(`完成交易失敗：${error.message}`);
-        return;
-      }
-      await reloadAfterUserMutation();
-      void dispatchEmailNotifications();
-      setToast("已標示為售出");
+    await loadUserWorkspace(currentUser);
+    setView("dashboard");
+    setDashboardTab("chats");
+    setExpandedConversationId(String(data));
+  }
+
+  async function sellerConfirmHandoff(requestId: string) {
+    if (!supabase) return;
+    const { error } = await supabase.rpc("seller_confirm_handoff", { target_request_id: requestId });
+    if (error) {
+      setToast(`更新失敗：${error.message}`);
       return;
     }
-    setStore((previous) => ({
-      ...previous,
-      books: previous.books.map((book) => (book.id === bookId ? { ...book, status } : book)),
-    }));
-    setToast(status === "sold" ? "已標示為售出" : "商品狀態已更新");
+    await reloadAfterUserMutation();
+    setToast("已標記完成面交，等待買家確認");
+  }
+
+  async function buyerConfirmTrade(requestId: string) {
+    if (!supabase) return;
+    const { error } = await supabase.rpc("buyer_confirm_trade", { target_request_id: requestId });
+    if (error) {
+      setToast(`確認失敗：${error.message}`);
+      return;
+    }
+    await reloadAfterUserMutation();
+    setToast("交易已完成");
   }
 
   function deleteBook(bookId: string) {
@@ -1376,9 +1424,6 @@ export function MarketplaceApp() {
     if (notification.type === "request_accepted" || notification.type === "request_rejected") {
       setView("dashboard");
       setDashboardTab("requests");
-      if (notification.type === "request_accepted" && notification.requestId) {
-        setExpandedChatRequestId(notification.requestId);
-      }
       return;
     }
     if (notification.type === "book_approved" || notification.type === "book_rejected" || notification.type === "book_hidden") {
@@ -1396,11 +1441,9 @@ export function MarketplaceApp() {
       setDashboardTab("listings");
       return;
     }
-    if (notification.type === "trade_message" && notification.requestId) {
-      const request = store.requests.find((item) => item.id === notification.requestId);
+    if (notification.type === "trade_message") {
       setView("dashboard");
-      setDashboardTab(request?.buyerId === currentUser?.id ? "requests" : "received");
-      setExpandedChatRequestId(notification.requestId);
+      setDashboardTab("chats");
       return;
     }
     if (notification.bookId) {
@@ -1412,17 +1455,29 @@ export function MarketplaceApp() {
     setView("dashboard");
   }
 
-  function toggleFavorite(bookId: string, event?: MouseEvent) {
+  async function toggleFavorite(bookId: string, event?: MouseEvent) {
     event?.stopPropagation();
     if (!store.currentUser) {
       setModal("login");
       return;
     }
+    const wasFavorite = favoriteIds.has(bookId);
+    if (supabase) {
+      const result = wasFavorite
+        ? await supabase.from("favorites").delete().eq("user_id", store.currentUser.id).eq("book_id", bookId)
+        : await supabase.from("favorites").insert({ user_id: store.currentUser.id, book_id: bookId });
+      if (result.error) {
+        setToast(`收藏更新失敗：${result.error.message}`);
+        return;
+      }
+    }
     setFavoriteIds((previous) => {
-      const next = toggleFavoriteId(previous, bookId);
-      setToast(previous.has(bookId) ? "已取消收藏" : "已加入收藏");
+      const next = new Set(previous);
+      if (wasFavorite) next.delete(bookId);
+      else next.add(bookId);
       return next;
     });
+    setToast(wasFavorite ? "已取消收藏" : "已加入收藏");
   }
 
   const myListings = currentUser
@@ -1699,13 +1754,22 @@ export function MarketplaceApp() {
                 {currentUser?.id === selectedBook.sellerId ? (
                   <button className="primary wide" disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(selectedBook); setModal("bookForm"); }}><Pencil size={18} />編輯我的刊登</button>
                 ) : (
-                  <button
-                    className="primary wide"
-                    disabled={selectedBook.status !== "available" || currentUser?.accountStatus === "suspended"}
-                    onClick={() => requireActive(() => setModal("request"))}
-                  >
-                    <MessageCircle size={18} />{selectedBook.status === "available" ? "我有興趣" : "目前洽談中"}
-                  </button>
+                  <div className="detail-primary-actions">
+                    <button
+                      className="chat-toggle wide"
+                      disabled={selectedBook.status === "sold" || currentUser?.accountStatus === "suspended"}
+                      onClick={() => requireActive(() => void startConversation(selectedBook.id))}
+                    >
+                      <MessageCircle size={18} />聊聊
+                    </button>
+                    <button
+                      className="primary wide"
+                      disabled={selectedBook.status !== "available" || currentUser?.accountStatus === "suspended"}
+                      onClick={() => requireActive(() => setModal("request"))}
+                    >
+                      <Check size={18} />{selectedBook.status === "available" ? "送出購買請求" : "已保留，暫停新訂單"}
+                    </button>
+                  </div>
                 )}
                 {currentUser?.id !== selectedBook.sellerId && (
                   <div className="detail-more-wrap">
@@ -1728,7 +1792,7 @@ export function MarketplaceApp() {
                   </div>
                 )}
               </div>
-              <p className="safety-note"><ShieldCheck size={15} />為保護隱私，賣家接受購買意願後才會顯示雙方 Email。</p>
+              <p className="safety-note"><ShieldCheck size={15} />只有被選定的買家，才會依賣家設定看到 Email 或 LINE ID。</p>
             </div>
           </div>
         </section>
@@ -1784,6 +1848,9 @@ export function MarketplaceApp() {
           )}
           <div className="dashboard-tabs">
             <button className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
+            <button className={dashboardTab === "chats" ? "active" : ""} onClick={() => setDashboardTab("chats")}>
+              聊聊 <span>{conversations.reduce((sum, item) => sum + item.unreadCount, 0)}</span>
+            </button>
             <button className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 <span>{myRequests.length}</span></button>
             <button className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 <span>{receivedRequests.length}</span></button>
             <button className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
@@ -1833,7 +1900,6 @@ export function MarketplaceApp() {
                     )}
                   </div>
                   <div className="row-actions">
-                    {book.lifecycleState === "active" && book.status === "negotiating" && <button onClick={() => updateBookStatus(book.id, "sold")}><Check size={16} />完成交易</button>}
                     {book.lifecycleState === "active" && (
                       <>
                         <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
@@ -1855,6 +1921,47 @@ export function MarketplaceApp() {
             </div>
           )}
 
+          {dashboardTab === "chats" && (
+            <div className="conversation-layout">
+              <div className="conversation-list">
+                {conversations.map((conversation) => {
+                  const book = knownBooks.find((item) => item.id === conversation.bookId);
+                  const otherId = conversation.buyerId === currentUser.id
+                    ? conversation.sellerId
+                    : conversation.buyerId;
+                  return (
+                    <button
+                      type="button"
+                      className={`conversation-item ${expandedConversationId === conversation.id ? "active" : ""}`}
+                      key={conversation.id}
+                      onClick={() => setExpandedConversationId(conversation.id)}
+                    >
+                      <span className="avatar">{profile(otherId)?.name.slice(0, 1) || "聊"}</span>
+                      <span>
+                        <b>{profile(otherId)?.name || "交易對象"}</b>
+                        <small>{book?.title || "已移除的課本"} · {conversation.status === "active" ? "可聊天" : "已結束"}</small>
+                      </span>
+                      {conversation.unreadCount > 0 && <em>{conversation.unreadCount}</em>}
+                    </button>
+                  );
+                })}
+                {conversations.length === 0 && <EmptyDashboard text="目前沒有聊聊紀錄" />}
+              </div>
+              <div className="conversation-panel">
+                {expandedConversationId ? (
+                  <TradeChatPanel
+                    conversation={conversations.find((item) => item.id === expandedConversationId)!}
+                    currentUserId={currentUser.id}
+                    profiles={store.profiles}
+                    onChanged={reloadAfterUserMutation}
+                  />
+                ) : (
+                  <EmptyDashboard text="選擇一個聊天室開始聯絡" />
+                )}
+              </div>
+            </div>
+          )}
+
           {dashboardTab === "requests" && (
             <div className="dashboard-list">
               {myRequests.map((request) => {
@@ -1869,25 +1976,23 @@ export function MarketplaceApp() {
                       <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
                       <h3>{book.title}</h3>
                       {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
-                      {request.status === "accepted" && contact && (
+                      {["reserved", "awaiting_confirmation", "completed"].includes(request.status) && contact && (
                         <div className="contact-box">
                           <Check size={16} />
                           賣家{contact.method === "line" ? " LINE ID" : " Email"}：<b>{contact.value}</b>
                         </div>
                       )}
-                      {request.status === "accepted" && !contact && <div className="contact-note">賣家尚未分享額外聯絡方式，請先使用站內聊天室。</div>}
-                      {request.status === "accepted" && supabase && currentUser && (
-                        <>
-                          <button className="chat-toggle" type="button" onClick={() => setExpandedChatRequestId((current) => (current === request.id ? null : request.id))}>
-                            <MessageCircle size={15} />{expandedChatRequestId === request.id ? "關閉聊天室" : "開啟聊天室"}
-                          </button>
-                          {expandedChatRequestId === request.id && (
-                            <TradeChatPanel requestId={request.id} currentUserId={currentUser.id} profiles={store.profiles} />
-                          )}
-                        </>
+                      {["reserved", "awaiting_confirmation", "completed"].includes(request.status) && !contact && <div className="contact-note">賣家尚未分享額外聯絡方式，請使用聊聊聯絡。</div>}
+                      <OrderTimeline request={request} />
+                    </div>
+                    <div className="request-actions">
+                      {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
+                        <button onClick={() => void cancelRequest(request.id)}><X size={16} />取消訂單</button>
+                      )}
+                      {request.status === "awaiting_confirmation" && (
+                        <button className="accept" onClick={() => void buyerConfirmTrade(request.id)}><CheckCheck size={16} />確認收到</button>
                       )}
                     </div>
-                    {request.status === "pending" && <div className="request-actions"><button onClick={() => void cancelRequest(request.id)}><X size={16} />取消意願</button></div>}
                     <small>{timeAgo(request.createdAt)}</small>
                   </div>
                 );
@@ -1910,19 +2015,23 @@ export function MarketplaceApp() {
                       <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
                       <h3>{buyer?.name} 想買《{book.title}》</h3>
                       {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
-                      {request.status === "accepted" && <div className="contact-note">為保護買家隱私，請先使用站內聊天室聯絡。</div>}
-                      {request.status === "accepted" && supabase && currentUser && (
+                      {["reserved", "awaiting_confirmation"].includes(request.status) && <div className="contact-note">聯絡請使用獨立的「聊聊」頁籤。</div>}
+                      <OrderTimeline request={request} />
+                    </div>
+                    <div className="request-actions">
+                      {["pending", "waitlisted"].includes(request.status) && book.status === "available" && (
+                        <button className="accept" onClick={() => void respondToRequest(request.id, "accepted")}><Check size={16} />選定買家</button>
+                      )}
+                      {["pending", "waitlisted"].includes(request.status) && (
+                        <button onClick={() => void respondToRequest(request.id, "rejected")}><X size={16} />婉拒</button>
+                      )}
+                      {request.status === "reserved" && (
                         <>
-                          <button className="chat-toggle" type="button" onClick={() => setExpandedChatRequestId((current) => (current === request.id ? null : request.id))}>
-                            <MessageCircle size={15} />{expandedChatRequestId === request.id ? "關閉聊天室" : "開啟聊天室"}
-                          </button>
-                          {expandedChatRequestId === request.id && (
-                            <TradeChatPanel requestId={request.id} currentUserId={currentUser.id} profiles={store.profiles} />
-                          )}
+                          <button className="accept" onClick={() => void sellerConfirmHandoff(request.id)}><CheckCheck size={16} />已完成面交</button>
+                          <button onClick={() => void cancelRequest(request.id)}><X size={16} />取消保留</button>
                         </>
                       )}
                     </div>
-                    {request.status === "pending" && <div className="request-actions"><button className="accept" onClick={() => void respondToRequest(request.id, "accepted")}><Check size={16} />接受</button><button onClick={() => void respondToRequest(request.id, "rejected")}><X size={16} />婉拒</button></div>}
                     {buyer && request.status === "pending" && (
                       <button
                         className="request-report-button"
@@ -2693,64 +2802,87 @@ function ReportModal({
   );
 }
 
+function OrderTimeline({ request }: { request: PurchaseRequest }) {
+  const steps = [
+    { label: "已提出請求", done: true },
+    { label: "賣家已選定", done: ["reserved", "awaiting_confirmation", "completed"].includes(request.status) },
+    { label: "等待面交", done: ["awaiting_confirmation", "completed"].includes(request.status) },
+    { label: request.status === "cancelled" ? "已取消" : "已完成", done: ["completed", "cancelled", "expired"].includes(request.status) },
+  ];
+  return <div className="order-timeline">{steps.map((step) => <span className={step.done ? "done" : ""} key={step.label}>{step.label}</span>)}</div>;
+}
+
 function TradeChatPanel({
-  requestId,
+  conversation,
   currentUserId,
   profiles,
+  onChanged,
 }: {
-  requestId: string;
+  conversation: Conversation;
   currentUserId: string;
   profiles: Profile[];
+  onChanged: () => void;
 }) {
   const [messages, setMessages] = useState<TradeMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const otherUserId = conversation.buyerId === currentUserId ? conversation.sellerId : conversation.buyerId;
 
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
     setError("");
-    void fetchTradeMessages(client, requestId)
-      .then(setMessages)
+    setLoading(true);
+    void fetchTradeMessages(client, conversation.id)
+      .then(async (items) => {
+        setMessages(items);
+        await markConversationRead(client, conversation.id);
+        const paths = [...new Set(items.flatMap((item) => item.imagePaths))];
+        const signed = await Promise.all(paths.map(async (path) => [path, await signChatImage(client, path)] as const));
+        setImageUrls(Object.fromEntries(signed));
+      })
       .catch((loadError) => {
         setMessages([]);
-        setError(loadError instanceof Error ? loadError.message : "無法載入聊天室");
+        setError(loadError instanceof Error ? loadError.message : "無法載入聊聊");
       })
       .finally(() => setLoading(false));
 
     const channel = client
-      .channel(`trade-chat:${requestId}`)
+      .channel(`trade-chat:${conversation.id}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "trade_messages",
-          filter: `request_id=eq.${requestId}`,
+          filter: `conversation_id=eq.${conversation.id}`,
         },
         (payload) => {
           const row = payload.new as Record<string, unknown>;
           const message: TradeMessage = {
             id: String(row.id),
-            requestId: String(row.request_id),
+            conversationId: String(row.conversation_id),
             senderId: String(row.sender_id),
-            body: String(row.body),
+            body: String(row.body || ""),
+            imagePaths: Array.isArray(row.image_paths) ? row.image_paths.map(String) : [],
+            recalledAt: row.recalled_at ? String(row.recalled_at) : null,
             createdAt: String(row.created_at),
           };
-          setMessages((previous) => (
-            previous.some((item) => item.id === message.id) ? previous : [...previous, message]
-          ));
+          setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
+          void markConversationRead(client, conversation.id);
+          void Promise.all(message.imagePaths.map(async (path) => [path, await signChatImage(client, path)] as const))
+            .then((signed) => setImageUrls((previous) => ({ ...previous, ...Object.fromEntries(signed) })));
+          onChanged();
         },
       )
       .subscribe();
-
-    return () => {
-      void client.removeChannel(channel);
-    };
-  }, [requestId]);
+    return () => { void client.removeChannel(channel); };
+  }, [conversation.id, onChanged]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -2758,16 +2890,18 @@ function TradeChatPanel({
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase || !draft.trim()) return;
+    if (!supabase || (!draft.trim() && files.length === 0)) return;
     const body = draft.trim();
     setDraft("");
     setError("");
     setSending(true);
     try {
-      const message = await sendTradeMessage(supabase, requestId, body);
-      setMessages((previous) => (
-        previous.some((item) => item.id === message.id) ? previous : [...previous, message]
-      ));
+      const paths = files.length > 0 ? await uploadChatImages(supabase, conversation.id, currentUserId, files) : [];
+      const message = await sendTradeMessage(supabase, conversation.id, body, paths);
+      setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
+      const signed = await Promise.all(paths.map(async (path) => [path, await signChatImage(supabase!, path)] as const));
+      setImageUrls((previous) => ({ ...previous, ...Object.fromEntries(signed) }));
+      setFiles([]);
     } catch (sendError) {
       setDraft(body);
       setError(sendError instanceof Error ? sendError.message : "訊息傳送失敗");
@@ -2778,8 +2912,62 @@ function TradeChatPanel({
 
   const senderName = (senderId: string) => profiles.find((profile) => profile.id === senderId)?.name || "使用者";
 
+  async function recall(messageId: string) {
+    if (!supabase) return;
+    try {
+      await recallTradeMessage(supabase, messageId);
+      setMessages((previous) => previous.map((message) =>
+        message.id === messageId ? { ...message, body: "", recalledAt: new Date().toISOString() } : message,
+      ));
+    } catch (recallError) {
+      setError(recallError instanceof Error ? recallError.message : "無法收回訊息");
+    }
+  }
+
+  async function closeChat() {
+    if (!supabase) return;
+    const reason = window.prompt("可選填結束聊天室的原因") || "";
+    const { error: closeError } = await supabase.rpc("close_conversation", {
+      target_conversation_id: conversation.id,
+      reason,
+    });
+    if (closeError) setError(closeError.message);
+    else onChanged();
+  }
+
+  async function blockUser() {
+    if (!supabase || !window.confirm("封鎖後雙方不能再傳送訊息，仍要封鎖嗎？")) return;
+    const { error: blockError } = await supabase.rpc("set_user_block", {
+      target_user_id: otherUserId,
+      should_block: true,
+    });
+    if (blockError) setError(blockError.message);
+    else onChanged();
+  }
+
+  async function reportChat(messageId?: string) {
+    if (!supabase) return;
+    const details = window.prompt("請簡短說明檢舉原因")?.trim();
+    if (!details) return;
+    const { error: reportError } = await supabase.rpc("submit_chat_report", {
+      target_conversation_id: conversation.id,
+      target_message_id: messageId || null,
+      report_reason: "other",
+      report_details: details,
+    });
+    setError(reportError ? reportError.message : "檢舉已送出，管理員將進行審查");
+  }
+
   return (
     <div className="trade-chat">
+      <div className="trade-chat-head">
+        <div><b>{senderName(otherUserId)}</b><small>每則最多 5 張圖片、每張 5MB；請勿傳送密碼、驗證碼或其他敏感資料。</small></div>
+        <div>
+          <button type="button" onClick={() => void reportChat()}><Flag size={14} />檢舉</button>
+          <button type="button" onClick={() => void blockUser()}><Ban size={14} />封鎖</button>
+          {conversation.status === "active" && <button type="button" onClick={() => void closeChat()}><X size={14} />結束</button>}
+        </div>
+      </div>
       <div className="trade-chat-log">
         {loading && <p className="trade-chat-empty">載入訊息中...</p>}
         {error && <p className="trade-chat-error">{error}</p>}
@@ -2787,30 +2975,44 @@ function TradeChatPanel({
         {messages.map((message) => (
           <div className={`trade-chat-bubble ${message.senderId === currentUserId ? "mine" : "theirs"}`} key={message.id}>
             <small>{message.senderId === currentUserId ? "我" : senderName(message.senderId)}</small>
-            <p>{message.body}</p>
+            {message.recalledAt ? <p className="recalled">訊息已收回</p> : (
+              <>
+                {message.body && <p>{message.body}</p>}
+                {message.imagePaths.length > 0 && (
+                  <div className="chat-images">
+                    {message.imagePaths.map((path) => imageUrls[path]
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img key={path} src={imageUrls[path]} alt="聊聊圖片" />
+                      : <span key={path}>圖片載入中</span>)}
+                  </div>
+                )}
+                <div className="message-tools">
+                  <button type="button" onClick={() => void reportChat(message.id)}>檢舉</button>
+                  {message.senderId === currentUserId
+                    && Date.now() - new Date(message.createdAt).getTime() <= 10 * 60_000
+                    && <button type="button" onClick={() => void recall(message.id)}>收回</button>}
+                </div>
+              </>
+            )}
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
       <div className="trade-chat-phrases">
         <small>常用語句</small>
-        <div>
-          {CHAT_PHRASES.map((phrase) => (
-            <button type="button" key={phrase} onClick={() => setDraft(phrase)}>
-              {phrase}
-            </button>
-          ))}
-        </div>
+        <div>{CHAT_PHRASES.map((phrase) => <button type="button" key={phrase} onClick={() => setDraft(phrase)}>{phrase}</button>)}</div>
       </div>
-      <form className="trade-chat-compose" onSubmit={(event) => void submitMessage(event)}>
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="輸入訊息，商量面交時間..."
-          maxLength={500}
-        />
-        <button type="submit" disabled={!draft.trim() || sending}>{sending ? "傳送中" : "送出"}</button>
-      </form>
+      {conversation.status === "active" ? (
+        <form className="trade-chat-compose" onSubmit={(event) => void submitMessage(event)}>
+          <label className="chat-image-picker" title="加入圖片">
+            <ImagePlus size={18} />
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 5))} />
+          </label>
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="輸入訊息..." maxLength={500} />
+          <button type="submit" disabled={(!draft.trim() && files.length === 0) || sending}>{sending ? "傳送中" : "送出"}</button>
+          {files.length > 0 && <small className="selected-images">已選擇 {files.length} 張圖片</small>}
+        </form>
+      ) : <p className="chat-readonly">這個聊天室已結束，紀錄保持唯讀。你可從書籍頁重新建立聊天室。</p>}
     </div>
   );
 }

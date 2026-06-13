@@ -149,6 +149,15 @@ async function checkSupabaseRemote(supabaseUrl, anonKey, serviceRoleKey) {
       options: { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } },
       missingCodes: ["PGRST205"],
     });
+    for (const table of ["conversations", "favorites", "order_events", "chat_reports"]) {
+      probes.push({
+        area: "交易與聊聊",
+        label: `${table} table`,
+        url: `${base}/rest/v1/${table}?select=*&limit=0`,
+        options: { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } },
+        missingCodes: ["PGRST205"],
+      });
+    }
   }
 
   for (const probe of probes) {
@@ -329,6 +338,19 @@ sourceContains(
   ["/api/cron/listing-lifecycle", "15 1 * * *"],
   "刊登生命週期",
   "Vercel Cron 設定",
+);
+sourceContains(
+  "supabase/multi-party-orders-and-safe-chat.sql",
+  [
+    "create table if not exists public.conversations",
+    "create table if not exists public.favorites",
+    "process_trade_deadlines",
+    "process-trade-deadlines-hourly",
+    "seller_confirm_handoff",
+    "buyer_confirm_trade",
+  ],
+  "交易與聊聊",
+  "多人洽談、訂單與安全聊聊 migration",
 );
 
 const redirectUrls = new Set(["http://localhost:3000"]);

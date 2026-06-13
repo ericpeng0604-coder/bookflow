@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260612-record-and-finalize-production-listing-l",
-  "taskTitle": "Record and finalize production listing lifecycle deployment",
-  "baseCommit": "8dda43a7c10ac52dbef06bc685494bd7136e6bdd",
-  "updatedAt": "2026-06-12T17:56:25.537Z",
+  "taskId": "20260613-release-multi-party-orders-and-safe-chat",
+  "taskTitle": "Release multi-party orders and safe chat",
+  "baseCommit": "dc0c40d3ee7b47fecf8308ee9894f9baddb3d5af",
+  "updatedAt": "2026-06-13T03:28:19.408Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260612-1756-20260612-record-and-finalize-production-.md"
+  "historyFile": ".ai/history/20260613-0328-20260613-release-multi-party-orders-and-.md"
 }

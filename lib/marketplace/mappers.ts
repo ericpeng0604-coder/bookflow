@@ -11,6 +11,7 @@ import type {
   RequestStatus,
   ReviewStatus,
   TradeContact,
+  Conversation,
   ContactMethod,
   UserRole,
 } from "@/lib/types";
@@ -51,6 +52,31 @@ export function mapRequest(row: Record<string, unknown>): PurchaseRequest {
     buyerId: String(row.buyer_id),
     message: String(row.message),
     status: row.status as RequestStatus,
+    titleSnapshot: String(row.title_snapshot || ""),
+    priceSnapshot: Number(row.price_snapshot || 0),
+    editionSnapshot: String(row.edition_snapshot || ""),
+    imageSnapshot: String(row.image_snapshot || ""),
+    meetupSnapshot: String(row.meetup_snapshot || ""),
+    reservationExpiresAt: row.reservation_expires_at ? String(row.reservation_expires_at) : null,
+    sellerHandoffAt: row.seller_handoff_at ? String(row.seller_handoff_at) : null,
+    buyerConfirmedAt: row.buyer_confirmed_at ? String(row.buyer_confirmed_at) : null,
+    cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
+    cancellationReason: String(row.cancellation_reason || ""),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at || row.created_at),
+  };
+}
+
+export function mapConversation(row: Record<string, unknown>): Conversation {
+  return {
+    id: String(row.id),
+    bookId: String(row.book_id),
+    buyerId: String(row.buyer_id),
+    sellerId: String(row.seller_id),
+    status: String(row.status || "active") as Conversation["status"],
+    closedReason: String(row.closed_reason || ""),
+    lastMessageAt: String(row.last_message_at || row.created_at),
+    unreadCount: Number(row.unread_count || 0),
     createdAt: String(row.created_at),
   };
 }
