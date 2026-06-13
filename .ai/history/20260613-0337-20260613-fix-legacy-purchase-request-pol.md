@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：Fix legacy purchase request policy migration
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`936223354859ac3b033e7b9bc2e83ba0f422c1e1`
+- 封存時間：2026-06-13T03:37:05.786Z
+
+---
 # BookFlow AI 交接
 
 ## 目前目標
