@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260613-record-completed-production-release",
-  "taskTitle": "Record completed production release",
-  "baseCommit": "c9ceb8f8622e12eb0fac2a9c748951f2c3a321ee",
-  "updatedAt": "2026-06-13T03:56:23.552Z",
+  "taskId": "20260613-implement-chat-read-state-30-day-confirm",
+  "taskTitle": "Implement chat read state, 30-day confirmations, and browser push",
+  "baseCommit": "a9837d67195415409c03d45b0f18ef9bf5464e67",
+  "updatedAt": "2026-06-13T05:53:54.114Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260613-0356-20260613-record-completed-production-rel.md"
+  "historyFile": ".ai/history/20260613-0553-20260613-implement-chat-read-state-30-da.md"
 }

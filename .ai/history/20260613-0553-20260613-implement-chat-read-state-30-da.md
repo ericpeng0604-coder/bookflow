@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：Implement chat read state, 30-day confirmations, and browser push
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`a9837d67195415409c03d45b0f18ef9bf5464e67`
+- 封存時間：2026-06-13T05:53:54.114Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

@@ -150,6 +150,7 @@ export type Notification = {
   type: NotificationType;
   bookId: string | null;
   requestId: string | null;
+  conversationId: string | null;
   title: string;
   message: string;
   readAt: string | null;

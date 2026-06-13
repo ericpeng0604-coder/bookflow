@@ -5,8 +5,9 @@ const cronRoute = fs.readFileSync("app/api/cron/listing-lifecycle/route.ts", "ut
 const vercel = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
 
 const requiredMigrationSignals = [
+  "interval '30 days'",
   "interval '60 days'",
-  "interval '83 days'",
+  "interval '90 days'",
   "interval '113 days'",
   "interval '120 days'",
   "interval '358 days'",
@@ -39,13 +40,19 @@ const DAY = 86400000;
 const stage = (days) => {
   if (days >= 120) return "archive";
   if (days >= 113) return "final";
-  if (days >= 83) return "remind";
+  if (days >= 90) return "remind-90";
+  if (days >= 60) return "remind-60";
+  if (days >= 30) return "remind-30";
   return "none";
 };
 const expected = new Map([
-  [82, "none"],
-  [83, "remind"],
-  [112, "remind"],
+  [29, "none"],
+  [30, "remind-30"],
+  [59, "remind-30"],
+  [60, "remind-60"],
+  [89, "remind-60"],
+  [90, "remind-90"],
+  [112, "remind-90"],
   [113, "final"],
   [119, "final"],
   [120, "archive"],

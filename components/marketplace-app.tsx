@@ -45,6 +45,14 @@ import {
 } from "@/lib/marketplace/favorites";
 import { isAllDepartments, NO_MAX_PRICE, buildMarketplaceFilters } from "@/lib/marketplace/filters";
 import {
+  type BrowserPushState,
+  browserPushState,
+  currentPushSubscription,
+  disableBrowserPush,
+  dispatchBrowserPush,
+  enableBrowserPush,
+} from "@/lib/marketplace/browser-push";
+import {
   fetchTradeMessages,
   markConversationRead,
   recallTradeMessage,
@@ -83,6 +91,8 @@ import type {
 } from "@/lib/types";
 
 const STORAGE_KEY = "bookflow-market-v1";
+const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
+const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
 
 type View = "home" | "book" | "dashboard" | "admin";
 type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites";
@@ -251,6 +261,9 @@ export function MarketplaceApp() {
   const [sellerLifecycle, setSellerLifecycle] = useState<SellerLifecycle | null>(null);
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
   const [lifecycleSaving, setLifecycleSaving] = useState(false);
+  const [pushState, setPushState] = useState<BrowserPushState>("disabled");
+  const [pushSaving, setPushSaving] = useState(false);
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
   const bookSavingRef = useRef(false);
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
@@ -563,6 +576,52 @@ export function MarketplaceApp() {
   }, [store.currentUser?.id, loadNotificationFeed]);
 
   useEffect(() => {
+    if (!supabase || !store.currentUser) {
+      setShowPushPrompt(false);
+      return;
+    }
+    void currentPushSubscription()
+      .then((subscription) => {
+        const state = browserPushState(subscription);
+        setPushState(state);
+        setShowPushPrompt(
+          state === "disabled"
+            && window.localStorage.getItem(pushPromptStorageKey(store.currentUser!.id)) !== "true",
+        );
+      })
+      .catch(() => setPushState("unsupported"));
+  }, [store.currentUser]);
+
+  useEffect(() => {
+    if (!ready || !store.currentUser) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetView = params.get("view");
+    const targetTab = params.get("tab");
+    const targetConversation = params.get("conversation");
+    const targetBook = params.get("book");
+    if (targetView === "dashboard") {
+      setView("dashboard");
+      if (["listings", "chats", "requests", "received", "favorites"].includes(targetTab || "")) {
+        setDashboardTab(targetTab as DashboardTab);
+      }
+      if (targetConversation) {
+        setExpandedConversationId(targetConversation);
+        setConversations((previous) => previous.map((conversation) =>
+          conversation.id === targetConversation ? { ...conversation, unreadCount: 0 } : conversation,
+        ));
+        if (supabase) {
+          void markConversationRead(supabase, targetConversation).catch(() => {
+            setToast("無法更新聊聊已讀狀態，請重新整理後再試");
+          });
+        }
+      }
+    } else if (targetView === "book" && targetBook) {
+      setSelectedId(targetBook);
+      setView("book");
+    }
+  }, [ready, store.currentUser]);
+
+  useEffect(() => {
     if (!supabase || view !== "admin" || !store.currentUser) return;
     if (!["admin", "moderator"].includes(store.currentUser.role)) return;
     void loadModerationPanel(store.currentUser);
@@ -627,15 +686,54 @@ export function MarketplaceApp() {
     };
   }, [mobileMenuOpen]);
 
-  async function dispatchEmailNotifications() {
+  async function dispatchNotificationDeliveries() {
     if (!supabase) return;
     const { data } = await supabase.auth.getSession();
     const accessToken = data.session?.access_token;
     if (!accessToken) return;
-    await fetch("/api/notifications/email", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }).catch(() => undefined);
+    await Promise.all([
+      fetch("/api/notifications/email", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).catch(() => undefined),
+      dispatchBrowserPush(supabase),
+    ]);
+  }
+
+  async function enablePushNotifications() {
+    if (!supabase || pushSaving) return;
+    setPushSaving(true);
+    try {
+      await enableBrowserPush(supabase);
+      setPushState("enabled");
+      setShowPushPrompt(false);
+      if (currentUser) window.localStorage.setItem(pushPromptStorageKey(currentUser.id), "true");
+      setToast("瀏覽器推播已開啟");
+    } catch (error) {
+      const state = "Notification" in window && Notification.permission === "denied" ? "denied" : "disabled";
+      setPushState(state);
+      setToast(error instanceof Error ? error.message : "無法開啟瀏覽器推播");
+    } finally {
+      setPushSaving(false);
+    }
+  }
+
+  async function disablePushNotifications() {
+    if (!supabase || pushSaving) return;
+    setPushSaving(true);
+    try {
+      await disableBrowserPush(supabase);
+      setPushState("Notification" in window && Notification.permission === "denied" ? "denied" : "disabled");
+      if (currentUser) window.localStorage.setItem(pushPromptStorageKey(currentUser.id), "true");
+      setToast("瀏覽器推播已關閉");
+    } finally {
+      setPushSaving(false);
+    }
+  }
+
+  function dismissPushPrompt() {
+    if (currentUser) window.localStorage.setItem(pushPromptStorageKey(currentUser.id), "true");
+    setShowPushPrompt(false);
   }
 
   const filteredBooks = useMemo(() => {
@@ -928,7 +1026,7 @@ export function MarketplaceApp() {
         setDashboardTab("listings");
         setToast(editingBook
           ? "修改已送回審核"
-          : "刊登已送出。這次上架也已確認你目前公開的課本仍在販售，90 天後會再提醒。");
+          : "刊登已送出。這次上架也已確認你目前公開的課本仍在販售，30 天後會再提醒。");
         return;
       }
 
@@ -994,7 +1092,7 @@ export function MarketplaceApp() {
         return;
       }
       await reloadAfterUserMutation();
-      void dispatchEmailNotifications();
+      void dispatchNotificationDeliveries();
       setModal(null);
       setToast("購買意願已送出");
       return;
@@ -1080,7 +1178,7 @@ export function MarketplaceApp() {
         return;
       }
       await reloadAfterUserMutation();
-      void dispatchEmailNotifications();
+      void dispatchNotificationDeliveries();
       setToast(status === "accepted" ? "已選定買家，保留期限為 7 天" : "已婉拒這筆請求");
       return;
     }
@@ -1116,6 +1214,7 @@ export function MarketplaceApp() {
         return;
       }
       await reloadAfterUserMutation();
+      void dispatchNotificationDeliveries();
       setToast("購買意願已取消");
       return;
     }
@@ -1137,8 +1236,28 @@ export function MarketplaceApp() {
     await loadUserWorkspace(currentUser);
     setView("dashboard");
     setDashboardTab("chats");
-    setExpandedConversationId(String(data));
+    void openConversation(String(data));
   }
+
+  async function openConversation(conversationId: string) {
+    setExpandedConversationId(conversationId);
+    setConversations((previous) => previous.map((conversation) =>
+      conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation,
+    ));
+    if (!supabase || !currentUser) return;
+    try {
+      await markConversationRead(supabase, conversationId);
+    } catch (error) {
+      await loadUserWorkspace(currentUser);
+      setToast(error instanceof Error ? error.message : "無法更新聊聊已讀狀態");
+    }
+  }
+
+  const keepConversationRead = useCallback((conversationId: string) => {
+    setConversations((previous) => previous.map((conversation) =>
+      conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation,
+    ));
+  }, []);
 
   async function sellerConfirmHandoff(requestId: string) {
     if (!supabase) return;
@@ -1148,6 +1267,7 @@ export function MarketplaceApp() {
       return;
     }
     await reloadAfterUserMutation();
+    void dispatchNotificationDeliveries();
     setToast("已標記完成面交，等待買家確認");
   }
 
@@ -1159,6 +1279,7 @@ export function MarketplaceApp() {
       return;
     }
     await reloadAfterUserMutation();
+    void dispatchNotificationDeliveries();
     setToast("交易已完成");
   }
 
@@ -1200,7 +1321,7 @@ export function MarketplaceApp() {
         return;
       }
       await reloadAfterUserMutation();
-      setToast("已確認目前公開課本仍在販售，下一次將在 90 天週期前提醒");
+      setToast("已確認目前公開課本仍在販售，30 天後會再提醒");
     } finally {
       setLifecycleSaving(false);
     }
@@ -1264,7 +1385,7 @@ export function MarketplaceApp() {
       return;
     }
     await reloadAfterModerationMutation();
-    void dispatchEmailNotifications();
+    void dispatchNotificationDeliveries();
     setToast(decision === "approved" ? "書籍已通過並公開上架" : "書籍已拒絕");
   }
 
@@ -1444,6 +1565,7 @@ export function MarketplaceApp() {
     if (notification.type === "trade_message") {
       setView("dashboard");
       setDashboardTab("chats");
+      if (notification.conversationId) void openConversation(notification.conversationId);
       return;
     }
     if (notification.bookId) {
@@ -1504,8 +1626,9 @@ export function MarketplaceApp() {
   const activeAvailableListings = myListings.filter((book) => book.lifecycleState === "active" && book.status === "available");
   const archivedListings = myListings.filter((book) => book.lifecycleState === "archived");
   const nextConfirmationAt = sellerLifecycle
-    ? new Date(new Date(sellerLifecycle.listingsConfirmedAt).getTime() + 90 * 86400000).toISOString()
+    ? new Date(new Date(sellerLifecycle.listingsConfirmedAt).getTime() + 30 * 86400000).toISOString()
     : null;
+  const confirmationDue = Boolean(nextConfirmationAt && new Date(nextConfirmationAt).getTime() <= Date.now());
 
   return (
     <main>
@@ -1539,6 +1662,27 @@ export function MarketplaceApp() {
                     <div className="notification-head">
                       <div><b>通知</b><span>{unreadNotifications} 則未讀</span></div>
                       {unreadNotifications > 0 && <button onClick={() => void markAllNotificationsRead()}><CheckCheck size={15} />全部已讀</button>}
+                    </div>
+                    <div className="push-setting">
+                      <div>
+                        <b>瀏覽器推播</b>
+                        <small>
+                          {pushState === "enabled" && "已開啟重要交易與聊聊通知"}
+                          {pushState === "disabled" && "目前關閉，站內通知仍會保留"}
+                          {pushState === "denied" && "已被瀏覽器封鎖，請到網址列旁的權限設定開啟"}
+                          {pushState === "unsupported" && "這個瀏覽器不支援推播"}
+                        </small>
+                      </div>
+                      {pushState === "enabled" ? (
+                        <button disabled={pushSaving} onClick={() => void disablePushNotifications()}>關閉</button>
+                      ) : (
+                        <button
+                          disabled={pushSaving || pushState === "denied" || pushState === "unsupported"}
+                          onClick={() => void enablePushNotifications()}
+                        >
+                          開啟
+                        </button>
+                      )}
                     </div>
                     <div className="notification-list">
                       {notifications.map((notification) => (
@@ -1628,6 +1772,22 @@ export function MarketplaceApp() {
           </div>
         )}
       </header>
+
+      {currentUser && showPushPrompt && (
+        <section className="push-permission-card">
+          <div>
+            <Bell size={20} />
+            <span>
+              <b>不在線也能收到重要通知</b>
+              <small>新聊聊、下訂、買家選定、取消、面交、售出與課本確認會透過瀏覽器通知你。</small>
+            </span>
+          </div>
+          <div>
+            <button className="ghost" type="button" onClick={dismissPushPrompt}>稍後再說</button>
+            <button className="primary" type="button" disabled={pushSaving} onClick={() => void enablePushNotifications()}>開啟推播</button>
+          </div>
+        </section>
+      )}
 
       {view === "home" && (
         <>
@@ -1767,7 +1927,7 @@ export function MarketplaceApp() {
                       disabled={selectedBook.status !== "available" || currentUser?.accountStatus === "suspended"}
                       onClick={() => requireActive(() => setModal("request"))}
                     >
-                      <Check size={18} />{selectedBook.status === "available" ? "送出購買請求" : "已保留，暫停新訂單"}
+                      <Check size={18} />{selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
                     </button>
                   </div>
                 )}
@@ -1807,7 +1967,7 @@ export function MarketplaceApp() {
           {currentUser.accountStatus === "suspended" && (
             <div className="readonly-notice"><Ban size={18} /><div><b>唯讀模式</b><span>{currentUser.suspensionReason || "你可以查看既有交易，但暫時不能新增或修改資料。"}</span></div></div>
           )}
-          {activeAvailableListings.length > 0 && (
+          {activeAvailableListings.length > 0 && confirmationDue && (
             <div className="listing-confirmation-panel">
               <div>
                 <b>定期確認課本仍在販售</b>
@@ -1815,7 +1975,7 @@ export function MarketplaceApp() {
                   {nextConfirmationAt
                     ? `目前 ${activeAvailableListings.length} 本公開販售中，下次確認日為 ${dateLabel(nextConfirmationAt)}。`
                     : `目前 ${activeAvailableListings.length} 本公開販售中。`}
-                  系統會提前一週提醒，逾期 30 天才暫時封存。
+                  每 30 天確認一次；最後確認後滿 120 天仍未處理，才會暫時封存。
                 </span>
               </div>
               <button className="primary" disabled={lifecycleSaving} onClick={() => void confirmAllListings()}>
@@ -1934,7 +2094,7 @@ export function MarketplaceApp() {
                       type="button"
                       className={`conversation-item ${expandedConversationId === conversation.id ? "active" : ""}`}
                       key={conversation.id}
-                      onClick={() => setExpandedConversationId(conversation.id)}
+                      onClick={() => void openConversation(conversation.id)}
                     >
                       <span className="avatar">{profile(otherId)?.name.slice(0, 1) || "聊"}</span>
                       <span>
@@ -1954,6 +2114,7 @@ export function MarketplaceApp() {
                     currentUserId={currentUser.id}
                     profiles={store.profiles}
                     onChanged={reloadAfterUserMutation}
+                    onRead={keepConversationRead}
                   />
                 ) : (
                   <EmptyDashboard text="選擇一個聊天室開始聯絡" />
@@ -2730,7 +2891,7 @@ function RequestModal({ book, onClose, onSubmit }: { book: Book; onClose: () => 
   const [message, setMessage] = useState(REQUEST_PHRASES[0]);
 
   return (
-    <ModalShell title="送出購買意願" subtitle={`想購買《${book.title}》`} onClose={onClose}>
+    <ModalShell title="確認下訂" subtitle={`想購買《${book.title}》`} onClose={onClose}>
       <form onSubmit={onSubmit} className="form">
         <div className="request-summary"><span>{book.condition}</span><b>{money(book.price)}</b><span><MapPin size={14} />{book.meetup}</span></div>
         <div className="phrase-list">
@@ -2759,8 +2920,8 @@ function RequestModal({ book, onClose, onSubmit }: { book: Book; onClose: () => 
             placeholder="介紹一下方便面交的時間，或想確認的書況..."
           />
         </label>
-        <button className="primary wide" type="submit"><MessageCircle size={17} />送出購買意願</button>
-        <p className="form-note">送出後不代表完成交易，請等待賣家接受。</p>
+        <button className="primary wide" type="submit"><MessageCircle size={17} />確認下訂</button>
+        <p className="form-note">下訂後仍需等待賣家選定，不代表交易完成。</p>
       </form>
     </ModalShell>
   );
@@ -2817,11 +2978,13 @@ function TradeChatPanel({
   currentUserId,
   profiles,
   onChanged,
+  onRead,
 }: {
   conversation: Conversation;
   currentUserId: string;
   profiles: Profile[];
   onChanged: () => void;
+  onRead: (conversationId: string) => void;
 }) {
   const [messages, setMessages] = useState<TradeMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -2841,6 +3004,7 @@ function TradeChatPanel({
     void fetchTradeMessages(client, conversation.id)
       .then(async (items) => {
         setMessages(items);
+        onRead(conversation.id);
         await markConversationRead(client, conversation.id);
         const paths = [...new Set(items.flatMap((item) => item.imagePaths))];
         const signed = await Promise.all(paths.map(async (path) => [path, await signChatImage(client, path)] as const));
@@ -2874,15 +3038,15 @@ function TradeChatPanel({
             createdAt: String(row.created_at),
           };
           setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
+          onRead(conversation.id);
           void markConversationRead(client, conversation.id);
           void Promise.all(message.imagePaths.map(async (path) => [path, await signChatImage(client, path)] as const))
             .then((signed) => setImageUrls((previous) => ({ ...previous, ...Object.fromEntries(signed) })));
-          onChanged();
         },
       )
       .subscribe();
     return () => { void client.removeChannel(channel); };
-  }, [conversation.id, onChanged]);
+  }, [conversation.id, onRead]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -2902,6 +3066,7 @@ function TradeChatPanel({
       const signed = await Promise.all(paths.map(async (path) => [path, await signChatImage(supabase!, path)] as const));
       setImageUrls((previous) => ({ ...previous, ...Object.fromEntries(signed) }));
       setFiles([]);
+      void dispatchBrowserPush(supabase);
     } catch (sendError) {
       setDraft(body);
       setError(sendError instanceof Error ? sendError.message : "訊息傳送失敗");
