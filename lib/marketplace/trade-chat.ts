@@ -1,5 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TradeMessage } from "@/lib/types";
+import { compressImage } from "@/lib/marketplace/image-upload";
+
+const CHAT_PAGE_SIZE = 50;
+
+export type TradeMessagePage = {
+  messages: TradeMessage[];
+  hasMore: boolean;
+  nextCursor: { createdAt: string; id: string } | null;
+};
 
 function mapMessage(row: Record<string, unknown>): TradeMessage {
   return {
@@ -13,15 +22,34 @@ function mapMessage(row: Record<string, unknown>): TradeMessage {
   };
 }
 
-export async function fetchTradeMessages(client: SupabaseClient, conversationId: string) {
-  const { data, error } = await client
+export async function fetchTradeMessages(
+  client: SupabaseClient,
+  conversationId: string,
+  cursor?: { createdAt: string; id: string } | null,
+): Promise<TradeMessagePage> {
+  let query = client
     .from("trade_messages")
     .select("id,conversation_id,sender_id,body,image_paths,recalled_at,created_at")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
-    .limit(300);
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(CHAT_PAGE_SIZE + 1);
+  if (cursor) {
+    query = query.or(
+      `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+    );
+  }
+  const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []).map((row) => mapMessage(row));
+  const mapped = (data ?? []).map((row) => mapMessage(row));
+  const hasMore = mapped.length > CHAT_PAGE_SIZE;
+  const page = (hasMore ? mapped.slice(0, CHAT_PAGE_SIZE) : mapped).reverse();
+  const oldest = page[0];
+  return {
+    messages: page,
+    hasMore,
+    nextCursor: oldest ? { createdAt: oldest.createdAt, id: oldest.id } : null,
+  };
 }
 
 export async function sendTradeMessage(
@@ -60,15 +88,16 @@ export async function uploadChatImages(
 ) {
   const paths: string[] = [];
   for (const file of files) {
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
-      throw new Error("圖片只支援 JPG、PNG、WebP，且每張不得超過 5MB");
-    }
-    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const path = `${conversationId}/${userId}/${crypto.randomUUID()}.${extension}`;
-    const { error } = await client.storage.from("chat-images").upload(path, file, {
-      cacheControl: "3600",
+    const compressed = await compressImage(file, {
+      maxWidth: 1600,
+      targetBytes: 1024 * 1024,
+      outputName: "chat-image",
+    });
+    const path = `${conversationId}/${userId}/${crypto.randomUUID()}.webp`;
+    const { error } = await client.storage.from("chat-images").upload(path, compressed, {
+      cacheControl: "31536000",
       upsert: false,
-      contentType: file.type,
+      contentType: compressed.type,
     });
     if (error) throw error;
     paths.push(path);
@@ -76,8 +105,11 @@ export async function uploadChatImages(
   return paths;
 }
 
-export async function signChatImage(client: SupabaseClient, path: string) {
-  const { data, error } = await client.storage.from("chat-images").createSignedUrl(path, 3600);
+export async function signChatImages(client: SupabaseClient, paths: string[]) {
+  if (paths.length === 0) return {} as Record<string, string>;
+  const { data, error } = await client.storage.from("chat-images").createSignedUrls(paths, 3600);
   if (error) throw error;
-  return data.signedUrl;
+  return Object.fromEntries(
+    data.flatMap((item) => item.signedUrl ? [[item.path, item.signedUrl] as const] : []),
+  );
 }

@@ -151,6 +151,8 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .trade-chat-head > div:last-child { display: flex; gap: 5px; align-items: flex-start; }
 .trade-chat-head button, .message-tools button { border: 0; background: none; color: var(--muted); font-size: 10px; cursor: pointer; display: inline-flex; gap: 3px; align-items: center; }
 .trade-chat-log { max-height: 390px; min-height: 260px; overflow-y: auto; padding: 12px; display: grid; gap: 10px; align-content: start; }
+.chat-load-older { justify-self: center; border: 1px solid var(--border); border-radius: 999px; background: #fff; color: var(--muted); padding: 7px 13px; cursor: pointer; }
+.chat-load-older:disabled { cursor: wait; opacity: .65; }
 .trade-chat-empty { margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
 .trade-chat-error { margin: 0; color: #983f35; background: #fff4f1; border-radius: 8px; padding: 8px 10px; font-size: 12px; }
 .trade-chat-bubble { max-width: 88%; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--line); }
