@@ -37,6 +37,7 @@ import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import {
   BOOK_IMAGE_CACHE_CONTROL,
   compressBookImage,
+  extractStoragePath,
 } from "@/lib/marketplace/image-upload";
 import {
   clearLegacyFavorites,
@@ -57,16 +58,17 @@ import {
   markConversationRead,
   recallTradeMessage,
   sendTradeMessage,
-  signChatImage,
+  signChatImages,
   uploadChatImages,
 } from "@/lib/marketplace/trade-chat";
 import {
   fetchBookById,
-  fetchBooksByIds,
+  fetchFavoriteIds,
   fetchMarketplacePage,
-  fetchPublicProfiles,
+  fetchProfilesByIds,
+  fetchUnreadNotificationCount,
   loadModerationData,
-  loadUserWorkspaceData,
+  loadWorkspaceTabData,
   mergeProfiles,
   fetchNotifications,
 } from "@/lib/marketplace/queries";
@@ -105,7 +107,7 @@ type Store = {
   currentUser: Profile | null;
 };
 
-const NOTIFICATION_REFRESH_INTERVAL_MS = 60_000;
+const NOTIFICATION_REFRESH_INTERVAL_MS = 120_000;
 
 const REQUEST_PHRASES = [
   "你好，我對這本書有興趣，方便約時間面交嗎？",
@@ -238,6 +240,7 @@ export function MarketplaceApp() {
   const [editingRequest, setEditingRequest] = useState<PurchaseRequest | null>(null);
   const [toast, setToast] = useState("");
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [adminOtpEmail, setAdminOtpEmail] = useState("");
@@ -293,26 +296,6 @@ export function MarketplaceApp() {
     return true;
   }
 
-  const applyWorkspaceData = useCallback((
-    workspace: Awaited<ReturnType<typeof loadUserWorkspaceData>>,
-    user: Profile,
-    publicProfiles: Profile[],
-  ) => {
-    setMyBooks(workspace.myBooks);
-    setRequestBooks(workspace.requestBooks);
-    setStore((previous) => ({
-      ...previous,
-      requests: workspace.requests,
-      profiles: mergeProfiles(publicProfiles, workspace.partyProfiles, previous.profiles.filter((profile) => profile.role !== "user" || profile.email), user),
-      currentUser: user,
-    }));
-    setNotifications(workspace.notifications);
-    setContacts(workspace.contacts);
-    setSellerLifecycle(workspace.sellerLifecycle);
-    setConversations(workspace.conversations);
-    setFavoriteIds(new Set(workspace.favoriteIds));
-  }, []);
-
   const loadMarketplaceBooks = useCallback(async (options?: { append?: boolean }) => {
     if (!supabase) return;
     const client = supabase;
@@ -327,7 +310,6 @@ export function MarketplaceApp() {
         );
         if (signal.aborted) return;
         setMarketplaceBooks((previous) => (append ? [...previous, ...page.books] : page.books));
-        setMarketplaceCount(page.totalCount);
         setMarketplaceHasMore(page.hasMore);
         setMarketplaceCursor(page.nextCursor);
       } catch (error) {
@@ -340,34 +322,61 @@ export function MarketplaceApp() {
     });
   }, [marketplaceCursor, marketplaceFilters]);
 
-  const loadPublicProfiles = useCallback(async () => {
-    if (!supabase) return [] as Profile[];
-    const profiles = await fetchPublicProfiles(supabase);
-    setStore((previous) => ({
-      ...previous,
-      profiles: mergeProfiles(profiles, [], previous.profiles, previous.currentUser),
-    }));
-    return profiles;
-  }, []);
+  const loadMarketplaceCount = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (marketplaceFilters.department) params.set("department", marketplaceFilters.department);
+    if (marketplaceFilters.maxPrice !== null) params.set("maxPrice", String(marketplaceFilters.maxPrice));
+    if (marketplaceFilters.query) params.set("query", marketplaceFilters.query);
+    try {
+      const response = await fetch(`/api/marketplace/count?${params.toString()}`);
+      if (!response.ok) throw new Error("count unavailable");
+      const result = await response.json() as { count: number | null };
+      if (result.count !== null) setMarketplaceCount(result.count);
+    } catch {
+      setMarketplaceCount((previous) => Math.max(previous, marketplaceBooks.length));
+    }
+  }, [marketplaceBooks.length, marketplaceFilters]);
 
-  const loadUserWorkspace = useCallback(async (user: Profile) => {
+  const loadUserWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
     if (!supabase) return;
     const client = supabase;
-    await runGuarded("workspace", async (signal) => {
+    await runGuarded(`workspace:${tab}`, async (signal) => {
       try {
-        const [publicProfiles, workspace] = await Promise.all([
-          fetchPublicProfiles(client),
-          loadUserWorkspaceData(client, user),
-        ]);
+        const workspace = await loadWorkspaceTabData(client, tab);
         if (signal.aborted) return;
-        applyWorkspaceData(workspace, user, publicProfiles);
+        if (workspace.myBooks) setMyBooks(workspace.myBooks);
+        if (workspace.requestBooks) {
+          setRequestBooks((previous) => [
+            ...new Map([...previous, ...workspace.requestBooks!].map((book) => [book.id, book])).values(),
+          ]);
+          if (tab === "favorites") setFavoriteBookCache(workspace.requestBooks);
+        }
+        if (workspace.requests) {
+          setStore((previous) => ({ ...previous, requests: workspace.requests!, currentUser: user }));
+        }
+        if (workspace.partyProfiles) {
+          setStore((previous) => ({
+            ...previous,
+            profiles: mergeProfiles(
+              previous.profiles,
+              workspace.partyProfiles!,
+              [],
+              user,
+            ),
+            currentUser: user,
+          }));
+        }
+        if (workspace.contacts) setContacts(workspace.contacts);
+        if (workspace.sellerLifecycle !== undefined) setSellerLifecycle(workspace.sellerLifecycle);
+        if (workspace.conversations) setConversations(workspace.conversations);
+        if (workspace.favoriteIds) setFavoriteIds(new Set(workspace.favoriteIds));
       } catch (error) {
         if (!isAbortError(error)) {
           setToast(`讀取交易資料失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
         }
       }
     });
-  }, [applyWorkspaceData]);
+  }, []);
 
   const loadModerationPanel = useCallback(async (user: Profile) => {
     if (!supabase) return;
@@ -402,6 +411,7 @@ export function MarketplaceApp() {
         const items = await fetchNotifications(client);
         if (signal.aborted) return;
         setNotifications(items);
+        setUnreadNotificationCount(items.filter((item) => !item.readAt).length);
         lastNotificationRefreshRef.current = Date.now();
       } catch (error) {
         if (!isAbortError(error)) {
@@ -411,13 +421,24 @@ export function MarketplaceApp() {
     });
   }, [store.currentUser]);
 
+  const loadNotificationCount = useCallback(async () => {
+    if (!supabase || !store.currentUser) return;
+    try {
+      const count = await fetchUnreadNotificationCount(supabase);
+      setUnreadNotificationCount(count);
+      lastNotificationRefreshRef.current = Date.now();
+    } catch {
+      // Keep the last known badge value when the network is temporarily unavailable.
+    }
+  }, [store.currentUser]);
+
   const reloadAfterUserMutation = useCallback(async () => {
     if (!supabase || !store.currentUser) return;
     await Promise.all([
-      loadUserWorkspace(store.currentUser),
+      loadUserWorkspace(store.currentUser, dashboardTab),
       loadMarketplaceBooks(),
     ]);
-  }, [loadMarketplaceBooks, loadUserWorkspace, store.currentUser]);
+  }, [dashboardTab, loadMarketplaceBooks, loadUserWorkspace, store.currentUser]);
 
   const reloadAfterModerationMutation = useCallback(async () => {
     if (!supabase || !store.currentUser) return;
@@ -431,30 +452,15 @@ export function MarketplaceApp() {
     window.localStorage.removeItem(STORAGE_KEY);
     setFavoriteIds(readFavoriteIds());
     setReady(true);
-    if (!supabase) return;
-    void loadPublicProfiles();
-    // Initial remote load only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!ready || !supabase) return;
     setMarketplaceCursor(null);
-    void loadMarketplaceBooks();
+    setMarketplaceCount(0);
+    void Promise.all([loadMarketplaceBooks(), loadMarketplaceCount()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, marketplaceFilters.department, marketplaceFilters.maxPrice, marketplaceFilters.query]);
-
-  useEffect(() => {
-    if (!ready || !supabase || favoriteIds.size === 0) {
-      setFavoriteBookCache([]);
-      return;
-    }
-    const client = supabase;
-    const ids = [...favoriteIds];
-    void fetchBooksByIds(client, ids)
-      .then(setFavoriteBookCache)
-      .catch(() => setFavoriteBookCache([]));
-  }, [ready, favoriteIds]);
 
   useEffect(() => {
     if (!ready || !supabase) return;
@@ -470,6 +476,7 @@ export function MarketplaceApp() {
         setMyBooks([]);
         setRequestBooks([]);
         setNotifications([]);
+        setUnreadNotificationCount(0);
         setContacts({});
         setSellerLifecycle(null);
         setSelectedArchivedIds(new Set());
@@ -488,6 +495,7 @@ export function MarketplaceApp() {
         setMyBooks([]);
         setRequestBooks([]);
         setNotifications([]);
+        setUnreadNotificationCount(0);
         setContacts({});
         return;
       }
@@ -525,7 +533,17 @@ export function MarketplaceApp() {
         }
       }
 
-      await loadUserWorkspace(googleProfile);
+      setStore((previous) => ({
+        ...previous,
+        currentUser: googleProfile,
+        profiles: mergeProfiles(previous.profiles, [], [], googleProfile),
+      }));
+      void fetchUnreadNotificationCount(client)
+        .then(setUnreadNotificationCount)
+        .catch(() => setUnreadNotificationCount(0));
+      void fetchFavoriteIds(client)
+        .then((ids) => setFavoriteIds(new Set(ids)))
+        .catch(() => setFavoriteIds(new Set()));
     };
 
     void client.auth.getSession().then(({ data }) => void syncUser(data.session?.user ?? null));
@@ -535,46 +553,27 @@ export function MarketplaceApp() {
     });
 
     return () => data.subscription.unsubscribe();
-  }, [ready, loadUserWorkspace]);
+  }, [ready]);
 
   useEffect(() => {
     if (!supabase || !store.currentUser) return;
-    const client = supabase;
-    const user = store.currentUser;
-    const channel = client
-      .channel(`notifications:${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `recipient_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const notification = payload.new as Record<string, unknown>;
-          if (
-            payload.eventType === "INSERT"
-            && notification.type === "trade_message"
-            && notification.actor_id !== user.id
-          ) {
-            setToast("收到新的聊天訊息");
-          }
-          void loadNotificationFeed();
-        },
-      )
-      .subscribe();
     const refreshWhenVisible = () => {
       if (document.visibilityState !== "visible") return;
       if (Date.now() - lastNotificationRefreshRef.current < NOTIFICATION_REFRESH_INTERVAL_MS) return;
-      void loadNotificationFeed();
+      void loadNotificationCount();
     };
+    const interval = window.setInterval(refreshWhenVisible, NOTIFICATION_REFRESH_INTERVAL_MS);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
+      window.clearInterval(interval);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
-      void client.removeChannel(channel);
     };
-  }, [store.currentUser?.id, loadNotificationFeed]);
+  }, [store.currentUser, loadNotificationCount]);
+
+  useEffect(() => {
+    if (!notificationOpen || !store.currentUser) return;
+    void loadNotificationFeed();
+  }, [notificationOpen, store.currentUser, loadNotificationFeed]);
 
   useEffect(() => {
     if (!supabase || !store.currentUser) {
@@ -630,8 +629,8 @@ export function MarketplaceApp() {
 
   useEffect(() => {
     if (!supabase || view !== "dashboard" || !store.currentUser) return;
-    void loadUserWorkspace(store.currentUser);
-  }, [view, store.currentUser?.id, loadUserWorkspace]);
+    void loadUserWorkspace(store.currentUser, dashboardTab);
+  }, [view, dashboardTab, store.currentUser, loadUserWorkspace]);
 
   useEffect(() => {
     if (!supabase || !selectedId || view !== "book") return;
@@ -669,6 +668,8 @@ export function MarketplaceApp() {
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const closeMenu = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMobileMenuOpen(false);
     };
@@ -679,6 +680,7 @@ export function MarketplaceApp() {
     window.addEventListener("keydown", closeMenu);
     window.addEventListener("resize", closeOnDesktop);
     return () => {
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeMenu);
       window.removeEventListener("resize", closeOnDesktop);
     };
@@ -753,7 +755,7 @@ export function MarketplaceApp() {
               .includes(normalized),
       )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [department, maxPrice, query, store.books, marketplaceBooks, supabase]);
+  }, [department, maxPrice, query, store.books, marketplaceBooks]);
 
   const selectedBook = detailBook
     ?? filteredBooks.find((book) => book.id === selectedId)
@@ -763,6 +765,19 @@ export function MarketplaceApp() {
     ?? null;
   const currentUser = store.currentUser;
   const profile = (id: string) => store.profiles.find((item) => item.id === id);
+
+  useEffect(() => {
+    if (!supabase || !selectedBook || view !== "book") return;
+    if (store.profiles.some((item) => item.id === selectedBook.sellerId)) return;
+    void fetchProfilesByIds(supabase, [selectedBook.sellerId])
+      .then((profiles) => {
+        setStore((previous) => ({
+          ...previous,
+          profiles: mergeProfiles(previous.profiles, profiles, [], previous.currentUser),
+        }));
+      })
+      .catch(() => undefined);
+  }, [selectedBook, view, store.profiles]);
 
   function openBook(id: string) {
     setSelectedId(id);
@@ -941,6 +956,7 @@ export function MarketplaceApp() {
       const fields = Object.fromEntries(data.entries());
       const image = data.get("image");
       let imageUrl = editingBook?.imageUrl ?? "";
+      let uploadedImagePath: string | null = null;
 
       if (image instanceof File && image.size > 0) {
         if (!supabase) {
@@ -961,6 +977,7 @@ export function MarketplaceApp() {
           }
 
           imageUrl = supabase.storage.from("book-images").getPublicUrl(filePath).data.publicUrl;
+          uploadedImagePath = filePath;
         } catch (error) {
           setToast(error instanceof Error ? error.message : "圖片處理失敗");
           return;
@@ -994,8 +1011,7 @@ export function MarketplaceApp() {
       }
 
       if (supabase) {
-        const dbPayload = {
-          seller_id: currentUser.id,
+        const updatePayload = {
           title: payload.title,
           author: payload.author,
           department: payload.department,
@@ -1008,14 +1024,23 @@ export function MarketplaceApp() {
           meetup: payload.meetup,
           description: payload.description,
         };
-        const { seller_id: _sellerId, ...updatePayload } = dbPayload;
+        const dbPayload = { seller_id: currentUser.id, ...updatePayload };
         const { error } = editingBook
           ? await supabase.from("books").update({ ...updatePayload, updated_at: new Date().toISOString() }).eq("id", editingBook.id)
           : await supabase.from("books").insert(dbPayload);
 
         if (error) {
+          if (uploadedImagePath) {
+            await supabase.storage.from("book-images").remove([uploadedImagePath]);
+          }
           setToast(`刊登儲存失敗：${error.message}`);
           return;
+        }
+        if (editingBook && uploadedImagePath) {
+          const oldImagePath = extractStoragePath(editingBook.imageUrl);
+          if (oldImagePath && oldImagePath !== uploadedImagePath) {
+            void supabase.storage.from("book-images").remove([oldImagePath]);
+          }
         }
         await reloadAfterUserMutation();
         setEditingBook(null);
@@ -1242,7 +1267,7 @@ export function MarketplaceApp() {
       setToast(`無法開啟聊聊：${error.message}`);
       return;
     }
-    await loadUserWorkspace(currentUser);
+    await loadUserWorkspace(currentUser, "chats");
     setView("dashboard");
     setDashboardTab("chats");
     void openConversation(String(data));
@@ -1257,7 +1282,7 @@ export function MarketplaceApp() {
       setToast(`無法開啟聊聊：${error.message}`);
       return;
     }
-    await loadUserWorkspace(currentUser);
+    await loadUserWorkspace(currentUser, "chats");
     setView("dashboard");
     setDashboardTab("chats");
     void openConversation(String(data));
@@ -1272,7 +1297,7 @@ export function MarketplaceApp() {
     try {
       await markConversationRead(supabase, conversationId);
     } catch (error) {
-      await loadUserWorkspace(currentUser);
+      await loadUserWorkspace(currentUser, "chats");
       setToast(error instanceof Error ? error.message : "無法更新聊聊已讀狀態");
     }
   }
@@ -1538,6 +1563,7 @@ export function MarketplaceApp() {
         notification.id === notificationId ? { ...notification, readAt } : notification,
       ),
     );
+    setUnreadNotificationCount((count) => Math.max(0, count - 1));
   }
 
   async function markAllNotificationsRead() {
@@ -1554,6 +1580,7 @@ export function MarketplaceApp() {
     setNotifications((previous) =>
       previous.map((notification) => ({ ...notification, readAt: notification.readAt || readAt })),
     );
+    setUnreadNotificationCount(0);
   }
 
   function openNotification(notification: Notification) {
@@ -1646,7 +1673,7 @@ export function MarketplaceApp() {
   const isModerator = currentUser?.accountStatus === "active"
     && (currentUser.role === "admin" || currentUser.role === "moderator");
   const pendingReports = reports.filter((report) => report.status === "pending");
-  const unreadNotifications = notifications.filter((notification) => !notification.readAt).length;
+  const unreadNotifications = unreadNotificationCount;
   const activeAvailableListings = myListings.filter((book) => book.lifecycleState === "active" && book.status === "available");
   const archivedListings = myListings.filter((book) => book.lifecycleState === "archived");
   const nextConfirmationAt = sellerLifecycle
@@ -1868,7 +1895,9 @@ export function MarketplaceApp() {
               <label><span className="dollar">$</span><select value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)}><option value="">不限價格</option><option value="300">$300 以下</option><option value="500">$500 以下</option><option value="800">$800 以下</option></select><ChevronDown size={16} /></label>
               <button className="filter-icon" title="篩選"><SlidersHorizontal size={18} /></button>
             </div>
-            <div className="result-line"><b>{supabase ? marketplaceCount : filteredBooks.length}</b> 本課本正在等待新主人</div>
+            <div className="result-line">
+              <b>{supabase ? marketplaceCount : filteredBooks.length}</b> 本左右的課本正在等待新主人
+            </div>
             <div className="book-grid">
               {filteredBooks.map((book) => (
                 <article className="book-card" key={book.id} onClick={() => openBook(book.id)}>
@@ -1931,8 +1960,8 @@ export function MarketplaceApp() {
               </div>
               <div className="description"><h3>賣家說明</h3><p>{selectedBook.description}</p></div>
               <div className="seller-row">
-                <span className="avatar">{profile(selectedBook.sellerId)?.name.slice(0, 1)}</span>
-                <div><small>賣家</small><b>{profile(selectedBook.sellerId)?.name}</b><span>{profile(selectedBook.sellerId)?.department}</span></div>
+                <span className="avatar">{profile(selectedBook.sellerId)?.name.slice(0, 1) || "賣"}</span>
+                <div><small>賣家</small><b>{profile(selectedBook.sellerId)?.name || "賣家"}</b><span>{profile(selectedBook.sellerId)?.department || ""}</span></div>
               </div>
               <div className="detail-action-row">
                 {currentUser?.id === selectedBook.sellerId ? (
@@ -2132,7 +2161,7 @@ export function MarketplaceApp() {
                 {conversations.length === 0 && <EmptyDashboard text="目前沒有聊聊紀錄" />}
               </div>
               <div className="conversation-panel">
-                {expandedConversationId ? (
+                {expandedConversationId && conversations.some((item) => item.id === expandedConversationId) ? (
                   <TradeChatPanel
                     conversation={conversations.find((item) => item.id === expandedConversationId)!}
                     currentUserId={currentUser.id}
@@ -2546,6 +2575,15 @@ function LoginModal({
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setResendCooldown((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   function switchMode(nextMode: "login" | "signup") {
     setMode(nextMode);
@@ -2586,7 +2624,10 @@ function LoginModal({
     const message = await onSignUp(name.trim(), department, email.trim(), password);
     setLoading(false);
     if (message) setError(message);
-    else setSignupStep("code");
+    else {
+      setSignupStep("code");
+      setResendCooldown(60);
+    }
   }
 
   async function confirmCode(event: FormEvent<HTMLFormElement>) {
@@ -2599,11 +2640,13 @@ function LoginModal({
   }
 
   async function resendCode() {
+    if (resendCooldown > 0) return;
     setLoading(true);
     setError("");
     const message = await onResendSignup(email.trim());
     setLoading(false);
     if (message) setError(message);
+    else setResendCooldown(60);
   }
 
   async function submitForgotPassword(event: FormEvent<HTMLFormElement>) {
@@ -2759,8 +2802,8 @@ function LoginModal({
                 <button className="text-button" type="button" disabled={loading} onClick={() => { setSignupStep("form"); setCode(""); setError(""); }}>
                   返回修改資料
                 </button>
-                <button className="text-button" type="button" disabled={loading} onClick={() => void resendCode()}>
-                  重新寄送驗證碼
+                <button className="text-button" type="button" disabled={loading || resendCooldown > 0} onClick={() => void resendCode()}>
+                  {resendCooldown > 0 ? `${resendCooldown} 秒後可重新寄送` : "重新寄送驗證碼"}
                 </button>
               </div>
             </form>
@@ -3049,6 +3092,9 @@ function TradeChatPanel({
   const [files, setFiles] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [messageCursor, setMessageCursor] = useState<{ createdAt: string; id: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -3060,13 +3106,14 @@ function TradeChatPanel({
     setError("");
     setLoading(true);
     void fetchTradeMessages(client, conversation.id)
-      .then(async (items) => {
-        setMessages(items);
+      .then(async (page) => {
+        setMessages(page.messages);
+        setHasOlderMessages(page.hasMore);
+        setMessageCursor(page.nextCursor);
         onRead(conversation.id);
         await markConversationRead(client, conversation.id);
-        const paths = [...new Set(items.flatMap((item) => item.imagePaths))];
-        const signed = await Promise.all(paths.map(async (path) => [path, await signChatImage(client, path)] as const));
-        setImageUrls(Object.fromEntries(signed));
+        const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
+        setImageUrls(await signChatImages(client, paths));
       })
       .catch((loadError) => {
         setMessages([]);
@@ -3098,8 +3145,8 @@ function TradeChatPanel({
           setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
           onRead(conversation.id);
           void markConversationRead(client, conversation.id);
-          void Promise.all(message.imagePaths.map(async (path) => [path, await signChatImage(client, path)] as const))
-            .then((signed) => setImageUrls((previous) => ({ ...previous, ...Object.fromEntries(signed) })));
+          void signChatImages(client, message.imagePaths)
+            .then((signed) => setImageUrls((previous) => ({ ...previous, ...signed })));
         },
       )
       .subscribe();
@@ -3121,8 +3168,8 @@ function TradeChatPanel({
       const paths = files.length > 0 ? await uploadChatImages(supabase, conversation.id, currentUserId, files) : [];
       const message = await sendTradeMessage(supabase, conversation.id, body, paths);
       setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
-      const signed = await Promise.all(paths.map(async (path) => [path, await signChatImage(supabase!, path)] as const));
-      setImageUrls((previous) => ({ ...previous, ...Object.fromEntries(signed) }));
+      const signed = await signChatImages(supabase, paths);
+      setImageUrls((previous) => ({ ...previous, ...signed }));
       setFiles([]);
       void dispatchBrowserPush(supabase);
     } catch (sendError) {
@@ -3134,6 +3181,27 @@ function TradeChatPanel({
   }
 
   const senderName = (senderId: string) => profiles.find((profile) => profile.id === senderId)?.name || "使用者";
+
+  async function loadOlderMessages() {
+    if (!supabase || !messageCursor || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const page = await fetchTradeMessages(supabase, conversation.id, messageCursor);
+      setMessages((previous) => [
+        ...page.messages.filter((item) => !previous.some((existing) => existing.id === item.id)),
+        ...previous,
+      ]);
+      setHasOlderMessages(page.hasMore);
+      setMessageCursor(page.nextCursor);
+      const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
+      const signed = await signChatImages(supabase, paths);
+      setImageUrls((previous) => ({ ...previous, ...signed }));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "無法載入較早訊息");
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
 
   async function recall(messageId: string) {
     if (!supabase) return;
@@ -3193,6 +3261,11 @@ function TradeChatPanel({
       </div>
       <div className="trade-chat-log">
         {loading && <p className="trade-chat-empty">載入訊息中...</p>}
+        {!loading && hasOlderMessages && (
+          <button className="chat-load-older" type="button" disabled={loadingOlder} onClick={() => void loadOlderMessages()}>
+            {loadingOlder ? "載入中..." : "載入較早訊息"}
+          </button>
+        )}
         {error && <p className="trade-chat-error">{error}</p>}
         {!loading && messages.length === 0 && <p className="trade-chat-empty">尚未開始對話，先打聲招呼吧。</p>}
         {messages.map((message) => (

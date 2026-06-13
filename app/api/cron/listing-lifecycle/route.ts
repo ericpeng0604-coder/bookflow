@@ -50,29 +50,30 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: dueError.message }, { status: 500 });
   }
 
+  const books = dueBooks ?? [];
+  const bookIds = books.map((book) => String(book.id));
+  const { data: requestRows, error: requestError } = bookIds.length
+    ? await admin.from("purchase_requests").select("book_id").in("book_id", bookIds)
+    : { data: [], error: null };
+  if (requestError) {
+    return NextResponse.json({ error: requestError.message }, { status: 500 });
+  }
+  const booksWithRequests = new Set((requestRows ?? []).map((row) => String(row.book_id)));
+  const imagePaths = books
+    .map((book) => storagePath(String(book.image_url || "")))
+    .filter((path): path is string => Boolean(path));
+  if (imagePaths.length > 0) {
+    const { error: storageError } = await admin.storage.from("book-images").remove(imagePaths);
+    if (storageError) {
+      return NextResponse.json({ error: storageError.message }, { status: 500 });
+    }
+  }
+
   let deleted = 0;
   let sanitized = 0;
   let cleanupFailed = 0;
-  for (const book of dueBooks ?? []) {
-    const { count, error: requestError } = await admin
-      .from("purchase_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("book_id", book.id);
-    if (requestError) {
-      cleanupFailed += 1;
-      continue;
-    }
-
-    const imagePath = storagePath(String(book.image_url || ""));
-    if (imagePath) {
-      const { error: storageError } = await admin.storage.from("book-images").remove([imagePath]);
-      if (storageError) {
-        cleanupFailed += 1;
-        continue;
-      }
-    }
-
-    if ((count ?? 0) === 0) {
+  for (const book of books) {
+    if (!booksWithRequests.has(String(book.id))) {
       const { error: deleteError } = await admin.from("books").delete().eq("id", book.id);
       if (deleteError) {
         cleanupFailed += 1;

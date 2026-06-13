@@ -23,7 +23,6 @@ export type MarketplaceCursor = {
 
 export type MarketplacePageResult = {
   books: Book[];
-  totalCount: number;
   hasMore: boolean;
   nextCursor: MarketplaceCursor;
 };
@@ -39,26 +38,16 @@ function marketplaceRpcParams(filters: MarketplaceFilters, limit: number, cursor
   };
 }
 
-function countRpcParams(filters: MarketplaceFilters) {
-  return {
-    p_department: filters.department,
-    p_max_price: filters.maxPrice,
-    p_query: filters.query,
-  };
-}
-
 export async function fetchMarketplacePage(
   client: SupabaseClient,
   filters: MarketplaceFilters,
   cursor: MarketplaceCursor,
 ): Promise<MarketplacePageResult> {
-  const [{ data: rows, error }, { data: totalCount, error: countError }] = await Promise.all([
-    client.rpc("list_books_page", marketplaceRpcParams(filters, MARKETPLACE_PAGE_SIZE, cursor)),
-    client.rpc("count_books_filtered", countRpcParams(filters)),
-  ]);
-
+  const { data: rows, error } = await client.rpc(
+    "list_books_page",
+    marketplaceRpcParams(filters, MARKETPLACE_PAGE_SIZE, cursor),
+  );
   if (error) throw error;
-  if (countError) throw countError;
 
   const mapped = (rows ?? []).map((row: Record<string, unknown>) => mapBook(row));
   const hasMore = mapped.length > MARKETPLACE_PAGE_SIZE;
@@ -67,7 +56,6 @@ export async function fetchMarketplacePage(
 
   return {
     books,
-    totalCount: Number(totalCount ?? books.length),
     hasMore,
     nextCursor: lastBook ? { createdAt: lastBook.createdAt, id: lastBook.id } : null,
   };
@@ -86,8 +74,9 @@ export async function fetchBooksByIds(client: SupabaseClient, bookIds: string[])
   return (data ?? []).map((row) => mapBook(row));
 }
 
-export async function fetchPublicProfiles(client: SupabaseClient) {
-  const { data, error } = await client.rpc("get_public_profiles");
+export async function fetchProfilesByIds(client: SupabaseClient, profileIds: string[]) {
+  if (profileIds.length === 0) return [] as Profile[];
+  const { data, error } = await client.rpc("get_profiles_by_ids", { p_ids: profileIds });
   if (error) throw error;
   return (data ?? []).map((row: Record<string, string>) => mapPublicProfile(row));
 }
@@ -140,12 +129,12 @@ export async function fetchHiddenBooks(client: SupabaseClient) {
   return (data ?? []).map((row) => mapBook(row));
 }
 
-export async function fetchUserRequests(client: SupabaseClient) {
+export async function fetchUserRequests(client: SupabaseClient, limit = 50) {
   const { data, error } = await client
     .from("purchase_requests")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(limit);
   if (error) throw error;
   return (data ?? []).map((row) => mapRequest(row));
 }
@@ -160,8 +149,29 @@ export async function fetchNotifications(client: SupabaseClient) {
   return (data ?? []).map((row) => mapNotification(row));
 }
 
-export async function fetchConversations(client: SupabaseClient) {
-  const { data, error } = await client.rpc("list_my_conversations");
+export async function fetchUnreadNotificationCount(client: SupabaseClient) {
+  const { data, error } = await client.rpc("count_my_unread_notifications");
+  if (error) {
+    if (["PGRST202", "42883"].includes(error.code || "")) {
+      const fallback = await fetchNotifications(client);
+      return fallback.filter((notification) => !notification.readAt).length;
+    }
+    throw error;
+  }
+  return Number(data || 0);
+}
+
+export async function fetchConversations(client: SupabaseClient): Promise<Conversation[]> {
+  let { data, error } = await client.rpc("list_my_conversations_page", {
+    p_limit: 30,
+    p_cursor_last_message_at: null,
+    p_cursor_id: null,
+  });
+  if (error && ["PGRST202", "42883"].includes(error.code || "")) {
+    const fallback = await client.rpc("list_my_conversations");
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) {
     if (["PGRST202", "42883"].includes(error.code || "")) return [] as Conversation[];
     throw error;
@@ -169,11 +179,12 @@ export async function fetchConversations(client: SupabaseClient) {
   return (data ?? []).map((row: Record<string, unknown>) => mapConversation(row));
 }
 
-export async function fetchFavoriteIds(client: SupabaseClient) {
+export async function fetchFavoriteIds(client: SupabaseClient, limit = 100) {
   const { data, error } = await client
     .from("favorites")
     .select("book_id")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) {
     if (["PGRST205", "42P01"].includes(error.code || "")) return [] as string[];
     throw error;
@@ -232,41 +243,58 @@ export async function fetchTradeContactsBatch(client: SupabaseClient, requestIds
   return contacts;
 }
 
-export async function loadUserWorkspaceData(client: SupabaseClient, _user: Profile) {
+export type WorkspaceTabData = {
+  myBooks?: Book[];
+  requests?: ReturnType<typeof mapRequest>[];
+  requestBooks?: Book[];
+  partyProfiles?: Profile[];
+  contacts?: Record<string, TradeContact>;
+  sellerLifecycle?: SellerLifecycle | null;
+  conversations?: Conversation[];
+  favoriteIds?: string[];
+};
+
+export async function loadWorkspaceTabData(
+  client: SupabaseClient,
+  tab: "listings" | "chats" | "requests" | "received" | "favorites",
+): Promise<WorkspaceTabData> {
+  if (tab === "listings") {
+    const [myBooks, sellerLifecycle] = await Promise.all([
+      fetchMyBooks(client),
+      fetchSellerLifecycle(client),
+    ]);
+    return { myBooks, sellerLifecycle };
+  }
+
+  if (tab === "chats") {
+    const conversations = await fetchConversations(client);
+    const profileIds = conversations.flatMap((item) => [item.buyerId, item.sellerId]);
+    const bookIds = [...new Set(conversations.map((item) => item.bookId))];
+    const [partyProfiles, requestBooks] = await Promise.all([
+      fetchProfilesByIds(client, [...new Set(profileIds)]),
+      fetchBooksByIds(client, bookIds),
+    ]);
+    return { conversations, partyProfiles, requestBooks };
+  }
+
+  if (tab === "favorites") {
+    const favoriteIds = await fetchFavoriteIds(client);
+    const requestBooks = await fetchBooksByIds(client, favoriteIds.slice(0, 100));
+    return { favoriteIds, requestBooks };
+  }
+
   const requests = await fetchUserRequests(client);
   const selectedIds = requests
     .filter((request) => ["reserved", "awaiting_confirmation", "completed"].includes(request.status))
     .map((request) => request.id);
-
-  const [myBooks, partyProfiles, notifications, contacts, sellerLifecycle, conversations, favoriteIds] = await Promise.all([
-    fetchMyBooks(client),
-    fetchPartyProfiles(client),
-    fetchNotifications(client),
+  const profileIds = [...new Set(requests.map((request) => request.buyerId))];
+  const bookIds = [...new Set(requests.map((request) => request.bookId))];
+  const [partyProfiles, contacts, requestBooks] = await Promise.all([
+    fetchProfilesByIds(client, profileIds),
     fetchTradeContactsBatch(client, selectedIds),
-    fetchSellerLifecycle(client),
-    fetchConversations(client),
-    fetchFavoriteIds(client),
+    fetchBooksByIds(client, bookIds),
   ]);
-
-  const requestBookIds = [...new Set([
-    ...requests.map((request) => request.bookId),
-    ...conversations.map((conversation: Conversation) => conversation.bookId),
-    ...favoriteIds,
-  ])];
-  const missingBookIds = requestBookIds.filter((bookId) => !myBooks.some((book: Book) => book.id === bookId));
-  const requestBooks = missingBookIds.length > 0 ? await fetchBooksByIds(client, missingBookIds) : [];
-
-  return {
-    myBooks,
-    requests,
-    requestBooks,
-    partyProfiles,
-    notifications,
-    contacts,
-    sellerLifecycle,
-    conversations,
-    favoriteIds,
-  };
+  return { requests, partyProfiles, contacts, requestBooks };
 }
 
 export async function loadModerationData(client: SupabaseClient, user: Profile) {
@@ -293,5 +321,4 @@ export function mergeProfiles(
   return [...profileMap.values()];
 }
 
-export type UserWorkspaceData = Awaited<ReturnType<typeof loadUserWorkspaceData>>;
 export type ModerationData = Awaited<ReturnType<typeof loadModerationData>>;

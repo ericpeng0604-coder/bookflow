@@ -44,6 +44,8 @@ npm run setup:check -- --no-network
 3. 依序執行其餘 migration；若要啟用市集分頁與 200 人在線優化，再執行 `supabase/list-books-pagination.sql`。
    雙方配對聊天室需要再執行 `supabase/trade-messages.sql`。
    幽靈課本與賣家確認週期需最後執行 `supabase/listing-lifecycle.sql`。
+   完成聊天室與生命週期 migration 後，再執行
+   `supabase/capacity-optimization.sql`，加入搜尋、未讀統計、對話分頁及精簡會員查詢。
    緊急停用時先移除 Vercel Cron，再執行
    `supabase/listing-lifecycle-rollback.sql`；此腳本保留交易與稽核資料。
 4. 在 Project Settings → API 取得 Project URL 與 publishable/anon key。
@@ -125,6 +127,27 @@ supabase/admin-login-verification.sql
 ### 4. 設定寄信服務
 
 Supabase 內建寄信服務只適合測試，而且通常只能寄給專案團隊的 Email。要讓所有學生都收到驗證碼，需要在 Authentication → SMTP Settings 設定自訂 SMTP，例如 Resend、SendGrid 或 Amazon SES。
+
+使用 Resend 免費方案時，先完成寄件網域的 SPF 與 DKIM 驗證，再將 Resend
+提供的 SMTP host、port、帳號與 API key 填入 Supabase。金鑰只放在
+Supabase Dashboard，不得寫入程式碼或 `NEXT_PUBLIC_` 環境變數。
+
+## 容量驗證
+
+容量測試只能對本機或獨立 staging 執行。工具會逐步升載並回報吞吐量、
+p50、p95、p99 與錯誤率：
+
+```text
+LOAD_TEST_CONFIRM=yes
+LOAD_TEST_ALLOWED_HOSTS=你的-staging-project.supabase.co
+LOAD_TEST_CONCURRENCY=200
+LOAD_TEST_DURATION_SECONDS=900
+LOAD_TEST_RAMP_STEPS=5
+npm run load-test:marketplace
+```
+
+通過門檻為找書 p95 不超過 1.5 秒且錯誤率低於 1%。建立腳本或通過本機
+建置不代表已證實 200 人容量；必須保留 staging 測試結果與資料庫資源數據。
 
 ### 5. 重新啟動
 

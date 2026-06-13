@@ -1,6 +1,8 @@
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_WIDTH = 1200;
-const JPEG_QUALITY = 0.82;
+const TARGET_BYTES = 700 * 1024;
+const INITIAL_QUALITY = 0.8;
+const MIN_QUALITY = 0.55;
 
 function loadImage(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -28,17 +30,19 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number)
   });
 }
 
-export async function compressBookImage(file: File) {
+export async function compressImage(
+  file: File,
+  options?: { maxWidth?: number; targetBytes?: number; outputName?: string },
+) {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
     throw new Error("圖片僅支援 JPG、PNG 或 WebP");
   }
-
-  if (file.size <= MAX_UPLOAD_BYTES && file.type === "image/jpeg") {
-    return file;
-  }
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("原始圖片大小不能超過 5MB");
 
   const image = await loadImage(file);
-  const scale = image.width > MAX_WIDTH ? MAX_WIDTH / image.width : 1;
+  const maxWidth = options?.maxWidth ?? MAX_WIDTH;
+  const targetBytes = options?.targetBytes ?? TARGET_BYTES;
+  const scale = image.width > maxWidth ? maxWidth / image.width : 1;
   const width = Math.max(1, Math.round(image.width * scale));
   const height = Math.max(1, Math.round(image.height * scale));
   const canvas = document.createElement("canvas");
@@ -49,20 +53,24 @@ export async function compressBookImage(file: File) {
   if (!context) throw new Error("無法處理圖片");
   context.drawImage(image, 0, 0, width, height);
 
-  const outputType = file.type === "image/png" ? "image/webp" : file.type;
-  let blob = await canvasToBlob(canvas, outputType, JPEG_QUALITY);
-
-  if (blob.size > MAX_UPLOAD_BYTES && outputType !== "image/jpeg") {
-    blob = await canvasToBlob(canvas, "image/jpeg", JPEG_QUALITY);
+  const outputType = "image/webp";
+  let quality = INITIAL_QUALITY;
+  let blob = await canvasToBlob(canvas, outputType, quality);
+  while (blob.size > targetBytes && quality > MIN_QUALITY) {
+    quality = Math.max(MIN_QUALITY, quality - 0.08);
+    blob = await canvasToBlob(canvas, outputType, quality);
   }
 
   if (blob.size > MAX_UPLOAD_BYTES) {
     throw new Error("圖片大小不能超過 5MB");
   }
 
-  const extension = blob.type === "image/webp" ? "webp" : blob.type === "image/png" ? "png" : "jpg";
-  const baseName = file.name.replace(/\.[^.]+$/, "") || "book-cover";
-  return new File([blob], `${baseName}.${extension}`, { type: blob.type });
+  const baseName = options?.outputName || file.name.replace(/\.[^.]+$/, "") || "image";
+  return new File([blob], `${baseName}.webp`, { type: blob.type });
+}
+
+export function compressBookImage(file: File) {
+  return compressImage(file, { maxWidth: MAX_WIDTH, targetBytes: TARGET_BYTES, outputName: "book-cover" });
 }
 
 export function extractStoragePath(publicUrl: string, bucket = "book-images") {
@@ -72,4 +80,4 @@ export function extractStoragePath(publicUrl: string, bucket = "book-images") {
   return decodeURIComponent(publicUrl.slice(index + marker.length));
 }
 
-export const BOOK_IMAGE_CACHE_CONTROL = "86400";
+export const BOOK_IMAGE_CACHE_CONTROL = "31536000";
