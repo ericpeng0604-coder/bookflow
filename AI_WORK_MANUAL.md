@@ -216,6 +216,37 @@ always belong to the currently selected record.
 **Prevention rule:** Key stateful detail components by record identity, reset
 record-specific state on change, and ignore asynchronous results after cleanup.
 
+### LESSON-013: Lazy tabs must not hide required dashboard state
+
+**Observed problem:** After a fresh login, purchase requests appeared empty
+until the user clicked the requests tab because only the default listings tab
+was loaded.
+
+**Cause:** Tab-level query optimization was also used for shared badge and
+transaction state that users expected to be ready when the dashboard opened.
+
+**Detection:** Test a fresh login and first dashboard visit without clicking
+each tab; verify shared counts and transaction records are already available.
+
+**Prevention rule:** Keep expensive tab details lazy, but preload shared
+dashboard state required by badges, cross-tab actions, and first-entry behavior.
+
+### LESSON-014: Shipping SQL files does not migrate production
+
+**Observed problem:** Purchase-notification SQL was merged and deployed with the
+web app, but the production Supabase function remained unchanged.
+
+**Cause:** A repository SQL file and a Vercel deployment were treated as if they
+also applied a database migration.
+
+**Detection:** Compare the production RPC behavior or migration history after
+every database-related release; do not infer database state from a green web
+deployment.
+
+**Prevention rule:** Track database rollout as a separate required release
+step, apply the idempotent SQL to staging and production with explicit approval,
+and verify the resulting notification behavior before claiming it is online.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

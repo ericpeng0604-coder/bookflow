@@ -88,6 +88,14 @@ begin
   insert into public.order_events (request_id, event_type, actor_id)
   values (created_id, 'requested', auth.uid());
   perform public.open_order_conversation(created_id);
+  insert into public.notifications (
+    recipient_id, actor_id, type, book_id, request_id, title, message, dedupe_key
+  ) values (
+    target_book.seller_id, auth.uid(), 'request_created', target_book.id, created_id,
+    '收到新的購買請求', '有買家想購買《' || target_book.title || '》',
+    'request-created:' || created_id::text
+  )
+  on conflict (dedupe_key) where dedupe_key is not null do nothing;
   return created_id;
 end;
 $$;
