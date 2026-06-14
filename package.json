@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "ai:status": "node scripts/ai-collaboration.mjs status",
     "ai:claim": "node scripts/ai-collaboration.mjs claim",
     "ai:handoff": "node scripts/ai-collaboration.mjs handoff",
@@ -21,7 +22,13 @@
     "check:chat-state": "node scripts/check-chat-switching.mjs",
     "check:notifications": "node scripts/check-notification-refresh.mjs",
     "check:push": "node scripts/check-browser-push.mjs",
-    "check:capacity": "node scripts/check-capacity-optimization.mjs"
+    "check:capacity": "node scripts/check-capacity-optimization.mjs",
+    "check:refresh": "node scripts/check-refresh-guard.mjs",
+    "check:workflows": "node scripts/check-workflows.mjs",
+    "check:project": "node scripts/run-project-checks.mjs",
+    "check:all": "npm run typecheck && npm run lint && npm run check:project && npm run build",
+    "release:smoke": "node scripts/release-smoke.mjs",
+    "staging:check": "node scripts/check-staging.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.0",
