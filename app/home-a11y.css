@@ -1,0 +1,90 @@
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 100;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--green-dark);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+
+.skip-link:focus-visible {
+  top: 16px;
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.home-page .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.home-page .hero-trust,
+.home-page .result-line,
+.home-page .card-meta,
+.home-page .card-footer small {
+  color: #4a5f58;
+}
+
+.home-page .book-card {
+  position: relative;
+}
+
+.home-page .book-card-main {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.home-page .book-card-main:focus-visible {
+  outline: 3px solid rgba(29, 106, 87, 0.45);
+  outline-offset: 3px;
+}
+
+.home-page .book-card:focus-within {
+  border-color: #7aa895;
+  box-shadow: 0 0 0 3px rgba(29, 106, 87, 0.18);
+}
+
+.home-page .heart:focus-visible {
+  outline: 3px solid rgba(29, 106, 87, 0.45);
+  outline-offset: 2px;
+}
+
+.home-page .filter-icon:focus-visible,
+.home-page .sell-cta:focus-visible,
+.home-page .hero-search button:focus-visible,
+.home-page .load-more-wrap button:focus-visible {
+  outline: 3px solid rgba(29, 106, 87, 0.45);
+  outline-offset: 2px;
+}
+
+.home-page .hero-search input:focus-visible,
+.home-page .filters input:focus-visible,
+.home-page .filters select:focus-visible {
+  outline: 3px solid rgba(29, 106, 87, 0.35);
+  outline-offset: 1px;
+}
+
+.home-page .empty[role="status"] {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: #fafcf9;
+}

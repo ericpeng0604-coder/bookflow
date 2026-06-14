@@ -19,6 +19,9 @@ const checkScripts = [
   { name: "check:refresh-guard", path: "scripts/check-refresh-guard.mjs", stripTypes: true },
   { name: "check:favorites", path: "scripts/check-favorites.mjs", stripTypes: true },
   { name: "check:notification-delivery", path: "scripts/check-notification-delivery.mjs", stripTypes: true },
+  { name: "check:trade-chat", path: "scripts/check-trade-chat.mjs", stripTypes: false },
+  { name: "check:home-accessibility", path: "scripts/check-home-accessibility.mjs", stripTypes: false },
+  { name: "check:push-subscription-api", path: "scripts/check-push-subscription-api.mjs", stripTypes: false },
   { name: "check:workflows", path: "scripts/check-workflows.mjs", stripTypes: false },
 ];
 

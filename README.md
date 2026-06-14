@@ -3,6 +3,77 @@
 > 發布、Staging、資料庫 migration、正式站驗證與回滾流程，請以
 > [`docs/RELEASE_WORKFLOW.md`](docs/RELEASE_WORKFLOW.md) 為準。
 
+校園二手課本交易原型，以 Next.js、TypeScript 與 Supabase 製作。
+
+## 本機開發
+
+### 需求
+
+- Node.js 20 或以上（建議 LTS）
+- npm（隨 Node.js 安裝）
+
+### 安裝與啟動
+
+```text
+npm install
+cp .env.example .env.local   # Windows 可改為 copy .env.example .env.local
+```
+
+在 `.env.local` 至少填入：
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://你的專案代碼.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=你的-publishable-或-anon-key
+```
+
+啟動開發伺服器（擇一）：
+
+```text
+npm run dev
+```
+
+瀏覽器開啟 `http://localhost:3000`。
+
+Windows 也可雙擊 `start-bookflow.cmd` 啟動（會等待伺服器就緒後自動開啟瀏覽器）。若該腳本找不到 Node.js，請改用上面的 `npm run dev`。
+
+### 本機驗證
+
+建置與型別檢查：
+
+```text
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+功能回歸腳本（不需連線正式資料庫）：
+
+```text
+npm run check:filters
+npm run check:trade
+npm run check:chat-state
+npm run check:notifications
+npm run check:push
+npm run check:capacity
+node scripts/check-refresh-guard.mjs
+node scripts/check-trade-chat.mjs
+node scripts/check-home-accessibility.mjs
+node scripts/check-push-subscription-api.mjs
+```
+
+AI 交接完整性：
+
+```text
+npm run ai:check
+```
+
+環境與 migration 健檢（可選 `--no-network` 只做本機檢查）：
+
+```text
+npm run setup:check
+npm run setup:check -- --no-network
+```
+
 ## 一鍵 setup health check
 
 在專案根目錄執行：
@@ -22,11 +93,9 @@ npm run setup:check -- --no-network
 輸出中的 `FAIL` 必須修正，`WARN` 是啟用相關功能前要補的設定，`TODO`
 則是必須到 Supabase Dashboard 人工確認的 Auth redirect 與 Email Template。
 
-單一校園使用的二手課本交易原型，以 Next.js、TypeScript 與 Supabase 製作。
+## 開啟網站（Windows 快速啟動）
 
-## 開啟網站
-
-在 Windows 檔案總管中雙擊 `start-bookflow.cmd`，並保持黑色視窗開啟。網站準備完成後會自動開啟 `http://localhost:3000`。
+在 Windows 檔案總管中雙擊 `start-bookflow.cmd`，並保持黑色視窗開啟。網站準備完成後會自動開啟 `http://localhost:3000`。一般開發仍建議使用上一節的 `npm run dev`。
 
 ## 設定會員註冊與登入
 
@@ -43,16 +112,23 @@ npm run setup:check -- --no-network
 ### 1. 建立 Supabase 專案
 
 1. 前往 Supabase 建立新專案。
-2. 在 SQL Editor 執行 `supabase/schema.sql`。
-3. 依序執行其餘 migration；若要啟用市集分頁與 200 人在線優化，再執行 `supabase/list-books-pagination.sql`。
-   雙方配對聊天室需要再執行 `supabase/trade-messages.sql`。
-   幽靈課本與賣家確認週期需最後執行 `supabase/listing-lifecycle.sql`。
-   完成聊天室與生命週期 migration 後，再執行
-   `supabase/capacity-optimization.sql`，加入搜尋、未讀統計、對話分頁及精簡會員查詢。
-   緊急停用時先移除 Vercel Cron，再執行
-   `supabase/listing-lifecycle-rollback.sql`；此腳本保留交易與稽核資料。
+2. 在 SQL Editor 依序執行 migration（順序很重要）：
+   1. `supabase/schema.sql`
+   2. `supabase/moderation.sql`
+   3. `supabase/reports-and-suspensions.sql`
+   4. `supabase/admin-login-verification.sql`
+   5. `supabase/transactions-and-notifications.sql`
+   6. `supabase/trade-messages.sql`（舊版聊聊；若已執行下一項可略過）
+   7. `supabase/multi-party-orders-and-safe-chat.sql`（多人洽談、訂單、安全聊聊、收藏）
+   8. `supabase/chat-notifications-and-contact-privacy.sql`
+   9. `supabase/list-books-pagination.sql`（市集分頁）
+   10. `supabase/listing-lifecycle.sql`（幽靈課本與賣家確認週期）
+   11. `supabase/capacity-optimization.sql`（搜尋、未讀統計、對話分頁優化）
+   12. `supabase/browser-push-and-30-day-confirmation.sql`（瀏覽器推播）
+   13. `supabase/request-update-notification-dedupe.sql`（下訂通知 dedupe；可重複執行）
+3. 若要回退生命週期排程（保留交易資料），執行 `supabase/listing-lifecycle-rollback.sql`；執行前請先移除 Vercel Cron。
 4. 在 Project Settings → API 取得 Project URL 與 publishable/anon key。
-5. 在專案根目錄建立 `.env.local`：
+5. 在專案根目錄建立 `.env.local`（可複製 `.env.example`）：
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://你的專案代碼.supabase.co
@@ -158,20 +234,20 @@ npm run load-test:marketplace
 
 ## 部署至 Vercel
 
-部署時在 Vercel 加入：
+部署時在 Vercel 加入（完整清單見 `.env.example`）：
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `APP_URL`（正式網站的 `https://` 網址，供通知郵件產生可信任連結）
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `APP_URL`（正式網站的 `https://` 網址，供通知郵件與推播連結）
+- `SUPABASE_SERVICE_ROLE_KEY`（僅伺服器端，不可加 `NEXT_PUBLIC_`）
 - `RESEND_API_KEY`
 - `RESEND_FROM_EMAIL`
-- `EMAIL_NOTIFICATIONS_ENABLED=true`
-- `CRON_SECRET`（至少 24 個隨機字元，保護每日排程 API）
+- `EMAIL_NOTIFICATIONS_ENABLED=true`（若要寄通知信）
+- `CRON_SECRET`（至少 24 個隨機字元；Vercel Cron 會以此保護 `/api/cron/listing-lifecycle`）
+- `WEB_PUSH_VAPID_PUBLIC_KEY` / `WEB_PUSH_VAPID_PRIVATE_KEY` / `WEB_PUSH_SUBJECT`（瀏覽器推播）
+- `PUSH_DISPATCH_SECRET`（保護 `/api/cron/push`；Supabase `pg_cron` 排程應使用此 secret）
 
-`vercel.json` 會每天執行一次刊登生命週期排程。它負責建立站內與 Email
-提醒、封存逾期販售中課本，以及處理封存滿一年的資料清理。洽談中的
-課本不會被自動封存。
+`vercel.json` 會每天執行一次刊登生命週期排程（`/api/cron/listing-lifecycle`）。瀏覽器推播 hourly 排程由 Supabase `pg_cron` 觸發（見 `supabase/browser-push-and-30-day-confirmation.sql`），需在 Supabase Vault 設定 dispatch URL 與 secret。排程負責建立站內與 Email 提醒、封存逾期販售中課本，以及處理封存滿一年的資料清理。洽談中的課本不會被自動封存。
 
 ## 一鍵回復正式網站上一版本
 
@@ -199,7 +275,7 @@ Repository 的預設 Actions 權限維持唯讀。一鍵還原與救援監控工
 
 如果工作停在建置檢查，代表上一版無法正常建置，因此不會推送或影響正式網站。如果顯示 main 已有新版本，代表檢查期間有人更新程式；重新執行一次即可，系統不會覆蓋那次更新。
 
-目前原型不包含付款、物流、站內聊天或評價。
+目前原型不包含付款、物流或評價；已支援站內聊聊、購買意願、通知與瀏覽器推播。
 
 ## Codex 與 Cursor 工作交接
 

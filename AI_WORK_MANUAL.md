@@ -281,6 +281,21 @@ recognized.
 `before..after` push range, and keep application rollback from changing the
 protected recovery files.
 
+### LESSON-017: Static checks must preserve the source text they assert
+
+**Observed problem:** Newly added regression scripts contained mojibake in
+Chinese string assertions, so the checks could not verify the intended source.
+
+**Cause:** The scripts were saved or generated without validating their encoded
+text against the files under test.
+
+**Detection:** Run every new check and inspect its asserted literals for
+replacement characters or suspicious byte-decoding patterns.
+
+**Prevention rule:** Save verification scripts as UTF-8, use stable structural
+assertions where practical, and confirm every text assertion matches readable
+source before relying on the result.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

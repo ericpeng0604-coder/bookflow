@@ -54,7 +54,9 @@ import {
   enableBrowserPush,
 } from "@/lib/marketplace/browser-push";
 import {
+  deleteChatImageUploads,
   fetchTradeMessages,
+  mapTradeMessage,
   markConversationRead,
   recallTradeMessage,
   sendTradeMessage,
@@ -1937,23 +1939,25 @@ export function MarketplaceApp() {
       )}
 
       {view === "home" && (
-        <>
+        <div className="home-page">
           {currentUser?.accountStatus === "suspended" && (
-            <div className="suspension-banner">
-              <Ban size={18} />
+            <div className="suspension-banner" role="status">
+              <Ban size={18} aria-hidden="true" />
               <div><b>帳號目前為唯讀模式</b><span>{currentUser.suspensionReason || "請聯絡管理員了解停權原因。"}</span></div>
             </div>
           )}
-          <section className="hero">
-            <div className="hero-glow one" />
-            <div className="hero-glow two" />
+          <section className="hero" aria-labelledby="home-hero-title">
+            <div className="hero-glow one" aria-hidden="true" />
+            <div className="hero-glow two" aria-hidden="true" />
             <div className="hero-copy">
-              <span className="eyebrow"><Sparkles size={15} /> 學長姐的書，學弟妹的下一站</span>
-              <h1>讓知識繼續流動，<br /><em>一本書也不浪費。</em></h1>
+              <span className="eyebrow"><Sparkles size={15} aria-hidden="true" /> 學長姐的書，學弟妹的下一站</span>
+              <h1 id="home-hero-title">讓知識繼續流動，<br /><em>一本書也不浪費。</em></h1>
               <p>在校園裡找到你需要的課本，省下一筆，也讓學長姐的筆記繼續發揮價值。</p>
-              <div className="hero-search">
-                <Search size={21} />
+              <div className="hero-search" role="search" aria-label="搜尋課本">
+                <label className="visually-hidden" htmlFor="hero-search-input">搜尋書名、課程或老師</label>
+                <Search size={21} aria-hidden="true" />
                 <input
+                  id="hero-search-input"
                   value={heroQuery}
                   onChange={(event) => setHeroQuery(event.target.value)}
                   onKeyDown={(event) => {
@@ -1961,15 +1965,15 @@ export function MarketplaceApp() {
                   }}
                   placeholder="搜尋書名、課程或老師..."
                 />
-                <button onClick={submitHeroSearch}>開始找書</button>
+                <button type="button" onClick={submitHeroSearch}>開始找書</button>
               </div>
-              <div className="hero-trust">
-                <span><ShieldCheck size={16} /> 校園面交更安心</span>
-                <span><MessageCircle size={16} /> 接受後依賣家設定分享聯絡方式</span>
-                <span><GraduationCap size={16} /> 依課程快速找到課本</span>
+              <div className="hero-trust" aria-label="平台特色">
+                <span><ShieldCheck size={16} aria-hidden="true" /> 校園面交更安心</span>
+                <span><MessageCircle size={16} aria-hidden="true" /> 接受後依賣家設定分享聯絡方式</span>
+                <span><GraduationCap size={16} aria-hidden="true" /> 依課程快速找到課本</span>
               </div>
             </div>
-            <div className="hero-art">
+            <div className="hero-art" aria-hidden="true">
               <div className="book-stack">
                 <div className="floating-note note-one">資料結構<br /><b>省下 $380</b></div>
                 <div className="book book-a"><span>DATA<br />STRUCTURES</span></div>
@@ -1980,57 +1984,129 @@ export function MarketplaceApp() {
             </div>
           </section>
 
-          <section className="market" id="market">
+          <section className="market" id="market" aria-labelledby="home-market-title">
             <div className="section-heading">
-              <div><span className="section-kicker">LATEST LISTINGS</span><h2>最近上架的課本</h2></div>
-              <button className="sell-cta" disabled={currentUser?.accountStatus === "suspended"} onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}><Plus size={18} />刊登一本書</button>
+              <div><span className="section-kicker">LATEST LISTINGS</span><h2 id="home-market-title">最近上架的課本</h2></div>
+              <button
+                type="button"
+                className="sell-cta"
+                disabled={currentUser?.accountStatus === "suspended"}
+                aria-disabled={currentUser?.accountStatus === "suspended"}
+                onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}
+              >
+                <Plus size={18} aria-hidden="true" />刊登一本書
+              </button>
             </div>
-            <div className="filters">
-              <label className="filter-search"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋課本..." /></label>
-              <label><GraduationCap size={18} /><select value={department} onChange={(event) => setDepartment(event.target.value)}>{departments.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={16} /></label>
-              <label><span className="dollar">$</span><select value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)}><option value="">不限價格</option><option value="300">$300 以下</option><option value="500">$500 以下</option><option value="800">$800 以下</option></select><ChevronDown size={16} /></label>
-              <button className="filter-icon" title="篩選"><SlidersHorizontal size={18} /></button>
-            </div>
-            <div className="result-line">
+            <form className="filters" aria-label="篩選課本" onSubmit={(event) => event.preventDefault()}>
+              <label className="filter-search" htmlFor="home-filter-query">
+                <span className="visually-hidden">搜尋課本</span>
+                <Search size={18} aria-hidden="true" />
+                <input
+                  id="home-filter-query"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="搜尋課本..."
+                  aria-label="搜尋課本"
+                />
+              </label>
+              <label htmlFor="home-filter-department">
+                <span className="visually-hidden">科系</span>
+                <GraduationCap size={18} aria-hidden="true" />
+                <select
+                  id="home-filter-department"
+                  value={department}
+                  onChange={(event) => setDepartment(event.target.value)}
+                  aria-label="科系"
+                >
+                  {departments.map((item) => <option key={item}>{item}</option>)}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </label>
+              <label htmlFor="home-filter-price">
+                <span className="visually-hidden">最高價格</span>
+                <span className="dollar" aria-hidden="true">$</span>
+                <select
+                  id="home-filter-price"
+                  value={maxPrice}
+                  onChange={(event) => setMaxPrice(event.target.value)}
+                  aria-label="最高價格"
+                >
+                  <option value="">不限價格</option>
+                  <option value="300">$300 以下</option>
+                  <option value="500">$500 以下</option>
+                  <option value="800">$800 以下</option>
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </label>
+              <button type="button" className="filter-icon" aria-label="進階篩選（即將推出）" disabled aria-disabled="true">
+                <SlidersHorizontal size={18} aria-hidden="true" />
+              </button>
+            </form>
+            <p className="result-line" aria-live="polite" aria-atomic="true">
               <b>{supabase ? marketplaceCount : filteredBooks.length}</b> 本左右的課本正在等待新主人
-            </div>
-            <div className="book-grid">
+            </p>
+            <div className="book-grid" role="list" aria-label="課本列表">
               {filteredBooks.map((book) => (
-                <article className="book-card" key={book.id} onClick={() => openBook(book.id)}>
-                  <div className="card-image">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={book.imageUrl} alt={book.title} loading="lazy" decoding="async" />
-                    <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
-                    <button
-                      className={`heart ${favoriteIds.has(book.id) ? "active" : ""}`}
-                      aria-label={favoriteIds.has(book.id) ? "取消收藏" : "收藏"}
-                      aria-pressed={favoriteIds.has(book.id)}
-                      onClick={(event) => toggleFavorite(book.id, event)}
-                    >
-                      <Heart size={18} fill={favoriteIds.has(book.id) ? "currentColor" : "none"} />
-                    </button>
-                  </div>
-                  <div className="card-body">
-                    {book.course && <span className="course-tag">{book.course}</span>}
-                    <h3>{book.title}</h3>
-                    <p>{book.author} · {book.edition}</p>
-                    <div className="card-meta"><span>{book.condition}</span><span><MapPin size={13} />{book.meetup}</span></div>
-                    <div className="card-footer"><strong>{money(book.price)}</strong><small>{timeAgo(book.createdAt)}刊登</small></div>
-                  </div>
+                <article className="book-card" key={book.id} role="listitem">
+                  <button
+                    type="button"
+                    className="book-card-main"
+                    onClick={() => openBook(book.id)}
+                    aria-label={`查看《${book.title}》，${book.author}，${money(book.price)}，${book.condition}`}
+                  >
+                    <div className="card-image">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={book.imageUrl} alt="" loading="lazy" decoding="async" />
+                      <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
+                    </div>
+                    <div className="card-body">
+                      {book.course && <span className="course-tag">{book.course}</span>}
+                      <h3>{book.title}</h3>
+                      <p>{book.author} · {book.edition}</p>
+                      <div className="card-meta"><span>{book.condition}</span><span><MapPin size={13} aria-hidden="true" />{book.meetup}</span></div>
+                      <div className="card-footer"><strong>{money(book.price)}</strong><small>{timeAgo(book.createdAt)}刊登</small></div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className={`heart ${favoriteIds.has(book.id) ? "active" : ""}`}
+                    aria-label={favoriteIds.has(book.id) ? `取消收藏《${book.title}》` : `收藏《${book.title}》`}
+                    aria-pressed={favoriteIds.has(book.id)}
+                    onClick={(event) => toggleFavorite(book.id, event)}
+                  >
+                    <Heart size={18} fill={favoriteIds.has(book.id) ? "currentColor" : "none"} aria-hidden="true" />
+                  </button>
                 </article>
               ))}
             </div>
             {supabase && marketplaceHasMore && (
               <div className="load-more-wrap">
-                <button className="primary" disabled={marketplaceLoading} onClick={() => void loadMarketplaceBooks({ append: true })}>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={marketplaceLoading}
+                  aria-busy={marketplaceLoading}
+                  onClick={() => void loadMarketplaceBooks({ append: true })}
+                >
                   {marketplaceLoading ? "載入中..." : "載入更多"}
                 </button>
               </div>
             )}
-            {filteredBooks.length === 0 && !marketplaceLoading && <div className="empty"><BookOpen size={40} /><h3>還沒有符合的課本</h3><p>換個關鍵字或篩選條件看看。</p></div>}
-            {marketplaceLoading && filteredBooks.length === 0 && <div className="empty"><BookOpen size={40} /><h3>載入中...</h3></div>}
+            {filteredBooks.length === 0 && !marketplaceLoading && (
+              <div className="empty" role="status" aria-live="polite">
+                <BookOpen size={40} aria-hidden="true" />
+                <h3>還沒有符合的課本</h3>
+                <p>換個關鍵字或篩選條件看看。</p>
+              </div>
+            )}
+            {marketplaceLoading && filteredBooks.length === 0 && (
+              <div className="empty" role="status" aria-live="polite" aria-busy="true">
+                <BookOpen size={40} aria-hidden="true" />
+                <h3>載入中...</h3>
+              </div>
+            )}
           </section>
-        </>
+        </div>
       )}
 
       {view === "book" && selectedBook && (
@@ -2189,7 +2265,6 @@ export function MarketplaceApp() {
                       <span>選取</span>
                     </label>
                   )}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   {book.imageUrl
                     ? <img src={book.imageUrl} alt="" />
                     : <div className="listing-image-placeholder"><BookOpen size={24} /></div>}
@@ -3277,11 +3352,24 @@ function TradeChatPanel({
         setHasOlderMessages(page.hasMore);
         setMessageCursor(page.nextCursor);
         onRead(conversation.id);
-        await markConversationRead(client, conversation.id);
+        try {
+          await markConversationRead(client, conversation.id);
+        } catch (readError) {
+          if (active) {
+            setError(readError instanceof Error ? readError.message : "無法更新已讀狀態");
+          }
+        }
         if (!active) return;
         const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
-        const signed = await signChatImages(client, paths);
-        if (active) setImageUrls(signed);
+        if (paths.length === 0) return;
+        try {
+          const signed = await signChatImages(client, paths);
+          if (active) setImageUrls(signed);
+        } catch (signError) {
+          if (active) {
+            setError(signError instanceof Error ? signError.message : "部分圖片無法載入");
+          }
+        }
       })
       .catch((loadError) => {
         if (!active) return;
@@ -3304,22 +3392,24 @@ function TradeChatPanel({
         },
         (payload) => {
           if (!active) return;
-          const row = payload.new as Record<string, unknown>;
-          const message: TradeMessage = {
-            id: String(row.id),
-            conversationId: String(row.conversation_id),
-            senderId: String(row.sender_id),
-            body: String(row.body || ""),
-            imagePaths: Array.isArray(row.image_paths) ? row.image_paths.map(String) : [],
-            recalledAt: row.recalled_at ? String(row.recalled_at) : null,
-            createdAt: String(row.created_at),
-          };
+          let message: TradeMessage;
+          try {
+            message = mapTradeMessage(payload.new as Record<string, unknown>);
+          } catch {
+            return;
+          }
           setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
           onRead(conversation.id);
-          void markConversationRead(client, conversation.id);
+          void markConversationRead(client, conversation.id).catch(() => undefined);
+          if (message.imagePaths.length === 0) return;
           void signChatImages(client, message.imagePaths)
             .then((signed) => {
               if (active) setImageUrls((previous) => ({ ...previous, ...signed }));
+            })
+            .catch((signError) => {
+              if (active) {
+                setError(signError instanceof Error ? signError.message : "部分圖片無法載入");
+              }
             });
         },
       )
@@ -3350,15 +3440,23 @@ function TradeChatPanel({
     setDraft("");
     setError("");
     setSending(true);
+    let uploadedPaths: string[] = [];
     try {
-      const paths = files.length > 0 ? await uploadChatImages(supabase, conversation.id, currentUserId, files) : [];
-      const message = await sendTradeMessage(supabase, conversation.id, body, paths);
+      uploadedPaths = files.length > 0
+        ? await uploadChatImages(supabase, conversation.id, currentUserId, files)
+        : [];
+      const message = await sendTradeMessage(supabase, conversation.id, body, uploadedPaths);
       setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
-      const signed = await signChatImages(supabase, paths);
-      setImageUrls((previous) => ({ ...previous, ...signed }));
+      if (uploadedPaths.length > 0) {
+        const signed = await signChatImages(supabase, uploadedPaths);
+        setImageUrls((previous) => ({ ...previous, ...signed }));
+      }
       setFiles([]);
       void dispatchBrowserPush(supabase);
     } catch (sendError) {
+      if (uploadedPaths.length > 0) {
+        await deleteChatImageUploads(supabase, uploadedPaths).catch(() => undefined);
+      }
       setDraft(body);
       setError(sendError instanceof Error ? sendError.message : "訊息傳送失敗");
     } finally {
