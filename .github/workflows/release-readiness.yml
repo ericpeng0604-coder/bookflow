@@ -1,0 +1,79 @@
+name: Release Readiness
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-readiness-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check:all
+
+  handoff:
+    name: AI handoff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate pull request handoff
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ai-collaboration.mjs check-ci "$BASE_SHA" "$HEAD_SHA"
+      - name: Validate local handoff state
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: node scripts/ai-collaboration.mjs check
+
+  actionlint:
+    name: Workflow syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.12
+
+  release-readiness:
+    name: Release Readiness
+    if: ${{ always() }}
+    needs:
+      - quality
+      - handoff
+      - actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every release check
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          HANDOFF: ${{ needs.handoff.result }}
+          ACTIONLINT: ${{ needs.actionlint.result }}
+        run: |
+          test "$QUALITY" = success
+          test "$HANDOFF" = success
+          test "$ACTIONLINT" = success

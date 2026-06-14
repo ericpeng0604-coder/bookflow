@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260614-fix-request-dashboard-preload-and-purcha",
-  "taskTitle": "fix request dashboard preload and purchase notifications",
-  "baseCommit": "f7097f5516ba40e11a205aa97922fb03110ae479",
-  "updatedAt": "2026-06-14T10:41:37.374Z",
+  "taskId": "20260614-deploy-release-workflow-and-verification",
+  "taskTitle": "deploy release workflow and verification tooling",
+  "baseCommit": "2b406e33d502ad5d75f663232e40a5583ee9f3cf",
+  "updatedAt": "2026-06-14T11:39:16.464Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260614-1041-20260614-fix-request-dashboard-preload-a.md"
+  "historyFile": ".ai/history/20260614-1139-20260614-deploy-release-workflow-and-ver.md"
 }

@@ -1,0 +1,67 @@
+name: Production Deployment Monitor
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Production https URL
+        required: true
+        default: https://bookflow-green.vercel.app
+        type: string
+      expected_commit:
+        description: Full deployed commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment-monitor
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Production Smoke Test
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.deployment_status.state == 'success' &&
+          github.event.deployment.environment == 'Production'
+        )
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify deployed release
+        env:
+          RELEASE_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.base_url || 'https://bookflow-green.vercel.app' }}
+          EXPECTED_COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_commit || github.event.deployment.sha }}
+        run: npm run release:smoke
+      - name: Add release evidence
+        if: ${{ success() }}
+        env:
+          DEPLOYED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_commit || github.event.deployment.sha }}
+        run: |
+          {
+            echo "## Production verification"
+            echo ""
+            echo "- Commit: \`$DEPLOYED_SHA\`"
+            echo "- Homepage, marketplace count, and release health passed."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Show rollback entry point
+        if: ${{ failure() }}
+        run: |
+          {
+            echo "## Production verification failed"
+            echo ""
+            echo "Use the **Rollback Production** workflow after confirming the failure."
+          } >> "$GITHUB_STEP_SUMMARY"

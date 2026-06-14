@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：deploy release workflow and verification tooling
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`2b406e33d502ad5d75f663232e40a5583ee9f3cf`
+- 封存時間：2026-06-14T11:39:16.463Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

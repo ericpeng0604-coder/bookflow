@@ -1,0 +1,90 @@
+name: Staging Migration
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-migration
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      migrations: ${{ steps.changes.outputs.migrations }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "migrations=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA...$HEAD_SHA" |
+            grep '^supabase/migrations/.*\.sql$' |
+            grep -qv '_legacy_baseline\.sql$'; then
+            echo "migrations=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "migrations=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  apply:
+    name: Apply and verify staging migrations
+    needs: detect
+    if: ${{ needs.detect.outputs.migrations == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+      - run: npm ci
+      - name: Apply versioned migrations
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: supabase db push --db-url "$STAGING_DATABASE_URL" --include-all
+      - name: Verify migration history
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: supabase migration list --db-url "$STAGING_DATABASE_URL"
+      - name: Verify RPC and RLS behavior
+        env:
+          STAGING_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run staging:check
+
+  staging-migration:
+    name: Staging Migration
+    if: ${{ always() }}
+    needs:
+      - detect
+      - apply
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require staging result when migrations changed
+        env:
+          CHANGED: ${{ needs.detect.outputs.migrations }}
+          APPLY_RESULT: ${{ needs.apply.result }}
+        run: |
+          if [[ "$CHANGED" == "true" ]]; then
+            test "$APPLY_RESULT" = success
+          else
+            echo "No versioned database migration changed."
+          fi
