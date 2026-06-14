@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix chat switching state race and deploy
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`8109eaa60c86bc5d72edf824275f0764873a6b7d`
+- 封存時間：2026-06-14T10:15:32.360Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

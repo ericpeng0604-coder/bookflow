@@ -2255,6 +2255,7 @@ export function MarketplaceApp() {
               <div className="conversation-panel">
                 {expandedConversationId && conversations.some((item) => item.id === expandedConversationId) ? (
                   <TradeChatPanel
+                    key={expandedConversationId}
                     conversation={conversations.find((item) => item.id === expandedConversationId)!}
                     currentUserId={currentUser.id}
                     profiles={store.profiles}
@@ -3255,23 +3256,34 @@ function TradeChatPanel({
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
+    let active = true;
     setError("");
     setLoading(true);
+    setMessages([]);
+    setImageUrls({});
+    setHasOlderMessages(false);
+    setMessageCursor(null);
     void fetchTradeMessages(client, conversation.id)
       .then(async (page) => {
+        if (!active) return;
         setMessages(page.messages);
         setHasOlderMessages(page.hasMore);
         setMessageCursor(page.nextCursor);
         onRead(conversation.id);
         await markConversationRead(client, conversation.id);
+        if (!active) return;
         const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
-        setImageUrls(await signChatImages(client, paths));
+        const signed = await signChatImages(client, paths);
+        if (active) setImageUrls(signed);
       })
       .catch((loadError) => {
+        if (!active) return;
         setMessages([]);
         setError(loadError instanceof Error ? loadError.message : "無法載入聊聊");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
     const channel = client
       .channel(`trade-chat:${conversation.id}`)
@@ -3284,6 +3296,7 @@ function TradeChatPanel({
           filter: `conversation_id=eq.${conversation.id}`,
         },
         (payload) => {
+          if (!active) return;
           const row = payload.new as Record<string, unknown>;
           const message: TradeMessage = {
             id: String(row.id),
@@ -3298,11 +3311,16 @@ function TradeChatPanel({
           onRead(conversation.id);
           void markConversationRead(client, conversation.id);
           void signChatImages(client, message.imagePaths)
-            .then((signed) => setImageUrls((previous) => ({ ...previous, ...signed })));
+            .then((signed) => {
+              if (active) setImageUrls((previous) => ({ ...previous, ...signed }));
+            });
         },
       )
       .subscribe();
-    return () => { void client.removeChannel(channel); };
+    return () => {
+      active = false;
+      void client.removeChannel(channel);
+    };
   }, [conversation.id, onRead]);
 
   useEffect(() => {

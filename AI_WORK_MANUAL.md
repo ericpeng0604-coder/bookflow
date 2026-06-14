@@ -201,6 +201,21 @@ all historical migrations.
 migrations. Drop every dependent policy variant before the change and recreate
 only the policies required by the new authorization model.
 
+### LESSON-012: Prop changes must invalidate asynchronous UI state
+
+**Observed problem:** Switching chats could briefly show the previous chat and
+allow its slower message or image request to overwrite the newly selected chat.
+
+**Cause:** The chat component reused local state across conversation changes,
+and asynchronous callbacks were not invalidated during cleanup.
+
+**Detection:** Rapidly switch between records whose detail panels fetch data,
+and verify that content, loading state, realtime events, and delayed responses
+always belong to the currently selected record.
+
+**Prevention rule:** Key stateful detail components by record identity, reset
+record-specific state on change, and ignore asynchronous results after cleanup.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
