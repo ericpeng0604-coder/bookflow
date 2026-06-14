@@ -129,7 +129,7 @@ jobs:
           set -euo pipefail
           api_url="https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${ROLLBACK_SHA}/status"
 
-          for attempt in {1..60}; do
+          for _ in {1..60}; do
             response="$(curl --fail --silent --show-error \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $GH_TOKEN" \
