@@ -6,22 +6,25 @@ import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const checks = [
-  "check-filters.mjs",
-  "check-listing-lifecycle.mjs",
-  "check-trade-workflow.mjs",
-  "check-chat-switching.mjs",
-  "check-notification-refresh.mjs",
-  "check-browser-push.mjs",
-  "check-capacity-optimization.mjs",
-  "check-refresh-guard.mjs",
-  "check-favorites.mjs",
-  "check-notification-delivery.mjs",
-  "check-workflows.mjs",
+  { file: "check-filters.mjs" },
+  { file: "check-listing-lifecycle.mjs" },
+  { file: "check-trade-workflow.mjs" },
+  { file: "check-chat-switching.mjs" },
+  { file: "check-notification-refresh.mjs" },
+  { file: "check-browser-push.mjs" },
+  { file: "check-capacity-optimization.mjs" },
+  { file: "check-refresh-guard.mjs", stripTypes: true },
+  { file: "check-favorites.mjs", stripTypes: true },
+  { file: "check-notification-delivery.mjs", stripTypes: true },
+  { file: "check-workflows.mjs" },
 ];
 
 for (const check of checks) {
-  console.log(`\n==> ${check}`);
-  const result = spawnSync(process.execPath, [join(root, "scripts", check)], {
+  console.log(`\n==> ${check.file}`);
+  const args = check.stripTypes
+    ? ["--experimental-strip-types", join(root, "scripts", check.file)]
+    : [join(root, "scripts", check.file)];
+  const result = spawnSync(process.execPath, args, {
     cwd: root,
     stdio: "inherit",
   });

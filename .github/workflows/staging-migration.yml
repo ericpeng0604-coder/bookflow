@@ -31,7 +31,8 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "migrations=true" >> "$GITHUB_OUTPUT"
           elif git diff --name-only "$BASE_SHA...$HEAD_SHA" |
-            grep -q '^supabase/migrations/.*\.sql$'; then
+            grep '^supabase/migrations/.*\.sql$' |
+            grep -qv '_legacy_baseline\.sql$'; then
             echo "migrations=true" >> "$GITHUB_OUTPUT"
           else
             echo "migrations=false" >> "$GITHUB_OUTPUT"
@@ -48,7 +49,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - uses: supabase/setup-cli@v2
         with:
