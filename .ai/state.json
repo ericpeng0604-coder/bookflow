@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260614-fix-transaction-refresh-and-notification",
-  "taskTitle": "fix transaction refresh and notification spam then deploy",
-  "baseCommit": "b29330333a3ff297c8875f8a23266036f1e044d0",
-  "updatedAt": "2026-06-14T03:15:37.274Z",
+  "taskId": "20260614-harden-release-migration-deployment-and-",
+  "taskTitle": "harden release migration deployment and recovery workflows",
+  "baseCommit": "75802032de4bc702ed635bd2daff574a5e35794c",
+  "updatedAt": "2026-06-14T03:37:57.194Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260614-0315-20260614-fix-transaction-refresh-and-not.md"
+  "historyFile": ".ai/history/20260614-0337-20260614-harden-release-migration-deploy.md"
 }

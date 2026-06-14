@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：harden release migration deployment and recovery workflows
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`75802032de4bc702ed635bd2daff574a5e35794c`
+- 封存時間：2026-06-14T03:37:57.194Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
