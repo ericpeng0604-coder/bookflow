@@ -378,6 +378,13 @@ export function MarketplaceApp() {
     });
   }, []);
 
+  const loadDashboardWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
+    const tabs = tab === "requests" || tab === "received"
+      ? [tab]
+      : [tab, "requests" as const];
+    await Promise.all(tabs.map((targetTab) => loadUserWorkspace(user, targetTab)));
+  }, [loadUserWorkspace]);
+
   const loadModerationPanel = useCallback(async (user: Profile) => {
     if (!supabase) return;
     const client = supabase;
@@ -455,10 +462,10 @@ export function MarketplaceApp() {
   const reloadAfterUserMutation = useCallback(async () => {
     if (!supabase || !store.currentUser) return;
     await Promise.all([
-      loadUserWorkspace(store.currentUser, dashboardTab),
+      loadDashboardWorkspace(store.currentUser, dashboardTab),
       loadMarketplaceBooks(),
     ]);
-  }, [dashboardTab, loadMarketplaceBooks, loadUserWorkspace, store.currentUser]);
+  }, [dashboardTab, loadDashboardWorkspace, loadMarketplaceBooks, store.currentUser]);
 
   const reloadAfterModerationMutation = useCallback(async () => {
     if (!supabase || !store.currentUser) return;
@@ -471,9 +478,9 @@ export function MarketplaceApp() {
   const openDashboard = useCallback(() => {
     setView("dashboard");
     if (view === "dashboard" && store.currentUser) {
-      void loadUserWorkspace(store.currentUser, dashboardTab);
+      void loadDashboardWorkspace(store.currentUser, dashboardTab);
     }
-  }, [dashboardTab, loadUserWorkspace, store.currentUser, view]);
+  }, [dashboardTab, loadDashboardWorkspace, store.currentUser, view]);
 
   useEffect(() => {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -656,18 +663,18 @@ export function MarketplaceApp() {
 
   useEffect(() => {
     if (!supabase || view !== "dashboard" || !store.currentUser) return;
-    void loadUserWorkspace(store.currentUser, dashboardTab);
-  }, [view, dashboardTab, store.currentUser, loadUserWorkspace]);
+    void loadDashboardWorkspace(store.currentUser, dashboardTab);
+  }, [view, dashboardTab, store.currentUser, loadDashboardWorkspace]);
 
   useEffect(() => {
     if (!supabase || view !== "dashboard" || !store.currentUser) return;
     const refreshDashboardWhenVisible = () => {
       if (document.visibilityState !== "visible") return;
-      void loadUserWorkspace(store.currentUser!, dashboardTab);
+      void loadDashboardWorkspace(store.currentUser!, dashboardTab);
     };
     document.addEventListener("visibilitychange", refreshDashboardWhenVisible);
     return () => document.removeEventListener("visibilitychange", refreshDashboardWhenVisible);
-  }, [dashboardTab, loadUserWorkspace, store.currentUser, view]);
+  }, [dashboardTab, loadDashboardWorkspace, store.currentUser, view]);
 
   useEffect(() => {
     if (!supabase || !selectedId || view !== "book") return;

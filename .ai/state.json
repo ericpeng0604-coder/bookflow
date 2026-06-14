@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260614-fix-chat-switching-state-race-and-deploy",
-  "taskTitle": "fix chat switching state race and deploy",
-  "baseCommit": "8109eaa60c86bc5d72edf824275f0764873a6b7d",
-  "updatedAt": "2026-06-14T10:15:32.360Z",
+  "taskId": "20260614-fix-request-dashboard-preload-and-purcha",
+  "taskTitle": "fix request dashboard preload and purchase notifications",
+  "baseCommit": "f7097f5516ba40e11a205aa97922fb03110ae479",
+  "updatedAt": "2026-06-14T10:41:37.374Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260614-1015-20260614-fix-chat-switching-state-race-a.md"
+  "historyFile": ".ai/history/20260614-1041-20260614-fix-request-dashboard-preload-a.md"
 }

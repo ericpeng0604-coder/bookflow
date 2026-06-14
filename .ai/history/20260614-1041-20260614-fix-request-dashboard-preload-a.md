@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix request dashboard preload and purchase notifications
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`f7097f5516ba40e11a205aa97922fb03110ae479`
+- 封存時間：2026-06-14T10:41:37.374Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
