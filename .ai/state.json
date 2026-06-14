@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260614-deploy-order-confirmation-profile-editin",
-  "taskTitle": "deploy order confirmation profile editing and chat image lightbox",
-  "baseCommit": "5e32a8aba322c9c78947c9c3a41d4afac53c3120",
-  "updatedAt": "2026-06-14T02:32:59.312Z",
+  "taskId": "20260614-fix-transaction-refresh-and-notification",
+  "taskTitle": "fix transaction refresh and notification spam then deploy",
+  "baseCommit": "b29330333a3ff297c8875f8a23266036f1e044d0",
+  "updatedAt": "2026-06-14T03:15:37.274Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260614-0232-20260614-deploy-order-confirmation-profi.md"
+  "historyFile": ".ai/history/20260614-0315-20260614-fix-transaction-refresh-and-not.md"
 }

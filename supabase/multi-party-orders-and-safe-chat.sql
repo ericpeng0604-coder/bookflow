@@ -595,11 +595,19 @@ begin
     insert into public.order_events (request_id, event_type, actor_id)
     values (existing_request.id, 'request_updated', auth.uid());
     insert into public.notifications (
-      recipient_id, actor_id, type, book_id, request_id, title, message
+      recipient_id, actor_id, type, book_id, request_id, title, message, dedupe_key
     ) values (
       target_book.seller_id, auth.uid(), 'request_created', target_book.id, existing_request.id,
-      '買家修改了訂單', '「' || target_book.title || '」的購買意願內容已更新'
-    );
+      '買家修改了訂單', '「' || target_book.title || '」的購買意願內容已更新',
+      'request-updated:' || existing_request.id::text
+    )
+    on conflict (dedupe_key) where dedupe_key is not null
+    do update set
+      actor_id = excluded.actor_id,
+      title = excluded.title,
+      message = excluded.message,
+      read_at = null,
+      created_at = now();
     return existing_request.id;
   end if;
   if target_book.status <> 'available' then

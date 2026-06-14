@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix transaction refresh and notification spam then deploy
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`b29330333a3ff297c8875f8a23266036f1e044d0`
+- 封存時間：2026-06-14T03:15:37.273Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

@@ -33,6 +33,7 @@ supabase/multi-party-orders-and-safe-chat.sql
 ```text
 supabase/listing-lifecycle.sql
 supabase/browser-push-and-30-day-confirmation.sql
+supabase/request-update-notification-dedupe.sql
 ```
 
 若生命週期排程需要緊急停用，先移除 Vercel Cron，再執行：
@@ -46,7 +47,8 @@ supabase/listing-lifecycle-rollback.sql
 這會加入賣家 30 天確認提示、60/90/113 天追蹤提醒、120 天未確認封存、
 逐本恢復與一年後清理所需的資料結構及 RPC。既有課本會以 migration
 執行時間作為首次確認時間，不會在上線當天被封存。
-最後一個 migration 會加入瀏覽器推播訂閱、30 天週期提醒與每小時推播派送。
+最後兩個 migration 會加入瀏覽器推播訂閱、30 天週期提醒與每小時推播派送，
+並將同一筆購買意願的重複修改通知合併為一則。
 
 ## 2. Vercel 環境變數
 
