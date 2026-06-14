@@ -9,10 +9,13 @@ const checks = [
   "check-filters.mjs",
   "check-listing-lifecycle.mjs",
   "check-trade-workflow.mjs",
+  "check-chat-switching.mjs",
   "check-notification-refresh.mjs",
   "check-browser-push.mjs",
   "check-capacity-optimization.mjs",
   "check-refresh-guard.mjs",
+  "check-favorites.mjs",
+  "check-notification-delivery.mjs",
   "check-workflows.mjs",
 ];
 

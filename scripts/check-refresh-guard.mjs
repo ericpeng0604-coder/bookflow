@@ -2,27 +2,28 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import {
+  extractExportFunction,
+  importTypeScriptModule,
+  nodeSupportsStripTypes,
+  normalizeTypeScriptForMirrorCompare,
+  projectRoot,
+} from "./lib/check-runner.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const sourcePath = join(root, "lib/marketplace/refresh-guard.ts");
+const sourcePath = join(projectRoot, "lib/marketplace/refresh-guard.ts");
 const source = readFileSync(sourcePath, "utf8");
 
 assert.match(source, /export function runGuarded/, "refresh-guard.ts must export runGuarded");
 assert.match(source, /export function isAbortError/, "refresh-guard.ts must export isAbortError");
-assert.match(source, /new Map<string, GuardEntry>/, "refresh-guard.ts should track in-flight work by key");
-assert.match(source, /controller\.abort\(\)/, "refresh-guard.ts should abort superseded requests");
 
 /**
- * Behavioral checks mirror lib/marketplace/refresh-guard.ts so this script can run
- * without a TypeScript loader. Keep in sync with that module.
+ * Fallback mirror used only when Node cannot import TypeScript directly.
+ * Keep this block synchronized with lib/marketplace/refresh-guard.ts.
  */
-const inFlight = new Map();
-
+const mirrorSource = `
 function runGuarded(key, task) {
   inFlight.get(key)?.abort();
-
   const controller = new AbortController();
   const promise = task(controller.signal).finally(() => {
     const current = inFlight.get(key);
@@ -30,17 +31,68 @@ function runGuarded(key, task) {
       inFlight.delete(key);
     }
   });
-
   inFlight.set(key, {
     promise,
     abort: () => controller.abort(),
   });
-
   return promise;
 }
 
 function isAbortError(error) {
   return error instanceof DOMException && error.name === "AbortError";
+}
+`;
+
+function extractMirrorComparableFunctions(moduleSource) {
+  return [
+    extractExportFunction(moduleSource, "runGuarded"),
+    extractExportFunction(moduleSource, "isAbortError"),
+  ].join("\n");
+}
+
+const tsComparable = extractMirrorComparableFunctions(source);
+const tsNormalized = normalizeTypeScriptForMirrorCompare(tsComparable);
+const mirrorNormalized = normalizeTypeScriptForMirrorCompare(mirrorSource);
+
+assert.equal(
+  tsNormalized,
+  mirrorNormalized,
+  [
+    "refresh-guard mirror drift detected; update scripts/check-refresh-guard.mjs or lib/marketplace/refresh-guard.ts",
+    `TS: ${tsNormalized}`,
+    `Mirror: ${mirrorNormalized}`,
+  ].join("\n"),
+);
+
+let runGuarded;
+let isAbortError;
+let importMode = "typescript";
+
+if (nodeSupportsStripTypes()) {
+  ({ runGuarded, isAbortError } = await importTypeScriptModule("lib/marketplace/refresh-guard.ts"));
+} else {
+  importMode = "mirror";
+  const inFlight = new Map();
+  ({ runGuarded, isAbortError } = {
+    runGuarded(key, task) {
+      inFlight.get(key)?.abort();
+      const controller = new AbortController();
+      const promise = task(controller.signal).finally(() => {
+        const current = inFlight.get(key);
+        if (current?.promise === promise) {
+          inFlight.delete(key);
+        }
+      });
+      inFlight.set(key, {
+        promise,
+        abort: () => controller.abort(),
+      });
+      return promise;
+    },
+    isAbortError(error) {
+      return error instanceof DOMException && error.name === "AbortError";
+    },
+  });
 }
 
 function delay(ms) {
@@ -75,7 +127,6 @@ function waitUnlessAborted(signal, ms) {
 async function runTests() {
   const firstResult = await runGuarded("marketplace", async () => "done");
   assert.equal(firstResult, "done");
-  assert.equal(inFlight.has("marketplace"), false, "completed work should clear the guard entry");
 
   let firstSignal;
   let secondSignal;
@@ -90,11 +141,9 @@ async function runTests() {
     return "second";
   });
 
-  assert.equal(firstSignal.aborted, true, "a superseded request should receive abort");
-  assert.equal(secondSignal.aborted, false, "the latest request should stay active");
-
-  const secondResult = await secondStarted;
-  assert.equal(secondResult, "second");
+  assert.equal(firstSignal.aborted, true);
+  assert.equal(secondSignal.aborted, false);
+  assert.equal(await secondStarted, "second");
   await assert.rejects(firstStarted, (error) => isAbortError(error));
 
   let isolatedFirstSignal;
@@ -110,8 +159,8 @@ async function runTests() {
     return "notifications";
   });
 
-  assert.equal(isolatedFirstSignal.aborted, false, "different keys must not abort each other");
-  assert.equal(isolatedSecondSignal.aborted, false, "different keys must not abort each other");
+  assert.equal(isolatedFirstSignal.aborted, false);
+  assert.equal(isolatedSecondSignal.aborted, false);
   assert.equal(await isolatedFirst, "moderation");
   assert.equal(await isolatedSecond, "notifications");
 
@@ -122,4 +171,4 @@ async function runTests() {
 }
 
 await runTests();
-console.log("Refresh guard checks passed (7/7).");
+console.log(`Refresh guard checks passed (${importMode}, 7/7).`);

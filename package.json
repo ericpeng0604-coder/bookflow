@@ -24,9 +24,13 @@
     "check:push": "node scripts/check-browser-push.mjs",
     "check:capacity": "node scripts/check-capacity-optimization.mjs",
     "check:refresh": "node scripts/check-refresh-guard.mjs",
+    "check:refresh-guard": "node --experimental-strip-types scripts/check-refresh-guard.mjs",
+    "check:favorites": "node --experimental-strip-types scripts/check-favorites.mjs",
+    "check:notification-delivery": "node --experimental-strip-types scripts/check-notification-delivery.mjs",
     "check:workflows": "node scripts/check-workflows.mjs",
     "check:project": "node scripts/run-project-checks.mjs",
     "check:all": "npm run typecheck && npm run lint && npm run check:project && npm run build",
+    "verify": "node scripts/verify.mjs",
     "release:smoke": "node scripts/release-smoke.mjs",
     "staging:check": "node scripts/check-staging.mjs"
   },
