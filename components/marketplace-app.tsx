@@ -98,7 +98,7 @@ const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
 
 type View = "home" | "book" | "dashboard" | "admin";
 type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites";
-type Modal = "login" | "adminOtp" | "resetPassword" | "bookForm" | "contactSettings" | "request" | "report" | null;
+type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | null;
 
 type Store = {
   books: Book[];
@@ -923,6 +923,31 @@ export function MarketplaceApp() {
     return null;
   }
 
+  async function saveProfile(name: string, profileDepartment: string) {
+    if (!supabase || !currentUser) return "目前無法更新個人資料";
+    const trimmedName = name.trim();
+    if (!trimmedName) return "請輸入姓名";
+    if (trimmedName.length > 60) return "姓名不可超過 60 個字";
+    if (!departments.slice(1).includes(profileDepartment)) return "請選擇系所";
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ name: trimmedName, department: profileDepartment })
+      .eq("id", currentUser.id);
+    if (error) return `更新失敗：${error.message}`;
+
+    await supabase.auth.updateUser({ data: { name: trimmedName, department: profileDepartment } });
+    const updatedProfile = { ...currentUser, name: trimmedName, department: profileDepartment };
+    setStore((previous) => ({
+      ...previous,
+      currentUser: updatedProfile,
+      profiles: mergeProfiles(previous.profiles, [], [], updatedProfile),
+    }));
+    setModal(null);
+    setToast("個人資料已更新");
+    return null;
+  }
+
   async function logout() {
     if (supabase) await supabase.auth.signOut();
     setStore((previous) => ({ ...previous, requests: [], currentUser: null }));
@@ -1101,6 +1126,27 @@ export function MarketplaceApp() {
         ["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status),
     );
     if (supabase) {
+      let existingMessage = duplicate?.message;
+      if (!duplicate) {
+        const { data: existing, error: existingError } = await supabase
+          .from("purchase_requests")
+          .select("id,message,status")
+          .eq("book_id", selectedBook.id)
+          .eq("buyer_id", currentUser.id)
+          .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation"])
+          .maybeSingle();
+        if (existingError) {
+          setToast(`無法確認既有購買意願：${existingError.message}`);
+          return;
+        }
+        existingMessage = existing ? String(existing.message || "") : undefined;
+      }
+      if (existingMessage?.trim() === message) {
+        setModal(null);
+        setEditingRequest(null);
+        setToast("已送出購買意願");
+        return;
+      }
       const { error } = await supabase.rpc("create_purchase_request", {
         target_book_id: selectedBook.id,
         request_message: message,
@@ -1113,10 +1159,16 @@ export function MarketplaceApp() {
       void dispatchNotificationDeliveries();
       setModal(null);
       setEditingRequest(null);
-      setToast(duplicate || editingRequest ? "訂單內容已更新" : "購買意願已送出");
+      setToast("購買意願已送出");
       return;
     }
     if (duplicate) {
+      if (duplicate.message.trim() === message) {
+        setModal(null);
+        setEditingRequest(null);
+        setToast("已送出購買意願");
+        return;
+      }
       setStore((previous) => ({
         ...previous,
         requests: previous.requests.map((request) =>
@@ -1127,7 +1179,7 @@ export function MarketplaceApp() {
       }));
       setModal(null);
       setEditingRequest(null);
-      setToast("訂單內容已更新");
+      setToast("購買意願已送出");
       return;
     }
     setStore((previous) => ({
@@ -2015,7 +2067,10 @@ export function MarketplaceApp() {
         <section className="dashboard">
           <div className="dashboard-head">
             <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
-            <button className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}><Plus size={18} />刊登課本</button>
+            <div className="dashboard-head-actions">
+              <button className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => setModal("profile"))}><UserRound size={18} />個人資料</button>
+              <button className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}><Plus size={18} />刊登課本</button>
+            </div>
           </div>
           {currentUser.accountStatus === "suspended" && (
             <div className="readonly-notice"><Ban size={18} /><div><b>唯讀模式</b><span>{currentUser.suspensionReason || "你可以查看既有交易，但暫時不能新增或修改資料。"}</span></div></div>
@@ -2446,6 +2501,13 @@ export function MarketplaceApp() {
           onSubmit={updatePassword}
         />
       )}
+      {modal === "profile" && currentUser && (
+        <ProfileModal
+          profile={currentUser}
+          onClose={() => setModal(null)}
+          onSubmit={saveProfile}
+        />
+      )}
       {modal === "bookForm" && <BookFormModal book={editingBook} saving={bookSaving} onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }} onSubmit={saveBook} />}
       {modal === "contactSettings" && editingBook && (
         <ContactSettingsModal
@@ -2544,6 +2606,57 @@ function AdminOtpModal({
         {error && <p className="auth-error">{error}</p>}
         <div className="privacy-note"><ShieldCheck size={15} />關閉此視窗會立即登出，未驗證前無法使用管理權限。</div>
       </div>
+    </ModalShell>
+  );
+}
+
+function ProfileModal({
+  profile,
+  onClose,
+  onSubmit,
+}: {
+  profile: Profile;
+  onClose: () => void;
+  onSubmit: (name: string, department: string) => Promise<string | null>;
+}) {
+  const [name, setName] = useState(profile.name);
+  const [department, setDepartment] = useState(profile.department);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setSaving(true);
+    const message = await onSubmit(name, department);
+    if (message) setError(message);
+    setSaving(false);
+  }
+
+  return (
+    <ModalShell title="個人資料" subtitle="更新其他使用者會看到的姓名與系所" onClose={onClose}>
+      <form className="form" onSubmit={(event) => void submit(event)}>
+        <label>
+          姓名
+          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={60} required />
+        </label>
+        <label>
+          系所
+          <select value={department} onChange={(event) => setDepartment(event.target.value)} required>
+            <option value="">請選擇系所</option>
+            {departments.slice(1).map((item) => <option key={item}>{item}</option>)}
+          </select>
+        </label>
+        <label>
+          登入 Email
+          <input value={profile.email} disabled />
+        </label>
+        <p className="form-note">登入 Email 涉及帳號驗證，目前不能在這裡直接修改。</p>
+        {error && <p className="form-error">{error}</p>}
+        <button className="primary wide" type="submit" disabled={saving}>
+          {saving ? "儲存中..." : "儲存個人資料"}
+        </button>
+      </form>
     </ModalShell>
   );
 }
@@ -3074,6 +3187,7 @@ function OrderTimeline({ request }: { request: PurchaseRequest }) {
   return <div className="order-timeline">{steps.map((step) => <span className={step.done ? "done" : ""} key={step.label}>{step.label}</span>)}</div>;
 }
 
+/* eslint-disable @next/next/no-img-element */
 function TradeChatPanel({
   conversation,
   currentUserId,
@@ -3091,6 +3205,7 @@ function TradeChatPanel({
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
@@ -3156,6 +3271,15 @@ function TradeChatPanel({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!enlargedImageUrl) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setEnlargedImageUrl(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [enlargedImageUrl]);
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3277,8 +3401,17 @@ function TradeChatPanel({
                 {message.imagePaths.length > 0 && (
                   <div className="chat-images">
                     {message.imagePaths.map((path) => imageUrls[path]
-                      // eslint-disable-next-line @next/next/no-img-element
-                      ? <img key={path} src={imageUrls[path]} alt="聊聊圖片" />
+                      ? (
+                        <button
+                          className="chat-image-button"
+                          type="button"
+                          key={path}
+                          onClick={() => setEnlargedImageUrl(imageUrls[path])}
+                          aria-label="放大聊聊圖片"
+                        >
+                          <img src={imageUrls[path]} alt="聊聊圖片" />
+                        </button>
+                      )
                       : <span key={path}>圖片載入中</span>)}
                   </div>
                 )}
@@ -3309,9 +3442,18 @@ function TradeChatPanel({
           {files.length > 0 && <small className="selected-images">已選擇 {files.length} 張圖片</small>}
         </form>
       ) : <p className="chat-readonly">這個聊天室已結束，紀錄保持唯讀。你可從書籍頁重新建立聊天室。</p>}
+      {enlargedImageUrl && (
+        <div className="chat-image-lightbox" role="dialog" aria-modal="true" aria-label="放大的聊聊圖片" onMouseDown={() => setEnlargedImageUrl(null)}>
+          <button type="button" className="chat-image-lightbox-close" onClick={() => setEnlargedImageUrl(null)} aria-label="關閉圖片">
+            <X size={24} />
+          </button>
+          <img src={enlargedImageUrl} alt="放大的聊聊圖片" onMouseDown={(event) => event.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 }
+/* eslint-enable @next/next/no-img-element */
 
 function EmptyDashboard({ text }: { text: string }) {
   return <div className="empty small"><Clock3 size={34} /><h3>{text}</h3><p>新的進度會出現在這裡。</p></div>;
