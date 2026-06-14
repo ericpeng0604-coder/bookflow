@@ -1,95 +1,49 @@
 # BookFlow AI Handoff
 
-## 目前目標
+## Goal
 
-Deploy the verified order feedback, profile editing, and chat image viewing
-improvements.
+Deploy transaction refresh and notification-noise fixes.
 
-## 重要背景與決策
+## Implemented
 
-- The first capacity target is 5,000 members, 10,000 historical listings,
-  5,000 active listings, and 200 concurrent users.
-- Catalog totals are approximate and cached instead of counted on every page.
-- Only an open chat keeps a Realtime subscription; notifications use polling.
-- Production load testing remains prohibited without separate authorization.
+- Opening **My Transactions** refreshes the active dashboard tab even when the
+  user is already on that page.
+- Returning to a visible browser tab refreshes the currently open transaction
+  tab without restoring the removed global Realtime subscription.
+- Opening the notification bell loads the feed, then marks only the fetched
+  unread notification IDs as read. Notifications arriving during that request
+  are not accidentally marked read.
+- Repeated edits to the same purchase request now update one seller
+  notification, move it to the top, and make it unread again instead of adding
+  another row.
+- Added the idempotent production migration
+  `supabase/request-update-notification-dedupe.sql`.
 
-## 已完成
+## Verification
 
-- Added distinct purchase-request feedback: unchanged active requests now show
-  that the request was already submitted without writing or notifying again;
-  new or changed requests show successful submission.
-- Added profile editing for the signed-in user's display name and department.
-  Login Email remains read-only because changing it requires a separate
-  verification flow.
-- Added click-to-enlarge chat images with backdrop, close button, and Escape
-  key dismissal.
-- Confirmed the existing profile RLS already permits users to update their own
-  profile, so this release does not require a database migration.
-- Split authenticated workspace loading by dashboard tab.
-- Removed the global public-profile fetch and notification Realtime channel.
-- Added cached catalog counts, paginated conversations and chat history.
-- Added browser image compression, immutable storage caching, and old-image cleanup.
-- Batched archived-listing cleanup and upgraded the guarded load-test tool.
-- Applied `supabase/capacity-optimization.sql` to production and verified its
-  indexes and function permissions.
-- Reduced new book-cover uploads to a 1,000px maximum width with a 400KB
-  compression target. Existing covers and chat images are unchanged.
-
-## 剩餘工作
-
-1. Push `codex/order-profile-chat-ux` and open a pull request.
-2. Merge after required checks pass.
-3. Confirm the Vercel production deployment is ready.
-4. Verify profile editing, duplicate request feedback, and chat image lightbox
-   with authenticated test accounts.
-
-## 修改範圍
-
-- Purchase request feedback and duplicate-write prevention.
-- Signed-in profile editing UI.
-- Chat image lightbox UI and styling.
-- Marketplace client data loading, notification refresh, chat, and image handling.
-- Cached marketplace count API and lifecycle cleanup route.
-- Supabase capacity migration and capacity/load-test checks.
-- Setup and capacity documentation.
-
-## 驗證結果
-
-- TypeScript passed after the order/profile/chat changes.
-- Trade workflow checks passed 13/13.
-- Next.js production build passed after the changes.
-- ESLint passed with the same three pre-existing non-blocking raw-image
-  warnings; the chat lightbox did not add warnings.
-- Local browser smoke test loaded the homepage and login modal with no console
-  errors.
 - TypeScript passed.
+- ESLint passed with the same three existing non-blocking image warnings.
 - Next.js production build passed.
-- Filter, lifecycle, trade, browser push, and capacity checks passed.
-- Capacity structure checks passed 10/10.
-- Mobile menu body scroll lock and catalog count refresh were verified locally.
-- Production migration returned success; all three indexes and RPC permissions
-  were verified in Supabase SQL Editor.
-- TypeScript and the Next.js production build passed after the cover compression
-  adjustment.
+- Trade workflow checks passed 14/14.
+- Notification and transaction refresh checks passed 4/4.
+- Refresh guard checks passed 7/7.
+- Filter, lifecycle, browser push, and capacity checks passed.
+- Local browser smoke test loaded the marketplace and login modal with no
+  console errors.
 
-## 風險或阻礙
+## Release Steps
 
-- Authenticated production verification is still required after deployment.
-- The 200-user capacity target is not yet proven because no approved staging
-  load test has run.
-- ESLint retains three non-blocking warnings for existing raw image elements.
-- Resend SMTP domain configuration still requires dashboard verification.
-- The new upload limits require one post-deployment authenticated upload check;
-  existing stored covers are intentionally not recompressed.
+1. Push `codex/transaction-notification-refresh` and open a pull request.
+2. Merge after required checks pass.
+3. Apply `supabase/request-update-notification-dedupe.sql` in production
+   Supabase and confirm it can be run repeatedly.
+4. Confirm the Vercel production deployment is Ready.
+5. Verify My Transactions refresh, bell auto-read, and merged request-edit
+   notifications with authenticated accounts.
 
-## 下一個 AI 的操作
+## Constraints
 
-1. Inspect the order/profile/chat pull request and required checks.
-2. Verify Vercel production points to the merged commit.
-3. Test profile editing, unchanged and changed purchase requests, and chat image
-   enlargement with authenticated accounts.
-4. Preserve the existing capacity caveat until staging load evidence exists.
-
-## 最後基準 Commit
-
-`bf93ef0` (latest merged `main` before this release)
+- Do not modify the protected rollback workflows or CODEOWNERS.
+- Notifications continue using polling; only an open chat keeps a Realtime
+  subscription.
+- Production load testing remains prohibited without separate authorization.

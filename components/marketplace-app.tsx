@@ -413,6 +413,26 @@ export function MarketplaceApp() {
         setNotifications(items);
         setUnreadNotificationCount(items.filter((item) => !item.readAt).length);
         lastNotificationRefreshRef.current = Date.now();
+
+        const unreadIds = items.filter((item) => !item.readAt).map((item) => item.id);
+        if (unreadIds.length > 0) {
+          const readAt = new Date().toISOString();
+          const { error } = await client
+            .from("notifications")
+            .update({ read_at: readAt })
+            .in("id", unreadIds)
+            .is("read_at", null);
+          if (signal.aborted) return;
+          if (error) {
+            setToast(`通知已載入，但無法更新已讀狀態：${error.message}`);
+            return;
+          }
+          const unreadIdSet = new Set(unreadIds);
+          setNotifications((previous) => previous.map((notification) =>
+            unreadIdSet.has(notification.id) ? { ...notification, readAt } : notification
+          ));
+          setUnreadNotificationCount(0);
+        }
       } catch (error) {
         if (!isAbortError(error)) {
           setToast(`讀取通知失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
@@ -447,6 +467,13 @@ export function MarketplaceApp() {
       loadMarketplaceBooks(),
     ]);
   }, [loadMarketplaceBooks, loadModerationPanel, store.currentUser]);
+
+  const openDashboard = useCallback(() => {
+    setView("dashboard");
+    if (view === "dashboard" && store.currentUser) {
+      void loadUserWorkspace(store.currentUser, dashboardTab);
+    }
+  }, [dashboardTab, loadUserWorkspace, store.currentUser, view]);
 
   useEffect(() => {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -631,6 +658,16 @@ export function MarketplaceApp() {
     if (!supabase || view !== "dashboard" || !store.currentUser) return;
     void loadUserWorkspace(store.currentUser, dashboardTab);
   }, [view, dashboardTab, store.currentUser, loadUserWorkspace]);
+
+  useEffect(() => {
+    if (!supabase || view !== "dashboard" || !store.currentUser) return;
+    const refreshDashboardWhenVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadUserWorkspace(store.currentUser!, dashboardTab);
+    };
+    document.addEventListener("visibilitychange", refreshDashboardWhenVisible);
+    return () => document.removeEventListener("visibilitychange", refreshDashboardWhenVisible);
+  }, [dashboardTab, loadUserWorkspace, store.currentUser, view]);
 
   useEffect(() => {
     if (!supabase || !selectedId || view !== "book") return;
@@ -1743,7 +1780,7 @@ export function MarketplaceApp() {
         <nav>
           <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
           <button onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}>我要賣書</button>
-          <button onClick={() => requireLogin(() => setView("dashboard"))}>我的交易</button>
+          <button onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
         </nav>
         <div className="header-actions">
@@ -1803,7 +1840,7 @@ export function MarketplaceApp() {
                   </div>
                 )}
               </div>
-              <button className="user-chip desktop-account-action" onClick={() => setView("dashboard")}><UserRound size={17} />{currentUser.name}</button>
+              <button className="user-chip desktop-account-action" onClick={openDashboard}><UserRound size={17} />{currentUser.name}</button>
               <button className="icon-button desktop-account-action" title="登出" onClick={() => void logout()}><LogOut size={18} /></button>
             </>
           ) : (
@@ -1843,7 +1880,7 @@ export function MarketplaceApp() {
                 className={view === "dashboard" ? "active" : ""}
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  requireLogin(() => setView("dashboard"));
+                  requireLogin(openDashboard);
                 }}
               >
                 我的交易
@@ -1859,7 +1896,7 @@ export function MarketplaceApp() {
               <div className="mobile-nav-separator" />
               {currentUser ? (
                 <>
-                  <button onClick={() => { setView("dashboard"); setMobileMenuOpen(false); }}>
+                  <button onClick={() => { openDashboard(); setMobileMenuOpen(false); }}>
                     <UserRound size={18} />會員中心
                   </button>
                   <button onClick={() => void logout()}>
