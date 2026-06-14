@@ -1,0 +1,45 @@
+name: Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type APPLY-PRODUCTION-MIGRATIONS
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply production migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production-database
+    steps:
+      - name: Require explicit confirmation
+        if: ${{ inputs.confirm != 'APPLY-PRODUCTION-MIGRATIONS' }}
+        run: exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+      - name: Show pending migration history
+        env:
+          PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: supabase migration list --db-url "$PRODUCTION_DATABASE_URL"
+      - name: Apply versioned migrations
+        env:
+          PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: supabase db push --db-url "$PRODUCTION_DATABASE_URL" --include-all
+      - name: Record applied migration history
+        env:
+          PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: supabase migration list --db-url "$PRODUCTION_DATABASE_URL"

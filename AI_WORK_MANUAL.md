@@ -201,6 +201,40 @@ all historical migrations.
 migrations. Drop every dependent policy variant before the change and recreate
 only the policies required by the new authorization model.
 
+### LESSON-012: Release claims need independently enforced evidence
+
+**Observed problem:** Pull requests could describe successful local checks even
+though GitHub only enforced the AI handoff check, and database changes depended
+on manually remembered SQL steps.
+
+**Cause:** Verification evidence lived in PR text and operator knowledge instead
+of required CI, versioned migrations, and post-deployment checks.
+
+**Detection:** Compare the documented release checklist with required GitHub
+statuses, migration history, staging evidence, Vercel deployment status, and
+production smoke-test output.
+
+**Prevention rule:** Enforce build and behavior checks in CI, apply timestamped
+migrations to staging before production, and claim a release complete only
+after the deployed commit passes production smoke tests.
+
+### LESSON-013: Recovery authorization must survive PR merges
+
+**Observed problem:** Checking only the pushed merge commit for the recovery
+approval trailer can reject an authorized change because the trailer lives on
+the reviewed commit inside the pull request.
+
+**Cause:** The protection workflow treated the tip commit message as the entire
+push authorization record.
+
+**Detection:** Test both direct pushes and PR merge ranges that modify recovery
+files, and verify that an approval trailer anywhere in the pushed range is
+recognized.
+
+**Prevention rule:** Validate recovery authorization across the exact
+`before..after` push range, and keep application rollback from changing the
+protected recovery files.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
