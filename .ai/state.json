@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260613-deploy-optimized-book-cover-compression",
-  "taskTitle": "deploy optimized book cover compression",
-  "baseCommit": "a2ae3bb6aa42a86bbd8a0857b56dc7eff2a13388",
-  "updatedAt": "2026-06-13T16:12:45.320Z",
+  "taskId": "20260614-deploy-order-confirmation-profile-editin",
+  "taskTitle": "deploy order confirmation profile editing and chat image lightbox",
+  "baseCommit": "5e32a8aba322c9c78947c9c3a41d4afac53c3120",
+  "updatedAt": "2026-06-14T02:32:59.312Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260613-1612-20260613-deploy-optimized-book-cover-com.md"
+  "historyFile": ".ai/history/20260614-0232-20260614-deploy-order-confirmation-profi.md"
 }
