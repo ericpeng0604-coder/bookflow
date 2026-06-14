@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：review cursor fixes and deploy
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`c58e66dd014f2bc5719d857ed3d41acf8a5e03f5`
+- 封存時間：2026-06-14T17:23:15.662Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

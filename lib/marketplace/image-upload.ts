@@ -30,16 +30,27 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number)
   });
 }
 
+function resolveImageMimeType(file: File) {
+  if (["image/jpeg", "image/png", "image/webp"].includes(file.type)) return file.type;
+
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "png") return "image/png";
+  if (extension === "webp") return "image/webp";
+  return null;
+}
+
 export async function compressImage(
   file: File,
   options?: { maxWidth?: number; targetBytes?: number; outputName?: string },
 ) {
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-    throw new Error("圖片僅支援 JPG、PNG 或 WebP");
+  if (!resolveImageMimeType(file)) {
+    throw new Error("無法辨識圖片格式，請改用 JPG、PNG 或 WebP");
   }
   if (file.size > MAX_UPLOAD_BYTES) throw new Error("原始圖片大小不能超過 5MB");
 
   const image = await loadImage(file);
+  if (image.width < 1 || image.height < 1) throw new Error("無法讀取圖片");
   const maxWidth = options?.maxWidth ?? MAX_WIDTH;
   const targetBytes = options?.targetBytes ?? TARGET_BYTES;
   const scale = image.width > maxWidth ? maxWidth / image.width : 1;

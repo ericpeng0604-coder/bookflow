@@ -16,6 +16,9 @@ const checks = [
   { file: "check-refresh-guard.mjs", stripTypes: true },
   { file: "check-favorites.mjs", stripTypes: true },
   { file: "check-notification-delivery.mjs", stripTypes: true },
+  { file: "check-trade-chat.mjs" },
+  { file: "check-home-accessibility.mjs" },
+  { file: "check-push-subscription-api.mjs" },
   { file: "check-workflows.mjs" },
 ];
 

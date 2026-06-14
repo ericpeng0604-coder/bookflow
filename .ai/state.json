@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260614-deploy-release-workflow-and-verification",
-  "taskTitle": "deploy release workflow and verification tooling",
-  "baseCommit": "2b406e33d502ad5d75f663232e40a5583ee9f3cf",
-  "updatedAt": "2026-06-14T11:39:16.464Z",
+  "taskId": "20260614-review-cursor-fixes-and-deploy",
+  "taskTitle": "review cursor fixes and deploy",
+  "baseCommit": "c58e66dd014f2bc5719d857ed3d41acf8a5e03f5",
+  "updatedAt": "2026-06-14T17:23:15.662Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260614-1139-20260614-deploy-release-workflow-and-ver.md"
+  "historyFile": ".ai/history/20260614-1723-20260614-review-cursor-fixes-and-deploy.md"
 }
