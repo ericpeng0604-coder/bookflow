@@ -39,7 +39,7 @@ const rpcProbes = [
   },
   {
     name: "list_feedback_for_moderation",
-    body: { page_limit: 1, page_offset: 0 },
+    body: {},
   },
 ];
 

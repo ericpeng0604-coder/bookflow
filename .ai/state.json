@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260615-fix-integrated-google-auth-regression-ch",
-  "taskTitle": "fix integrated Google auth regression check",
-  "baseCommit": "192d31a3b42bb8c45c5bc6b40b73b7551a612f4c",
-  "updatedAt": "2026-06-15T15:51:10.269Z",
+  "taskId": "20260615-fix-staging-feedback-rpc-probe",
+  "taskTitle": "fix staging feedback RPC probe",
+  "baseCommit": "9b281bad4a483521613ac8e072625b9cdfdcee73",
+  "updatedAt": "2026-06-15T15:56:29.087Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260615-1551-20260615-fix-integrated-google-auth-regr.md"
+  "historyFile": ".ai/history/20260615-1556-20260615-fix-staging-feedback-rpc-probe.md"
 }

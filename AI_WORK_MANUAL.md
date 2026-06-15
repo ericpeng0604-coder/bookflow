@@ -329,6 +329,22 @@ the integrated source.
 behavioral structure with whitespace-tolerant patterns, and rerun the complete
 project suite after every rebase.
 
+### LESSON-020: PostgREST RPC probes must match the deployed signature
+
+**Observed problem:** A staging migration applied successfully, but its
+verification job reported an existing moderation RPC as missing.
+
+**Cause:** The probe supplied pagination parameters to a zero-argument
+function, so PostgREST correctly returned its function-signature lookup error.
+
+**Detection:** When migration history succeeds but an RPC existence probe
+returns `PGRST202`, compare the request JSON keys with the exact SQL function
+arguments before assuming the migration failed.
+
+**Prevention rule:** Build staging RPC probes from the declared SQL signature,
+use an empty object for zero-argument functions, and treat authorization
+failures separately from signature lookup failures.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
