@@ -13,6 +13,7 @@ import type {
   TradeContact,
   Conversation,
   ContactMethod,
+  Feedback,
   UserRole,
 } from "@/lib/types";
 
@@ -108,6 +109,19 @@ export function mapReport(row: Record<string, unknown>): Report {
     reason: row.reason as ReportReason,
     details: String(row.details || ""),
     status: row.status as Report["status"],
+    resolutionNote: String(row.resolution_note || ""),
+    createdAt: String(row.created_at),
+  };
+}
+
+export function mapFeedback(row: Record<string, unknown>): Feedback {
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    userName: String(row.user_name || "使用者"),
+    category: String(row.category || "other"),
+    message: String(row.message || ""),
+    status: String(row.status || "pending") as Feedback["status"],
     resolutionNote: String(row.resolution_note || ""),
     createdAt: String(row.created_at),
   };

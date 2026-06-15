@@ -10,8 +10,9 @@ import {
   mapRequest,
   mapTradeContact,
   mapConversation,
+  mapFeedback,
 } from "@/lib/marketplace/mappers";
-import type { Book, Conversation, Profile, SellerLifecycle, TradeContact } from "@/lib/types";
+import type { Book, Conversation, Feedback, Profile, SellerLifecycle, TradeContact } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 
@@ -225,6 +226,15 @@ export async function fetchModerationReports(client: SupabaseClient) {
   return (data ?? []).map((row: Record<string, unknown>) => mapReport(row));
 }
 
+export async function fetchFeedbackForModeration(client: SupabaseClient): Promise<Feedback[]> {
+  const { data, error } = await client.rpc("list_feedback_for_moderation");
+  if (error) {
+    if (["PGRST202", "42883"].includes(error.code || "")) return [];
+    throw error;
+  }
+  return (data ?? []).map((row: Record<string, unknown>) => mapFeedback(row));
+}
+
 export async function fetchTradeContactsBatch(client: SupabaseClient, requestIds: string[]) {
   if (requestIds.length === 0) return {} as Record<string, TradeContact>;
 
@@ -298,14 +308,15 @@ export async function loadWorkspaceTabData(
 }
 
 export async function loadModerationData(client: SupabaseClient, user: Profile) {
-  const [pendingReviews, hiddenBooks, reports, adminProfiles] = await Promise.all([
+  const [pendingReviews, hiddenBooks, reports, feedback, adminProfiles] = await Promise.all([
     fetchPendingReviews(client),
     fetchHiddenBooks(client),
     fetchModerationReports(client),
+    fetchFeedbackForModeration(client),
     user.role === "admin" ? fetchAdminProfiles(client) : Promise.resolve([] as Profile[]),
   ]);
 
-  return { pendingReviews, hiddenBooks, reports, adminProfiles };
+  return { pendingReviews, hiddenBooks, reports, feedback, adminProfiles };
 }
 
 export function mergeProfiles(

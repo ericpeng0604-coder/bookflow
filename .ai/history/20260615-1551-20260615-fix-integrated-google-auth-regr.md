@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix integrated Google auth regression check
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`192d31a3b42bb8c45c5bc6b40b73b7551a612f4c`
+- 封存時間：2026-06-15T15:51:10.268Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
@@ -28,14 +37,11 @@
 - Supabase 自訂 SMTP 已使用官方 Gmail 設定，重設密碼測試信成功送達。
 - staging 檢查新增 RPC 存在性及新增資料表匿名 RLS 驗證。
 - rebase 後修正 Google Auth 靜態檢查，使 OTP 重置驗證不依賴固定縮排。
-- staging migration 已成功套用；首次驗證因無參數 RPC 探針傳入錯誤參數
-  而失敗，探針已修正並等待重新執行。
 
 ## 剩餘工作
 
 1. 推送分支並建立 PR。
-2. 等待 AI handoff、Release Readiness、重新執行的 Staging Migration 與
-   Vercel Preview。
+2. 等待 AI handoff、Release Readiness、Staging Migration 與 Vercel Preview。
 3. 合併後另行核准並執行 Production Migration。
 4. 確認 Vercel Production 部署，並以 merge commit 執行 production smoke。
 

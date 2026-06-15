@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260615-deploy-google-oauth-login",
-  "taskTitle": "deploy Google OAuth login",
-  "baseCommit": "5027513ba7f23abfc4cf349a86996e5a4d26fc41",
-  "updatedAt": "2026-06-15T06:37:59.768Z",
+  "taskId": "20260615-fix-staging-feedback-rpc-probe",
+  "taskTitle": "fix staging feedback RPC probe",
+  "baseCommit": "9b281bad4a483521613ac8e072625b9cdfdcee73",
+  "updatedAt": "2026-06-15T15:56:29.087Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260615-0637-20260615-deploy-google-oauth-login.md"
+  "historyFile": ".ai/history/20260615-1556-20260615-fix-staging-feedback-rpc-probe.md"
 }

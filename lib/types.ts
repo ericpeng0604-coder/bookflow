@@ -172,3 +172,16 @@ export type Report = {
   resolutionNote: string;
   createdAt: string;
 };
+
+export type FeedbackStatus = "pending" | "resolved";
+
+export type Feedback = {
+  id: string;
+  userId: string;
+  userName: string;
+  category: string;
+  message: string;
+  status: FeedbackStatus;
+  resolutionNote: string;
+  createdAt: string;
+};

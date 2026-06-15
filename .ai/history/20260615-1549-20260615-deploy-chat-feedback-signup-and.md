@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：deploy chat feedback signup and official email
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`3a8eac4010762a844d55f442b2c3e1ae1f64ba22`
+- 封存時間：2026-06-15T15:49:00.092Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
@@ -27,17 +36,14 @@
 - README 與環境範例更新為官方寄件帳號 `huweibookflow@gmail.com`。
 - Supabase 自訂 SMTP 已使用官方 Gmail 設定，重設密碼測試信成功送達。
 - staging 檢查新增 RPC 存在性及新增資料表匿名 RLS 驗證。
-- rebase 後修正 Google Auth 靜態檢查，使 OTP 重置驗證不依賴固定縮排。
-- staging migration 已成功套用；首次驗證因無參數 RPC 探針傳入錯誤參數
-  而失敗，探針已修正並等待重新執行。
 
 ## 剩餘工作
 
-1. 推送分支並建立 PR。
-2. 等待 AI handoff、Release Readiness、重新執行的 Staging Migration 與
-   Vercel Preview。
-3. 合併後另行核准並執行 Production Migration。
-4. 確認 Vercel Production 部署，並以 merge commit 執行 production smoke。
+1. 提交並 rebase 到最新 `origin/main`。
+2. 推送分支並建立 PR。
+3. 等待 AI handoff、Release Readiness、Staging Migration 與 Vercel Preview。
+4. 合併後另行核准並執行 Production Migration。
+5. 確認 Vercel Production 部署，並以 merge commit 執行 production smoke。
 
 ## 修改範圍
 
@@ -51,7 +57,7 @@
 ## 驗證結果
 
 - Chat visibility and feedback checks：8/8 通過。
-- Project checks：整合後 16/16 通過。
+- Project checks：15/15 通過。
 - TypeScript `tsc --noEmit` 通過。
 - 獨立乾淨 worktree 的 Next.js production build 通過，只有兩個既有
   `<img>` 效能 warnings。
@@ -77,4 +83,5 @@
 
 ## 最後基準 Commit
 
-`3ea680c`（rebase 後的 `origin/main`）。
+`3a8eac4`（建立本次工作分支時的 HEAD；提交後 rebase 到最新
+`origin/main`）。

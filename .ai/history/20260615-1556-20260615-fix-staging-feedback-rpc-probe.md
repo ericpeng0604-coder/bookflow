@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix staging feedback RPC probe
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`9b281bad4a483521613ac8e072625b9cdfdcee73`
+- 封存時間：2026-06-15T15:56:29.087Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
