@@ -330,6 +330,12 @@ sourceContains(
   "註冊驗證信範本",
 );
 sourceContains(
+  "supabase/migrations/20260615000000_google_oauth_profile_support.sql",
+  ["handle_new_user", "raw_user_meta_data->>'full_name'", "'未設定'"],
+  "Google Auth",
+  "Google OAuth profile migration",
+);
+sourceContains(
   "app/api/cron/listing-lifecycle/route.ts",
   ["CRON_SECRET", "process_listing_lifecycle", "deliverNotificationEmails", "deliverBrowserPush"],
   "刊登生命週期",
@@ -398,6 +404,12 @@ add(
   "Auth Email",
   "請確認 Email provider、Confirm email，以及 Confirm signup/Magic Link 範本含 {{ .Token }}；Password recovery 範本保留 {{ .ConfirmationURL }}。",
   "到 Authentication > Providers 與 Email Templates 人工確認。",
+);
+add(
+  "MANUAL",
+  "Google Auth",
+  "請確認 Google OAuth Client 已加入 Supabase 顯示的 Callback URL，且 Supabase Google Provider 已填入 Client ID/Secret 並啟用。",
+  "到 Google Cloud Console 與 Supabase Authentication > Providers 人工確認。",
 );
 add(
   "MANUAL",

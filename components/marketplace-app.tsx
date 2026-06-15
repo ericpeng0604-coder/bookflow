@@ -271,9 +271,26 @@ export function MarketplaceApp() {
   const [pushSaving, setPushSaving] = useState(false);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const bookSavingRef = useRef(false);
+  const adminOtpRequestedRef = useRef<string | null>(null);
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
   const debouncedQuery = useDebouncedValue(query, 300);
+
+  const ensureAdminOtp = useCallback(async (email: string, force = false) => {
+    if (!supabase) return "請先完成 Supabase Email 驗證設定";
+    if (!force && adminOtpRequestedRef.current === email) return null;
+
+    adminOtpRequestedRef.current = email;
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false },
+    });
+    if (error) {
+      adminOtpRequestedRef.current = null;
+      return authErrorMessage(error.message, "管理員驗證碼寄送失敗，請稍後再試");
+    }
+    return null;
+  }, []);
 
   const marketplaceFilters = useMemo(
     () => buildMarketplaceFilters(department, maxPrice, debouncedQuery),
@@ -508,6 +525,7 @@ export function MarketplaceApp() {
       user_metadata?: Record<string, unknown>;
     } | null) => {
       if (!user?.email) {
+        adminOtpRequestedRef.current = null;
         setStore((previous) => ({ ...previous, currentUser: null, requests: [] }));
         setMyBooks([]);
         setRequestBooks([]);
@@ -565,10 +583,13 @@ export function MarketplaceApp() {
           setAdminOtpEmail(user.email);
           setModal("adminOtp");
           setStore((previous) => ({ ...previous, currentUser: null }));
+          const otpError = await ensureAdminOtp(user.email);
+          setToast(otpError || "管理員驗證碼已寄出");
           return;
         }
       }
 
+      adminOtpRequestedRef.current = null;
       setStore((previous) => ({
         ...previous,
         currentUser: googleProfile,
@@ -589,7 +610,7 @@ export function MarketplaceApp() {
     });
 
     return () => data.subscription.unsubscribe();
-  }, [ready]);
+  }, [ready, ensureAdminOtp]);
 
   useEffect(() => {
     if (!supabase || !store.currentUser) return;
@@ -868,13 +889,10 @@ export function MarketplaceApp() {
       .eq("id", data.user.id)
       .maybeSingle();
     if (profile?.role === "admin") {
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: false },
-      });
+      const otpError = await ensureAdminOtp(email);
       if (otpError) {
         await supabase.auth.signOut();
-        return authErrorMessage(otpError.message, "無法寄送管理員驗證碼");
+        return otpError;
       }
       setAdminOtpEmail(email);
       setModal("adminOtp");
@@ -883,6 +901,19 @@ export function MarketplaceApp() {
     }
     setModal(null);
     setToast(profile?.account_status === "suspended" ? "已登入；你的帳號目前為唯讀模式" : "登入成功");
+    return null;
+  }
+
+  async function loginWithGoogle() {
+    if (!supabase) return "請先完成 Supabase 驗證設定";
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+    if (error) return authErrorMessage(error.message, "Google 登入失敗，請稍後再試");
     return null;
   }
 
@@ -910,11 +941,8 @@ export function MarketplaceApp() {
 
   async function resendAdminOtp() {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
-    const { error } = await supabase.auth.signInWithOtp({
-      email: adminOtpEmail,
-      options: { shouldCreateUser: false },
-    });
-    if (error) return authErrorMessage(error.message, "重新寄送失敗，請稍後再試");
+    const error = await ensureAdminOtp(adminOtpEmail, true);
+    if (error) return error;
     setToast("新的管理員驗證碼已寄出");
     return null;
   }
@@ -2599,6 +2627,7 @@ export function MarketplaceApp() {
         <LoginModal
           configured={isSupabaseConfigured}
           onClose={() => setModal(null)}
+          onGoogleLogin={loginWithGoogle}
           onLogin={loginWithPassword}
           onSignUp={signUpWithPassword}
           onVerifySignup={verifySignupCode}
@@ -2784,6 +2813,7 @@ function ProfileModal({
 function LoginModal({
   configured,
   onClose,
+  onGoogleLogin,
   onLogin,
   onSignUp,
   onVerifySignup,
@@ -2792,6 +2822,7 @@ function LoginModal({
 }: {
   configured: boolean;
   onClose: () => void;
+  onGoogleLogin: () => Promise<string | null>;
   onLogin: (email: string, password: string) => Promise<string | null>;
   onSignUp: (name: string, department: string, email: string, password: string) => Promise<string | null>;
   onVerifySignup: (email: string, token: string) => Promise<string | null>;
@@ -2808,6 +2839,7 @@ function LoginModal({
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
@@ -2823,6 +2855,16 @@ function LoginModal({
     setSignupStep("form");
     setCode("");
     setError("");
+  }
+
+  async function startGoogleLogin() {
+    setOauthLoading(true);
+    setError("");
+    const message = await onGoogleLogin();
+    if (message) {
+      setError(message);
+      setOauthLoading(false);
+    }
   }
 
   async function submitLogin(event: FormEvent<HTMLFormElement>) {
@@ -2896,10 +2938,22 @@ function LoginModal({
       <div className="email-login">
         <div className="auth-shield"><ShieldCheck size={24} /></div>
         {mode !== "forgot" && signupStep === "form" && (
-          <div className="auth-tabs" role="tablist" aria-label="會員驗證方式">
-            <button className={mode === "login" ? "active" : ""} type="button" onClick={() => switchMode("login")}>登入</button>
-            <button className={mode === "signup" ? "active" : ""} type="button" onClick={() => switchMode("signup")}>註冊</button>
-          </div>
+          <>
+            <button
+              className="google-login-button"
+              type="button"
+              disabled={loading || oauthLoading || !configured}
+              onClick={() => void startGoogleLogin()}
+            >
+              <GoogleLogo />
+              {oauthLoading ? "正在前往 Google..." : "使用 Google 帳號繼續"}
+            </button>
+            <div className="auth-divider"><span>或使用 Email</span></div>
+            <div className="auth-tabs" role="tablist" aria-label="會員驗證方式">
+              <button className={mode === "login" ? "active" : ""} type="button" onClick={() => switchMode("login")}>登入</button>
+              <button className={mode === "signup" ? "active" : ""} type="button" onClick={() => switchMode("signup")}>註冊</button>
+            </div>
+          </>
         )}
         {mode === "login" ? (
           <>
@@ -3073,6 +3127,17 @@ function LoginModal({
         <small><ShieldCheck size={13} />密碼由 Supabase Auth 加密處理，網站不會讀取你的明碼密碼。</small>
       </div>
     </ModalShell>
+  );
+}
+
+function GoogleLogo() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="19" height="19">
+      <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.4Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.5-4H3.2v2.6A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.5 14.1a6 6 0 0 1 0-4.2V7.3H3.2a10 10 0 0 0 0 9.4l3.3-2.6Z" />
+      <path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.2 7.3l3.3 2.6A5.8 5.8 0 0 1 12 5.9Z" />
+    </svg>
   );
 }
 

@@ -356,6 +356,12 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .auth-tabs { width: 100%; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 10px; background: #e9eeeb; }
 .auth-tabs button { border: 0; border-radius: 7px; padding: 9px 12px; background: transparent; color: var(--muted); cursor: pointer; font-weight: 700; }
 .auth-tabs button.active { background: white; color: var(--green); box-shadow: 0 2px 8px rgba(9, 34, 27, .09); }
+.google-login-button { width: 100%; min-height: 46px; border: 1px solid #cbd5d1; border-radius: 9px; display: flex; align-items: center; justify-content: center; gap: 10px; background: white; color: var(--ink); cursor: pointer; font-weight: 700; }
+.google-login-button:hover { border-color: #9fafa8; background: #f8faf9; }
+.google-login-button:focus-visible { outline: 3px solid rgba(31, 105, 82, .22); outline-offset: 2px; }
+.google-login-button:disabled { cursor: default; opacity: .58; }
+.auth-divider { width: 100%; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 11px; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; flex: 1; background: var(--line); }
 .otp-form { width: 100%; display: grid; gap: 13px; text-align: left; }
 .otp-form label { display: grid; gap: 7px; font-size: 12px; font-weight: 700; }
 .otp-form input, .otp-form select { width: 100%; border: 1px solid var(--line); background: white; border-radius: 9px; padding: 12px 13px; outline: none; color: var(--ink); }

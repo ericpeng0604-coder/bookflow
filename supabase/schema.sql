@@ -97,7 +97,14 @@ begin
   insert into public.profiles (id, name, email, department, role)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    left(
+      coalesce(
+        nullif(trim(new.raw_user_meta_data->>'name'), ''),
+        nullif(trim(new.raw_user_meta_data->>'full_name'), ''),
+        split_part(new.email, '@', 1)
+      ),
+      60
+    ),
     new.email,
     coalesce(new.raw_user_meta_data->>'department', '未設定'),
     case when lower(new.email) = 'ericpeng0604@gmail.com' then 'admin' else 'user' end
