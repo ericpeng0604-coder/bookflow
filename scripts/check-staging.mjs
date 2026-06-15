@@ -30,18 +30,37 @@ const auth = await fetch(`${base}/auth/v1/settings`, {
 });
 if (!auth.ok) throw new Error(`Staging Auth API returned HTTP ${auth.status}.`);
 
-for (const rpc of ["is_verified_admin", "list_books_page"]) {
-  const response = await request(`/rest/v1/rpc/${rpc}`, anonKey, {
+const rpcProbes = [
+  { name: "is_verified_admin", body: {} },
+  { name: "list_books_page", body: {} },
+  {
+    name: "hide_closed_conversation",
+    body: { target_conversation_id: "00000000-0000-0000-0000-000000000000" },
+  },
+  {
+    name: "list_feedback_for_moderation",
+    body: { page_limit: 1, page_offset: 0 },
+  },
+];
+
+for (const rpc of rpcProbes) {
+  const response = await request(`/rest/v1/rpc/${rpc.name}`, anonKey, {
     method: "POST",
-    body: "{}",
+    body: JSON.stringify(rpc.body),
   });
   const body = await response.text();
   if (response.status === 404 || body.includes("PGRST202")) {
-    throw new Error(`Required staging RPC is missing: ${rpc}`);
+    throw new Error(`Required staging RPC is missing: ${rpc.name}`);
   }
 }
 
-for (const table of ["notifications", "purchase_requests", "conversations"]) {
+for (const table of [
+  "notifications",
+  "purchase_requests",
+  "conversations",
+  "conversation_user_preferences",
+  "user_feedback",
+]) {
   const serviceResponse = await request(`/rest/v1/${table}?select=*&limit=0`, serviceKey);
   if (!serviceResponse.ok) {
     throw new Error(`Service-role staging probe failed for ${table}.`);

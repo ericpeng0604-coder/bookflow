@@ -80,6 +80,7 @@ import type {
   Book,
   BookStatus,
   Conversation,
+  Feedback,
   Notification,
   Profile,
   PurchaseRequest,
@@ -100,7 +101,7 @@ const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
 
 type View = "home" | "book" | "dashboard" | "admin";
 type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites";
-type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | null;
+type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | "feedback" | null;
 
 type Store = {
   books: Book[];
@@ -156,6 +157,13 @@ const reportReasonLabels: Record<ReportReason, string> = {
   duplicate: "重複刊登",
   harassment: "騷擾",
   no_show: "交易失約",
+  other: "其他",
+};
+
+const feedbackCategoryLabels: Record<string, string> = {
+  suggestion: "功能建議",
+  bug: "問題回報",
+  experience: "使用體驗",
   other: "其他",
 };
 
@@ -248,6 +256,7 @@ export function MarketplaceApp() {
   const [adminOtpEmail, setAdminOtpEmail] = useState("");
   const [contacts, setContacts] = useState<Record<string, TradeContact>>({});
   const [reports, setReports] = useState<Report[]>([]);
+  const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; label: string } | null>(null);
   const [marketplaceBooks, setMarketplaceBooks] = useState<Book[]>([]);
   const [marketplaceCount, setMarketplaceCount] = useState(0);
@@ -414,6 +423,7 @@ export function MarketplaceApp() {
         setPendingReviews(data.pendingReviews);
         setHiddenBooks(data.hiddenBooks);
         setReports(data.reports);
+        setFeedback(data.feedback);
         if (data.adminProfiles.length > 0) {
           setStore((previous) => ({
             ...previous,
@@ -1604,6 +1614,58 @@ export function MarketplaceApp() {
     setToast("檢舉已送交管理員審核");
   }
 
+  async function submitFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !currentUser) return;
+    const data = new FormData(event.currentTarget);
+    const message = String(data.get("message") || "").trim();
+    if (message.length < 10) {
+      setToast("請至少輸入 10 個字，讓我們能了解你的建議");
+      return;
+    }
+    const { error } = await supabase.rpc("submit_feedback", {
+      feedback_category: String(data.get("category") || "other"),
+      feedback_message: message,
+    });
+    if (error) {
+      setToast(`送出意見失敗：${error.message}`);
+      return;
+    }
+    setModal(null);
+    setToast("謝謝你的意見，我們已經收到");
+  }
+
+  async function resolveFeedback(feedbackId: string) {
+    if (!supabase || !currentUser) return;
+    const note = window.prompt("處理備註（可留空）");
+    if (note === null) return;
+    const { error } = await supabase.rpc("resolve_feedback", {
+      target_feedback_id: feedbackId,
+      note: note.trim(),
+    });
+    if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
+      setToast(`處理意見失敗：${error.message}`);
+      return;
+    }
+    await reloadAfterModerationMutation();
+    setToast("意見已標記為完成");
+  }
+
+  async function hideClosedConversation(conversationId: string) {
+    if (!supabase || !currentUser) return;
+    const { error } = await supabase.rpc("hide_closed_conversation", {
+      target_conversation_id: conversationId,
+    });
+    if (error) {
+      setToast(`無法刪除聊聊：${error.message}`);
+      return;
+    }
+    setExpandedConversationId(null);
+    setConversations((previous) => previous.filter((conversation) => conversation.id !== conversationId));
+    setToast("聊聊已從你的清單刪除");
+  }
+
   function openReport(type: ReportTargetType, id: string, label: string) {
     requireActive(() => {
       if (id === currentUser?.id) {
@@ -1818,6 +1880,7 @@ export function MarketplaceApp() {
           <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
           <button onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}>我要賣書</button>
           <button onClick={() => requireLogin(openDashboard)}>我的交易</button>
+          <button onClick={() => requireLogin(() => setModal("feedback"))}>意見回饋</button>
           {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
         </nav>
         <div className="header-actions">
@@ -1921,6 +1984,14 @@ export function MarketplaceApp() {
                 }}
               >
                 我的交易
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  requireLogin(() => setModal("feedback"));
+                }}
+              >
+                意見回饋
               </button>
               {isModerator && (
                 <button
@@ -2337,7 +2408,7 @@ export function MarketplaceApp() {
           )}
 
           {dashboardTab === "chats" && (
-            <div className="conversation-layout">
+            <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""}`}>
               <div className="conversation-list">
                 {conversations.map((conversation) => {
                   const book = knownBooks.find((item) => item.id === conversation.bookId);
@@ -2371,6 +2442,8 @@ export function MarketplaceApp() {
                     profiles={store.profiles}
                     onChanged={reloadAfterUserMutation}
                     onRead={keepConversationRead}
+                    onBack={() => setExpandedConversationId(null)}
+                    onHide={() => void hideClosedConversation(expandedConversationId)}
                   />
                 ) : (
                   <EmptyDashboard text="選擇一個聊天室開始聯絡" />
@@ -2519,8 +2592,26 @@ export function MarketplaceApp() {
               <h1>安全與審核後台</h1>
               <p>處理檢舉、刊登審核、商品隱藏與會員權限。</p>
             </div>
-            <div className="admin-count">{pendingReports.length + pendingReviews.length} 筆待處理</div>
+            <div className="admin-count">{pendingReports.length + pendingReviews.length + feedback.filter((item) => item.status === "pending").length} 筆待處理</div>
           </div>
+
+          <h2 className="admin-section-title">使用者意見</h2>
+          <div className="reports-list">
+            {feedback.filter((item) => item.status === "pending").map((item) => (
+              <article className="report-card" key={item.id}>
+                <div className="report-card-head">
+                  <span className="report-target user"><MessageCircle size={14} />{feedbackCategoryLabels[item.category] || "其他"}</span>
+                  <time>{timeAgo(item.createdAt)}</time>
+                </div>
+                <h3>{item.userName}</h3>
+                <p>{item.message}</p>
+                <div className="report-actions">
+                  <button onClick={() => void resolveFeedback(item.id)}><Check size={16} />標記完成</button>
+                </div>
+              </article>
+            ))}
+          </div>
+          {feedback.every((item) => item.status !== "pending") && <EmptyDashboard text="目前沒有等待處理的意見" />}
 
           <h2 className="admin-section-title">待處理檢舉</h2>
           <div className="reports-list">
@@ -2621,7 +2712,12 @@ export function MarketplaceApp() {
         </section>
       )}
 
-      <footer><div className="brand footer-brand"><span className="brand-mark"><BookOpen size={20} /></span><span><b>虎科書流</b><small>HUST BOOKFLOW</small></span></div><p>讓每一本課本，都找到下一位需要它的人。</p><span>虎科校園二手書交流平台 · Prototype 2026</span></footer>
+      <footer>
+        <div className="brand footer-brand"><span className="brand-mark"><BookOpen size={20} /></span><span><b>虎科書流</b><small>HUST BOOKFLOW</small></span></div>
+        <p>讓每一本課本，都找到下一位需要它的人。</p>
+        <button className="footer-feedback" type="button" onClick={() => requireLogin(() => setModal("feedback"))}>提供意見</button>
+        <span>虎科校園二手書交流平台 · Prototype 2026</span>
+      </footer>
 
       {modal === "login" && (
         <LoginModal
@@ -2678,6 +2774,12 @@ export function MarketplaceApp() {
           target={reportTarget}
           onClose={() => { setModal(null); setReportTarget(null); }}
           onSubmit={submitReport}
+        />
+      )}
+      {modal === "feedback" && currentUser && (
+        <FeedbackModal
+          onClose={() => setModal(null)}
+          onSubmit={submitFeedback}
         />
       )}
       {toast && <div className="toast"><Check size={17} />{toast}</div>}
@@ -2810,6 +2912,43 @@ function ProfileModal({
   );
 }
 
+function FeedbackModal({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <ModalShell title="提供意見" subtitle="告訴我們哪裡可以做得更好" onClose={onClose}>
+      <form className="form" onSubmit={onSubmit}>
+        <label>
+          意見類型
+          <select name="category" defaultValue="suggestion">
+            <option value="suggestion">功能建議</option>
+            <option value="bug">問題回報</option>
+            <option value="experience">使用體驗</option>
+            <option value="other">其他</option>
+          </select>
+        </label>
+        <label>
+          意見內容
+          <textarea
+            name="message"
+            minLength={10}
+            maxLength={2000}
+            rows={7}
+            placeholder="請描述你遇到的情況，或希望新增的功能..."
+            required
+          />
+        </label>
+        <p className="form-note">請勿填寫密碼、驗證碼或其他敏感資料。</p>
+        <button className="primary wide" type="submit">送出意見</button>
+      </form>
+    </ModalShell>
+  );
+}
+
 function LoginModal({
   configured,
   onClose,
@@ -2829,7 +2968,7 @@ function LoginModal({
   onResendSignup: (email: string) => Promise<string | null>;
   onRequestReset: (email: string) => Promise<string | null>;
 }) {
-  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("signup");
   const [signupStep, setSignupStep] = useState<"form" | "code">("form");
   const [name, setName] = useState("");
   const [department, setDepartment] = useState("");
@@ -3379,12 +3518,16 @@ function TradeChatPanel({
   profiles,
   onChanged,
   onRead,
+  onBack,
+  onHide,
 }: {
   conversation: Conversation;
   currentUserId: string;
   profiles: Profile[];
   onChanged: () => void;
   onRead: (conversationId: string) => void;
+  onBack: () => void;
+  onHide: () => void;
 }) {
   const [messages, setMessages] = useState<TradeMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -3575,6 +3718,13 @@ function TradeChatPanel({
     else onChanged();
   }
 
+  function hideChat() {
+    if (!window.confirm("這會將已結束的聊聊從你的清單刪除，另一位使用者仍可保留自己的紀錄。確定刪除嗎？")) {
+      return;
+    }
+    onHide();
+  }
+
   async function blockUser() {
     if (!supabase || !window.confirm("封鎖後雙方不能再傳送訊息，仍要封鎖嗎？")) return;
     const { error: blockError } = await supabase.rpc("set_user_block", {
@@ -3601,11 +3751,13 @@ function TradeChatPanel({
   return (
     <div className="trade-chat">
       <div className="trade-chat-head">
-        <div><b>{senderName(otherUserId)}</b><small>每則最多 5 張圖片、每張 5MB；請勿傳送密碼、驗證碼或其他敏感資料。</small></div>
-        <div>
+        <button className="chat-mobile-back" type="button" onClick={onBack}><ArrowLeft size={17} />返回聊聊</button>
+        <div className="trade-chat-person"><b>{senderName(otherUserId)}</b><small>每則最多 5 張圖片、每張 5MB；請勿傳送密碼、驗證碼或其他敏感資料。</small></div>
+        <div className="trade-chat-actions">
           <button type="button" onClick={() => void reportChat()}><Flag size={14} />檢舉</button>
           <button type="button" onClick={() => void blockUser()}><Ban size={14} />封鎖</button>
           {conversation.status === "active" && <button type="button" onClick={() => void closeChat()}><X size={14} />結束</button>}
+          {conversation.status === "closed" && <button type="button" onClick={hideChat}><Trash2 size={14} />刪除</button>}
         </div>
       </div>
       <div className="trade-chat-log">
