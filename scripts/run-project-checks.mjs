@@ -19,6 +19,7 @@ const checks = [
   { file: "check-trade-chat.mjs" },
   { file: "check-home-accessibility.mjs" },
   { file: "check-push-subscription-api.mjs" },
+  { file: "check-google-auth.mjs" },
   { file: "check-workflows.mjs" },
 ];
 

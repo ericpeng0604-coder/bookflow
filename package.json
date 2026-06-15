@@ -30,6 +30,7 @@
     "check:trade-chat": "node scripts/check-trade-chat.mjs",
     "check:home-accessibility": "node scripts/check-home-accessibility.mjs",
     "check:push-subscription-api": "node scripts/check-push-subscription-api.mjs",
+    "check:google-auth": "node scripts/check-google-auth.mjs",
     "check:workflows": "node scripts/check-workflows.mjs",
     "check:project": "node scripts/run-project-checks.mjs",
     "check:all": "npm run typecheck && npm run lint && npm run check:project && npm run build",

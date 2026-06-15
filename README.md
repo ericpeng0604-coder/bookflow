@@ -126,6 +126,7 @@ npm run setup:check -- --no-network
    11. `supabase/capacity-optimization.sql`（搜尋、未讀統計、對話分頁優化）
    12. `supabase/browser-push-and-30-day-confirmation.sql`（瀏覽器推播）
    13. `supabase/request-update-notification-dedupe.sql`（下訂通知 dedupe；可重複執行）
+   14. `supabase/google-oauth-profile-support.sql`（Google 登入會員資料；可重複執行）
 3. 若要回退生命週期排程（保留交易資料），執行 `supabase/listing-lifecycle-rollback.sql`；執行前請先移除 Vercel Cron。
 4. 在 Project Settings → API 取得 Project URL 與 publishable/anon key。
 5. 在專案根目錄建立 `.env.local`（可複製 `.env.example`）：
@@ -203,7 +204,24 @@ supabase/admin-login-verification.sql
 
 網站會以目前所在網域作為密碼重設回站網址，因此本機與正式部署網址都需要列入 Supabase 允許清單。
 
-### 4. 設定寄信服務
+### 4. 啟用 Google 快速登入
+
+1. 在 Google Cloud Console 建立或選擇專案，設定 OAuth consent screen。
+2. 建立 OAuth Client ID，Application type 選擇 Web application。
+3. 在 Authorized JavaScript origins 加入：
+   - `http://localhost:3000`
+   - 正式網站 origin，例如 `https://bookflow-green.vercel.app`
+4. 開啟 Supabase Dashboard → Authentication → Providers → Google，複製該頁顯示的 Callback URL。
+5. 將 Callback URL 加到 Google OAuth Client 的 Authorized redirect URIs。
+6. 將 Google Client ID 與 Client Secret 填入 Supabase 的 Google Provider 並啟用。
+7. 在 Supabase Authentication → URL Configuration，確認本機與正式網站都已加入 Redirect URLs。
+8. 套用 `supabase/google-oauth-profile-support.sql`，讓首次 Google 登入使用 Google 顯示名稱建立會員資料。
+
+Google 不提供虎科系所資料，因此首次登入會暫存為「未設定」，使用者可在個人資料中補選。管理員使用 Google 登入後仍必須完成 8 位數 Email 驗證碼，不會略過管理員二次驗證。
+
+Client Secret 只填在 Google Cloud 與 Supabase Dashboard，不得加入 `.env.local`、前端程式碼或 Git。
+
+### 5. 設定寄信服務
 
 Supabase 內建寄信服務只適合測試，而且通常只能寄給專案團隊的 Email。要讓所有學生都收到驗證碼，需要在 Authentication → SMTP Settings 設定自訂 SMTP，例如 Resend、SendGrid 或 Amazon SES。
 
