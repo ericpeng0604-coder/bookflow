@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：polish chat and issue report entry points
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`de8dfdc1f06113e96c265e70db00d17a824a1c45`
+- 封存時間：2026-06-16T02:30:22.892Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
