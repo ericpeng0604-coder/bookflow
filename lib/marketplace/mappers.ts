@@ -21,6 +21,8 @@ export function mapBook(row: Record<string, unknown>): Book {
   return {
     id: String(row.id),
     sellerId: String(row.seller_id),
+    listingType: String(row.listing_type || "book") as Book["listingType"],
+    itemCategory: String(row.item_category || "book"),
     title: String(row.title),
     author: String(row.author),
     department: String(row.department || ""),

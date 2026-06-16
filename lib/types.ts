@@ -14,6 +14,7 @@ export type AccountStatus = "active" | "suspended";
 export type ModerationVisibility = "visible" | "hidden";
 export type ListingLifecycleState = "active" | "archived" | "withdrawn";
 export type ContactMethod = "none" | "email" | "line";
+export type ListingType = "book" | "secondhand";
 export type ReportTargetType = "book" | "user";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
 export type ReportReason =
@@ -54,6 +55,8 @@ export type Profile = {
 export type Book = {
   id: string;
   sellerId: string;
+  listingType: ListingType;
+  itemCategory: string;
   title: string;
   author: string;
   department: string;
