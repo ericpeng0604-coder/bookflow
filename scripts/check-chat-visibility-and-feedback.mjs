@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
+const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../lib/marketplace/queries.ts", import.meta.url), "utf8");
 const migration = readFileSync(
   new URL("../supabase/migrations/20260615090000_chat_visibility_and_feedback.sql", import.meta.url),
@@ -12,12 +13,13 @@ const migration = readFileSync(
 const checks = [
   ["signup is the default auth view", app.includes('useState<"login" | "signup" | "forgot">("signup")')],
   ["mobile chat has a back control", app.includes('className="chat-mobile-back"') && app.includes("onBack={() => setExpandedConversationId(null)}")],
+  ["mobile chat list rail can collapse an open panel", app.includes('window.matchMedia("(max-width: 640px)").matches') && app.includes("onClickCapture") && css.includes(".conversation-layout.conversation-open { grid-template-columns: 42px minmax(0, 1fr);")],
   ["closed chat exposes per-user hide", app.includes('conversation.status === "closed"') && app.includes('rpc("hide_closed_conversation"')],
   ["hidden chats are excluded from both list RPCs", (migration.match(/conversation_user_preferences/g) || []).length >= 5],
-  ["feedback form is authenticated", app.includes('modal === "feedback" && currentUser')],
-  ["feedback is loaded into moderation", queries.includes("fetchFeedbackForModeration") && app.includes("setFeedback(data.feedback)")],
-  ["feedback submission is rate limited", migration.includes("Daily feedback limit reached")],
-  ["feedback moderation requires moderator permission", migration.includes("list_feedback_for_moderation") && migration.includes("public.is_moderator()")],
+  ["issue report form is authenticated", app.includes('modal === "feedback" && currentUser')],
+  ["issue reports load into moderation", queries.includes("fetchFeedbackForModeration") && app.includes("setFeedback(data.feedback)")],
+  ["issue report submission is rate limited", migration.includes("Daily feedback limit reached")],
+  ["issue report moderation requires moderator permission", migration.includes("list_feedback_for_moderation") && migration.includes("public.is_moderator()")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);

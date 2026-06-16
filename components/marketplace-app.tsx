@@ -1620,7 +1620,7 @@ export function MarketplaceApp() {
     const data = new FormData(event.currentTarget);
     const message = String(data.get("message") || "").trim();
     if (message.length < 10) {
-      setToast("請至少輸入 10 個字，讓我們能了解你的建議");
+      setToast("請至少輸入 10 個字，讓我們能了解你遇到的問題");
       return;
     }
     const { error } = await supabase.rpc("submit_feedback", {
@@ -1628,11 +1628,11 @@ export function MarketplaceApp() {
       feedback_message: message,
     });
     if (error) {
-      setToast(`送出意見失敗：${error.message}`);
+      setToast(`送出問題回報失敗：${error.message}`);
       return;
     }
     setModal(null);
-    setToast("謝謝你的意見，我們已經收到");
+    setToast("問題回報已送出，我們會盡快查看");
   }
 
   async function resolveFeedback(feedbackId: string) {
@@ -1645,11 +1645,11 @@ export function MarketplaceApp() {
     });
     if (error) {
       if (await recoverAdminVerification(error.message, currentUser)) return;
-      setToast(`處理意見失敗：${error.message}`);
+      setToast(`處理問題回報失敗：${error.message}`);
       return;
     }
     await reloadAfterModerationMutation();
-    setToast("意見已標記為完成");
+    setToast("問題回報已標記為完成");
   }
 
   async function hideClosedConversation(conversationId: string) {
@@ -1880,7 +1880,6 @@ export function MarketplaceApp() {
           <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
           <button onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}>我要賣書</button>
           <button onClick={() => requireLogin(openDashboard)}>我的交易</button>
-          <button onClick={() => requireLogin(() => setModal("feedback"))}>意見回饋</button>
           {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
         </nav>
         <div className="header-actions">
@@ -1984,14 +1983,6 @@ export function MarketplaceApp() {
                 }}
               >
                 我的交易
-              </button>
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  requireLogin(() => setModal("feedback"));
-                }}
-              >
-                意見回饋
               </button>
               {isModerator && (
                 <button
@@ -2409,7 +2400,15 @@ export function MarketplaceApp() {
 
           {dashboardTab === "chats" && (
             <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""}`}>
-              <div className="conversation-list">
+              <div
+                className="conversation-list"
+                onClickCapture={(event) => {
+                  if (!expandedConversationId) return;
+                  if (!window.matchMedia("(max-width: 640px)").matches) return;
+                  event.stopPropagation();
+                  setExpandedConversationId(null);
+                }}
+              >
                 {conversations.map((conversation) => {
                   const book = knownBooks.find((item) => item.id === conversation.bookId);
                   const otherId = conversation.buyerId === currentUser.id
@@ -2595,12 +2594,12 @@ export function MarketplaceApp() {
             <div className="admin-count">{pendingReports.length + pendingReviews.length + feedback.filter((item) => item.status === "pending").length} 筆待處理</div>
           </div>
 
-          <h2 className="admin-section-title">使用者意見</h2>
+          <h2 className="admin-section-title">網站問題回報</h2>
           <div className="reports-list">
             {feedback.filter((item) => item.status === "pending").map((item) => (
               <article className="report-card" key={item.id}>
                 <div className="report-card-head">
-                  <span className="report-target user"><MessageCircle size={14} />{feedbackCategoryLabels[item.category] || "其他"}</span>
+                  <span className="report-target user"><Flag size={14} />{feedbackCategoryLabels[item.category] || "其他"}</span>
                   <time>{timeAgo(item.createdAt)}</time>
                 </div>
                 <h3>{item.userName}</h3>
@@ -2611,7 +2610,7 @@ export function MarketplaceApp() {
               </article>
             ))}
           </div>
-          {feedback.every((item) => item.status !== "pending") && <EmptyDashboard text="目前沒有等待處理的意見" />}
+          {feedback.every((item) => item.status !== "pending") && <EmptyDashboard text="目前沒有等待處理的問題回報" />}
 
           <h2 className="admin-section-title">待處理檢舉</h2>
           <div className="reports-list">
@@ -2715,7 +2714,7 @@ export function MarketplaceApp() {
       <footer>
         <div className="brand footer-brand"><span className="brand-mark"><BookOpen size={20} /></span><span><b>虎科書流</b><small>HUST BOOKFLOW</small></span></div>
         <p>讓每一本課本，都找到下一位需要它的人。</p>
-        <button className="footer-feedback" type="button" onClick={() => requireLogin(() => setModal("feedback"))}>提供意見</button>
+        <button className="footer-feedback" type="button" onClick={() => requireLogin(() => setModal("feedback"))}>問題回報</button>
         <span>虎科校園二手書交流平台 · Prototype 2026</span>
       </footer>
 
@@ -2920,30 +2919,30 @@ function FeedbackModal({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <ModalShell title="提供意見" subtitle="告訴我們哪裡可以做得更好" onClose={onClose}>
+    <ModalShell title="問題回報" subtitle="告訴我們網站哪裡出現問題" onClose={onClose}>
       <form className="form" onSubmit={onSubmit}>
         <label>
-          意見類型
-          <select name="category" defaultValue="suggestion">
-            <option value="suggestion">功能建議</option>
+          問題類型
+          <select name="category" defaultValue="bug">
             <option value="bug">問題回報</option>
+            <option value="suggestion">功能建議</option>
             <option value="experience">使用體驗</option>
             <option value="other">其他</option>
           </select>
         </label>
         <label>
-          意見內容
+          問題內容
           <textarea
             name="message"
             minLength={10}
             maxLength={2000}
             rows={7}
-            placeholder="請描述你遇到的情況，或希望新增的功能..."
+            placeholder="請描述你在哪個頁面、做了什麼、遇到什麼狀況..."
             required
           />
         </label>
         <p className="form-note">請勿填寫密碼、驗證碼或其他敏感資料。</p>
-        <button className="primary wide" type="submit">送出意見</button>
+        <button className="primary wide" type="submit"><Flag size={16} />送出問題回報</button>
       </form>
     </ModalShell>
   );
