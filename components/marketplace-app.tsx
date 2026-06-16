@@ -44,7 +44,7 @@ import {
   legacyFavoritesNeedSync,
   readFavoriteIds,
 } from "@/lib/marketplace/favorites";
-import { isAllDepartments, NO_MAX_PRICE, buildMarketplaceFilters } from "@/lib/marketplace/filters";
+import { ALL_ITEM_CATEGORIES, isAllDepartments, NO_MAX_PRICE, buildMarketplaceFilters } from "@/lib/marketplace/filters";
 import {
   type BrowserPushState,
   browserPushState,
@@ -92,6 +92,7 @@ import type {
   SellerLifecycle,
   TradeContact,
   TradeMessage,
+  ListingType,
   UserRole,
 } from "@/lib/types";
 
@@ -111,6 +112,8 @@ type Store = {
 };
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 120_000;
+const SECONDHAND_CATEGORIES = [ALL_ITEM_CATEGORIES, "3C 電子", "文具用品", "宿舍生活", "服飾配件", "運動休閒", "其他"];
+const DEFAULT_SECONDHAND_CATEGORY = SECONDHAND_CATEGORIES[1];
 
 const REQUEST_PHRASES = [
   "你好，我對這本書有興趣，方便約時間面交嗎？",
@@ -181,6 +184,8 @@ const blankBook: Omit<
   | "archivedAt"
   | "archiveReason"
 > = {
+  listingType: "book",
+  itemCategory: "book",
   title: "",
   author: "",
   department: "",
@@ -242,6 +247,8 @@ export function MarketplaceApp() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [heroQuery, setHeroQuery] = useState("");
+  const [listingType, setListingType] = useState<ListingType>("book");
+  const [itemCategory, setItemCategory] = useState(ALL_ITEM_CATEGORIES);
   const [department, setDepartment] = useState(departments[0]);
   const [maxPrice, setMaxPrice] = useState(NO_MAX_PRICE);
   const [modal, setModal] = useState<Modal>(null);
@@ -302,8 +309,8 @@ export function MarketplaceApp() {
   }, []);
 
   const marketplaceFilters = useMemo(
-    () => buildMarketplaceFilters(department, maxPrice, debouncedQuery),
-    [department, maxPrice, debouncedQuery],
+    () => buildMarketplaceFilters(listingType, itemCategory, department, maxPrice, debouncedQuery),
+    [listingType, itemCategory, department, maxPrice, debouncedQuery],
   );
 
   async function recoverAdminVerification(message: string, user: Profile | null) {
@@ -352,6 +359,8 @@ export function MarketplaceApp() {
 
   const loadMarketplaceCount = useCallback(async () => {
     const params = new URLSearchParams();
+    params.set("listingType", marketplaceFilters.listingType);
+    if (marketplaceFilters.itemCategory) params.set("itemCategory", marketplaceFilters.itemCategory);
     if (marketplaceFilters.department) params.set("department", marketplaceFilters.department);
     if (marketplaceFilters.maxPrice !== null) params.set("maxPrice", String(marketplaceFilters.maxPrice));
     if (marketplaceFilters.query) params.set("query", marketplaceFilters.query);
@@ -523,7 +532,14 @@ export function MarketplaceApp() {
     setMarketplaceCount(0);
     void Promise.all([loadMarketplaceBooks(), loadMarketplaceCount()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, marketplaceFilters.department, marketplaceFilters.maxPrice, marketplaceFilters.query]);
+  }, [
+    ready,
+    marketplaceFilters.listingType,
+    marketplaceFilters.itemCategory,
+    marketplaceFilters.department,
+    marketplaceFilters.maxPrice,
+    marketplaceFilters.query,
+  ]);
 
   useEffect(() => {
     if (!ready || !supabase) return;
@@ -746,20 +762,15 @@ export function MarketplaceApp() {
   useEffect(() => {
     if (!mobileMenuOpen) return;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    if (window.innerWidth <= 980) document.body.style.overflow = "hidden";
     const closeMenu = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMobileMenuOpen(false);
     };
-    const closeOnDesktop = () => {
-      if (window.innerWidth > 980) setMobileMenuOpen(false);
-    };
 
     window.addEventListener("keydown", closeMenu);
-    window.addEventListener("resize", closeOnDesktop);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeMenu);
-      window.removeEventListener("resize", closeOnDesktop);
     };
   }, [mobileMenuOpen]);
 
@@ -821,18 +832,20 @@ export function MarketplaceApp() {
       .filter((book) => book.moderationVisibility === "visible")
       .filter((book) => book.lifecycleState === "active")
       .filter((book) => book.status !== "sold")
-      .filter((book) => isAllDepartments(department) || book.department === department)
+      .filter((book) => (book.listingType || "book") === listingType)
+      .filter((book) => listingType === "book" || itemCategory === ALL_ITEM_CATEGORIES || book.itemCategory === itemCategory)
+      .filter((book) => listingType !== "book" || isAllDepartments(department) || book.department === department)
       .filter((book) => !maxPrice || book.price <= Number(maxPrice))
       .filter((book) =>
         !normalized
           ? true
-          : [book.title, book.author, book.course, book.teacher]
+          : [book.title, book.author, book.course, book.teacher, book.description, book.itemCategory]
               .join(" ")
               .toLowerCase()
               .includes(normalized),
       )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [department, maxPrice, query, store.books, marketplaceBooks]);
+  }, [department, itemCategory, listingType, maxPrice, query, store.books, marketplaceBooks]);
 
   const selectedBook = detailBook
     ?? filteredBooks.find((book) => book.id === selectedId)
@@ -868,6 +881,19 @@ export function MarketplaceApp() {
     setQuery(heroQuery);
     setHeroQuery("");
     document.getElementById("market")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function switchListingType(nextType: ListingType) {
+    setListingType(nextType);
+    setSelectedId(null);
+    setDetailBook(null);
+    setQuery("");
+    setHeroQuery("");
+    if (nextType === "book") {
+      setItemCategory(ALL_ITEM_CATEGORIES);
+    } else {
+      setDepartment(departments[0]);
+    }
   }
 
   function requireLogin(action: () => void) {
@@ -1099,6 +1125,8 @@ export function MarketplaceApp() {
       }
 
       const payload = {
+        listingType: (String(fields.listingType) === "secondhand" ? "secondhand" : "book") as ListingType,
+        itemCategory: String(fields.itemCategory || "book"),
         title: String(fields.title),
         author: String(fields.author),
         department: String(fields.department),
@@ -1114,13 +1142,19 @@ export function MarketplaceApp() {
         contactValue: editingBook?.contactValue ?? "",
       };
 
-      if (payload.department && !departments.slice(1).includes(payload.department)) {
+      if (payload.listingType === "book" && payload.department && !departments.slice(1).includes(payload.department)) {
         setToast("請從選單選擇正確的科系");
+        return;
+      }
+      if (payload.listingType === "secondhand" && !SECONDHAND_CATEGORIES.slice(1).includes(payload.itemCategory)) {
+        setToast("請選擇正確的二手分類");
         return;
       }
 
       if (supabase) {
         const updatePayload = {
+          listing_type: payload.listingType,
+          item_category: payload.listingType === "book" ? "book" : payload.itemCategory,
           title: payload.title,
           author: payload.author,
           department: payload.department,
@@ -1868,17 +1902,19 @@ export function MarketplaceApp() {
     ? new Date(new Date(sellerLifecycle.listingsConfirmedAt).getTime() + 30 * 86400000).toISOString()
     : null;
   const confirmationDue = Boolean(nextConfirmationAt && new Date(nextConfirmationAt).getTime() <= Date.now());
+  const isSecondhandMode = listingType === "secondhand";
+  const activeMarketLabel = isSecondhandMode ? "二手物品" : "課本";
 
   return (
-    <main>
+    <main className={isSecondhandMode ? "theme-secondhand" : undefined}>
       <header className="site-header">
         <button className="brand" onClick={() => { setView("home"); setMobileMenuOpen(false); }} aria-label="回首頁">
           <span className="brand-mark"><BookOpen size={23} /></span>
           <span><b>虎科書流</b><small>HUST BOOKFLOW</small></span>
         </button>
         <nav>
-          <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
-          <button onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}>我要賣書</button>
+          <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isSecondhandMode ? "逛二手" : "找課本"}</button>
+          <button onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}>我要刊登</button>
           <button onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
         </nav>
@@ -1965,7 +2001,7 @@ export function MarketplaceApp() {
                 className={view === "home" ? "active" : ""}
                 onClick={() => { setView("home"); setMobileMenuOpen(false); }}
               >
-                找課本
+                {isSecondhandMode ? "逛二手" : "找課本"}
               </button>
               <button
                 onClick={() => {
@@ -1973,7 +2009,7 @@ export function MarketplaceApp() {
                   requireActive(() => { setEditingBook(null); setModal("bookForm"); });
                 }}
               >
-                我要賣書
+                我要刊登
               </button>
               <button
                 className={view === "dashboard" ? "active" : ""}
@@ -2040,11 +2076,14 @@ export function MarketplaceApp() {
             <div className="hero-glow one" aria-hidden="true" />
             <div className="hero-glow two" aria-hidden="true" />
             <div className="hero-copy">
-              <span className="eyebrow"><Sparkles size={15} aria-hidden="true" /> 學長姐的書，學弟妹的下一站</span>
-              <h1 id="home-hero-title">讓知識繼續流動，<br /><em>一本書也不浪費。</em></h1>
-              <p>在校園裡找到你需要的課本，省下一筆，也讓學長姐的筆記繼續發揮價值。</p>
-              <div className="hero-search" role="search" aria-label="搜尋課本">
-                <label className="visually-hidden" htmlFor="hero-search-input">搜尋書名、課程或老師</label>
+              <span className="eyebrow"><Sparkles size={15} aria-hidden="true" /> {isSecondhandMode ? "HUST SECONDHAND STORE" : "學長姐的書，學弟妹的下一站"}</span>
+              <h1 id="home-hero-title">
+                {isSecondhandMode ? "校園裡的二手選物，" : "讓知識繼續流動，"}<br />
+                <em>{isSecondhandMode ? "把日常換成新靈感。" : "一本書也不浪費。"}</em>
+              </h1>
+              <p>{isSecondhandMode ? "從 3C、宿舍小物到日常配件，用更像商店的方式逛校園二手好物。" : "在校園裡找到你需要的課本，省下一筆，也讓學長姐的筆記繼續發揮價值。"}</p>
+              <div className="hero-search" role="search" aria-label={isSecondhandMode ? "搜尋二手物品" : "搜尋課本"}>
+                <label className="visually-hidden" htmlFor="hero-search-input">{isSecondhandMode ? "搜尋商品、分類或描述" : "搜尋書名、課程或老師"}</label>
                 <Search size={21} aria-hidden="true" />
                 <input
                   id="hero-search-input"
@@ -2053,30 +2092,30 @@ export function MarketplaceApp() {
                   onKeyDown={(event) => {
                     if (event.key === "Enter") submitHeroSearch();
                   }}
-                  placeholder="搜尋書名、課程或老師..."
+                  placeholder={isSecondhandMode ? "搜尋商品、分類或描述..." : "搜尋書名、課程或老師..."}
                 />
-                <button type="button" onClick={submitHeroSearch}>開始找書</button>
+                <button type="button" onClick={submitHeroSearch}>{isSecondhandMode ? "開始逛" : "開始找書"}</button>
               </div>
               <div className="hero-trust" aria-label="平台特色">
                 <span><ShieldCheck size={16} aria-hidden="true" /> 校園面交更安心</span>
                 <span><MessageCircle size={16} aria-hidden="true" /> 接受後依賣家設定分享聯絡方式</span>
-                <span><GraduationCap size={16} aria-hidden="true" /> 依課程快速找到課本</span>
+                <span><GraduationCap size={16} aria-hidden="true" /> {isSecondhandMode ? "依分類快速探索好物" : "依課程快速找到課本"}</span>
               </div>
             </div>
             <div className="hero-art" aria-hidden="true">
               <div className="book-stack">
-                <div className="floating-note note-one">資料結構<br /><b>省下 $380</b></div>
+                <div className="floating-note note-one">{isSecondhandMode ? "耳機 / 桌燈" : "資料結構"}<br /><b>{isSecondhandMode ? "今日精選" : "省下 $380"}</b></div>
                 <div className="book book-a"><span>DATA<br />STRUCTURES</span></div>
-                <div className="book book-b"><span>MANAGEMENT</span></div>
-                <div className="book book-c"><span>ENGLISH<br />GRAMMAR</span></div>
-                <div className="floating-note note-two"><Check size={16} /> 校內面交</div>
+                <div className="book book-b"><span>{isSecondhandMode ? "SECONDHAND" : "MANAGEMENT"}</span></div>
+                <div className="book book-c"><span>{isSecondhandMode ? "DROP 02" : "ENGLISH GRAMMAR"}</span></div>
+                <div className="floating-note note-two"><Check size={16} /> {isSecondhandMode ? "風格好物" : "校內面交"}</div>
               </div>
             </div>
           </section>
 
           <section className="market" id="market" aria-labelledby="home-market-title">
             <div className="section-heading">
-              <div><span className="section-kicker">LATEST LISTINGS</span><h2 id="home-market-title">最近上架的課本</h2></div>
+              <div><span className="section-kicker">{isSecondhandMode ? "SECONDHAND DROP" : "LATEST LISTINGS"}</span><h2 id="home-market-title">{isSecondhandMode ? "校園二手選物" : "最近上架的課本"}</h2></div>
               <button
                 type="button"
                 className="sell-cta"
@@ -2084,10 +2123,30 @@ export function MarketplaceApp() {
                 aria-disabled={currentUser?.accountStatus === "suspended"}
                 onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}
               >
-                <Plus size={18} aria-hidden="true" />刊登一本書
+                <Plus size={18} aria-hidden="true" />{isSecondhandMode ? "刊登二手物品" : "刊登一本書"}
               </button>
             </div>
-            <form className="filters" aria-label="篩選課本" onSubmit={(event) => event.preventDefault()}>
+            <div className="market-mode-switch" role="tablist" aria-label="市場類型">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={listingType === "book"}
+                className={listingType === "book" ? "active" : ""}
+                onClick={() => switchListingType("book")}
+              >
+                <BookOpen size={16} aria-hidden="true" /> 課本
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={listingType === "secondhand"}
+                className={listingType === "secondhand" ? "active" : ""}
+                onClick={() => switchListingType("secondhand")}
+              >
+                <Sparkles size={16} aria-hidden="true" /> 二手物品
+              </button>
+            </div>
+            <form className="filters" aria-label={isSecondhandMode ? "篩選二手物品" : "篩選課本"} onSubmit={(event) => event.preventDefault()}>
               <label className="filter-search" htmlFor="home-filter-query">
                 <span className="visually-hidden">搜尋課本</span>
                 <Search size={18} aria-hidden="true" />
@@ -2095,23 +2154,39 @@ export function MarketplaceApp() {
                   id="home-filter-query"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜尋課本..."
-                  aria-label="搜尋課本"
+                  placeholder={isSecondhandMode ? "搜尋商品、分類或描述..." : "搜尋課本..."}
+                  aria-label={isSecondhandMode ? "搜尋二手物品" : "搜尋課本"}
                 />
               </label>
-              <label htmlFor="home-filter-department">
-                <span className="visually-hidden">科系</span>
-                <GraduationCap size={18} aria-hidden="true" />
-                <select
-                  id="home-filter-department"
-                  value={department}
-                  onChange={(event) => setDepartment(event.target.value)}
-                  aria-label="科系"
-                >
-                  {departments.map((item) => <option key={item}>{item}</option>)}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </label>
+              {listingType === "book" ? (
+                <label htmlFor="home-filter-department">
+                  <span className="visually-hidden">科系</span>
+                  <GraduationCap size={18} aria-hidden="true" />
+                  <select
+                    id="home-filter-department"
+                    value={department}
+                    onChange={(event) => setDepartment(event.target.value)}
+                    aria-label="科系"
+                  >
+                    {departments.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </label>
+              ) : (
+                <label htmlFor="home-filter-category">
+                  <span className="visually-hidden">二手分類</span>
+                  <Sparkles size={18} aria-hidden="true" />
+                  <select
+                    id="home-filter-category"
+                    value={itemCategory}
+                    onChange={(event) => setItemCategory(event.target.value)}
+                    aria-label="二手分類"
+                  >
+                    {SECONDHAND_CATEGORIES.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </label>
+              )}
               <label htmlFor="home-filter-price">
                 <span className="visually-hidden">最高價格</span>
                 <span className="dollar" aria-hidden="true">$</span>
@@ -2133,16 +2208,16 @@ export function MarketplaceApp() {
               </button>
             </form>
             <p className="result-line" aria-live="polite" aria-atomic="true">
-              <b>{supabase ? marketplaceCount : filteredBooks.length}</b> 本左右的課本正在等待新主人
+              <b>{supabase ? marketplaceCount : filteredBooks.length}</b> 件{activeMarketLabel}正在等待新主人
             </p>
-            <div className="book-grid" role="list" aria-label="課本列表">
+            <div className="book-grid" role="list" aria-label={`${activeMarketLabel}列表`}>
               {filteredBooks.map((book) => (
-                <article className="book-card" key={book.id} role="listitem">
+                <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id} role="listitem">
                   <button
                     type="button"
                     className="book-card-main"
                     onClick={() => openBook(book.id)}
-                    aria-label={`查看《${book.title}》，${book.author}，${money(book.price)}，${book.condition}`}
+                    aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
                   >
                     <div className="card-image">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2150,9 +2225,11 @@ export function MarketplaceApp() {
                       <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
                     </div>
                     <div className="card-body">
-                      {book.course && <span className="course-tag">{book.course}</span>}
+                      {(book.listingType === "secondhand" ? book.itemCategory : book.course) && (
+                        <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : book.course}</span>
+                      )}
                       <h3>{book.title}</h3>
-                      <p>{book.author} · {book.edition}</p>
+                      <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : `${book.author} · ${book.edition}`}</p>
                       <div className="card-meta"><span>{book.condition}</span><span><MapPin size={13} aria-hidden="true" />{book.meetup}</span></div>
                       <div className="card-footer"><strong>{money(book.price)}</strong><small>{timeAgo(book.createdAt)}刊登</small></div>
                     </div>
@@ -2185,7 +2262,7 @@ export function MarketplaceApp() {
             {filteredBooks.length === 0 && !marketplaceLoading && (
               <div className="empty" role="status" aria-live="polite">
                 <BookOpen size={40} aria-hidden="true" />
-                <h3>還沒有符合的課本</h3>
+                <h3>還沒有符合的{activeMarketLabel}</h3>
                 <p>換個關鍵字或篩選條件看看。</p>
               </div>
             )}
@@ -2209,15 +2286,18 @@ export function MarketplaceApp() {
               <span className={`status ${selectedBook.status}`}>{statusLabels[selectedBook.status]}</span>
             </div>
             <div className="detail-content">
-              {(selectedBook.department || selectedBook.course) && (
+              {selectedBook.listingType === "secondhand" ? (
+                <span className="course-tag">{selectedBook.itemCategory}</span>
+              ) : (selectedBook.department || selectedBook.course) && (
                 <span className="course-tag">{[selectedBook.department, selectedBook.course].filter(Boolean).join(" · ")}</span>
               )}
               <h1>{selectedBook.title}</h1>
-              <p className="detail-author">{selectedBook.author} · {selectedBook.edition}</p>
+              {selectedBook.listingType === "book" && <p className="detail-author">{selectedBook.author} · {selectedBook.edition}</p>}
               <strong className="detail-price">{money(selectedBook.price)}</strong>
               <div className="detail-facts">
-                <div><small>書況</small><b>{selectedBook.condition}</b></div>
-                {selectedBook.teacher && <div><small>授課老師</small><b>{selectedBook.teacher}</b></div>}
+                <div><small>{selectedBook.listingType === "secondhand" ? "物況" : "書況"}</small><b>{selectedBook.condition}</b></div>
+                {selectedBook.listingType === "book" && selectedBook.teacher && <div><small>授課老師</small><b>{selectedBook.teacher}</b></div>}
+                {selectedBook.listingType === "secondhand" && <div><small>分類</small><b>{selectedBook.itemCategory}</b></div>}
                 <div><small>面交地點</small><b>{selectedBook.meetup}</b></div>
               </div>
               <div className="description"><h3>賣家說明</h3><p>{selectedBook.description}</p></div>
@@ -2555,7 +2635,7 @@ export function MarketplaceApp() {
           {dashboardTab === "favorites" && (
             <div className="book-grid favorites-grid">
               {favoriteBooks.map((book) => (
-                <article className="book-card" key={book.id} onClick={() => openBook(book.id)}>
+                <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id} onClick={() => openBook(book.id)}>
                   <div className="card-image">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={book.imageUrl} alt={book.title} loading="lazy" decoding="async" />
@@ -2570,9 +2650,11 @@ export function MarketplaceApp() {
                     </button>
                   </div>
                   <div className="card-body">
-                    {book.course && <span className="course-tag">{book.course}</span>}
+                    {(book.listingType === "secondhand" ? book.itemCategory : book.course) && (
+                      <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : book.course}</span>
+                    )}
                     <h3>{book.title}</h3>
-                    <p>{book.author} · {book.edition}</p>
+                    <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : `${book.author} · ${book.edition}`}</p>
                     <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
                   </div>
                 </article>
@@ -2752,7 +2834,7 @@ export function MarketplaceApp() {
           onSubmit={saveProfile}
         />
       )}
-      {modal === "bookForm" && <BookFormModal book={editingBook} saving={bookSaving} onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }} onSubmit={saveBook} />}
+      {modal === "bookForm" && <BookFormModal book={editingBook} defaultListingType={listingType} saving={bookSaving} onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }} onSubmit={saveBook} />}
       {modal === "contactSettings" && editingBook && (
         <ContactSettingsModal
           book={editingBook}
@@ -3350,9 +3432,28 @@ function ResetPasswordModal({
   );
 }
 
-function BookFormModal({ book, saving, onClose, onSubmit }: { book: Book | null; saving: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void> }) {
-  const value = book ?? blankBook;
+function BookFormModal({
+  book,
+  defaultListingType,
+  saving,
+  onClose,
+  onSubmit,
+}: {
+  book: Book | null;
+  defaultListingType: ListingType;
+  saving: boolean;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+}) {
+  const initialListingType = book?.listingType ?? defaultListingType;
+  const value = book ?? {
+    ...blankBook,
+    listingType: initialListingType,
+    itemCategory: initialListingType === "secondhand" ? DEFAULT_SECONDHAND_CATEGORY : "book",
+  };
+  const [formListingType, setFormListingType] = useState<ListingType>(initialListingType);
   const [preview, setPreview] = useState(value.imageUrl);
+  const isSecondhand = formListingType === "secondhand";
 
   function selectImage(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -3360,7 +3461,96 @@ function BookFormModal({ book, saving, onClose, onSubmit }: { book: Book | null;
     setPreview(URL.createObjectURL(file));
   }
 
-  return <ModalShell title={book ? "編輯刊登" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}><form onSubmit={onSubmit} className="form book-form"><fieldset disabled={saving} className="book-form-fields"><label className="full">書名 *<input name="title" required defaultValue={value.title} placeholder="例如：資料結構：使用 C++" /></label><label>作者 *<input name="author" required defaultValue={value.author} /></label><label>版本 *<input name="edition" required defaultValue={value.edition} placeholder="例如：第 2 版" /></label><label>科系（選填）<select name="department" defaultValue={value.department}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label><label>課程（選填）<input name="course" defaultValue={value.course} /></label><label>授課老師（選填）<input name="teacher" defaultValue={value.teacher} /></label><label>書況 *<select name="condition" required defaultValue={value.condition}><option>近全新</option><option>書況良好</option><option>有筆記</option><option>使用痕跡明顯</option><option>損壞嚴重</option></select></label><label>價格（NT$）*<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label><label className="full">面交地點 *<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label><label className="full">封面圖片 *<span className="image-upload"><input name="image" required={!book} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} /><ImagePlus size={22} /><b>{book ? "選擇新圖片（不選則保留原圖）" : "選擇圖片檔"}</b><small>支援 JPG、PNG、WebP，最大 5MB</small></span></label>{preview && <div className="image-preview full"><img src={preview} alt="書籍封面預覽" /></div>}<label className="full">書況說明 *<textarea name="description" required rows={3} defaultValue={value.description} /></label><button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button></fieldset></form></ModalShell>;
+  return (
+    <ModalShell title={book ? "編輯刊登" : isSecondhand ? "刊登二手物品" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}>
+      <form onSubmit={onSubmit} className="form book-form">
+        <fieldset disabled={saving} className="book-form-fields">
+          <div className="listing-type-control full" role="radiogroup" aria-label="刊登類型">
+            <label>
+              <input
+                type="radio"
+                name="listingType"
+                value="book"
+                checked={formListingType === "book"}
+                onChange={() => setFormListingType("book")}
+              />
+              課本
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="listingType"
+                value="secondhand"
+                checked={formListingType === "secondhand"}
+                onChange={() => setFormListingType("secondhand")}
+              />
+              二手物品
+            </label>
+          </div>
+
+          <label className="full">
+            {isSecondhand ? "商品名稱" : "書名"} *
+            <input name="title" required defaultValue={value.title} placeholder={isSecondhand ? "例如：小米檯燈、藍牙耳機" : "例如：資料結構：使用 C++"} />
+          </label>
+
+          {isSecondhand ? (
+            <>
+              <input type="hidden" name="author" value="" />
+              <input type="hidden" name="edition" value="" />
+              <input type="hidden" name="department" value="" />
+              <input type="hidden" name="course" value="" />
+              <input type="hidden" name="teacher" value="" />
+              <label>
+                二手分類 *
+                <select name="itemCategory" required defaultValue={value.itemCategory === "book" ? DEFAULT_SECONDHAND_CATEGORY : value.itemCategory}>
+                  {SECONDHAND_CATEGORIES.slice(1).map((item) => <option key={item}>{item}</option>)}
+                </select>
+              </label>
+            </>
+          ) : (
+            <>
+              <input type="hidden" name="itemCategory" value="book" />
+              <label>作者 *<input name="author" required defaultValue={value.author} /></label>
+              <label>版本 *<input name="edition" required defaultValue={value.edition} placeholder="例如：第 2 版" /></label>
+              <label>科系（選填）<select name="department" defaultValue={value.department}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label>課程（選填）<input name="course" defaultValue={value.course} /></label>
+              <label>授課老師（選填）<input name="teacher" defaultValue={value.teacher} /></label>
+            </>
+          )}
+
+          <label>
+            {isSecondhand ? "物況" : "書況"} *
+            <select name="condition" required defaultValue={value.condition}>
+              <option>近全新</option>
+              <option>{isSecondhand ? "狀況良好" : "書況良好"}</option>
+              <option>{isSecondhand ? "正常使用痕跡" : "有筆記"}</option>
+              <option>使用痕跡明顯</option>
+              <option>損壞嚴重</option>
+            </select>
+          </label>
+          <label>價格（NT$）*<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label>
+          <label className="full">面交地點 *<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label>
+          <label className="full">
+            {isSecondhand ? "商品圖片" : "封面圖片"} *
+            <span className="image-upload">
+              <input name="image" required={!book} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} />
+              <ImagePlus size={22} />
+              <b>{book ? "選擇新圖片（不選則保留原圖）" : "選擇圖片檔"}</b>
+              <small>支援 JPG、PNG、WebP，最大 5MB</small>
+            </span>
+          </label>
+          {preview && (
+            <div className="image-preview full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={preview} alt={isSecondhand ? "商品圖片預覽" : "書籍封面預覽"} />
+            </div>
+          )}
+          <label className="full">{isSecondhand ? "商品說明" : "書況說明"} *<textarea name="description" required rows={3} defaultValue={value.description} /></label>
+          <button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button>
+        </fieldset>
+      </form>
+    </ModalShell>
+  );
 }
 
 function ContactSettingsModal({

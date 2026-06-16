@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260616-polish-chat-and-issue-report-entry-point",
-  "taskTitle": "polish chat and issue report entry points",
-  "baseCommit": "de8dfdc1f06113e96c265e70db00d17a824a1c45",
-  "updatedAt": "2026-06-16T02:30:22.892Z",
+  "taskId": "20260616-secondhand-marketplace-and-desktop-menu",
+  "taskTitle": "secondhand marketplace and desktop menu",
+  "baseCommit": "ab710726ba40ea6df5db9288ee007e04a39be92e",
+  "updatedAt": "2026-06-16T05:39:00.919Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260616-0230-20260616-polish-chat-and-issue-report-en.md"
+  "historyFile": ".ai/history/20260616-0539-20260616-secondhand-marketplace-and-desk.md"
 }

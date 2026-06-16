@@ -2,17 +2,24 @@ import { unstable_cache } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 type CountFilters = {
+  listingType: string;
+  itemCategory: string | null;
   department: string | null;
   maxPrice: number | null;
   query: string | null;
 };
 
 function normalizedFilters(request: NextRequest): CountFilters {
+  const rawListingType = request.nextUrl.searchParams.get("listingType")?.trim();
+  const listingType = rawListingType === "secondhand" ? "secondhand" : "book";
+  const itemCategory = request.nextUrl.searchParams.get("itemCategory")?.trim() || null;
   const department = request.nextUrl.searchParams.get("department")?.trim() || null;
   const query = request.nextUrl.searchParams.get("query")?.trim().slice(0, 80) || null;
   const rawMaxPrice = request.nextUrl.searchParams.get("maxPrice");
   const parsedMaxPrice = rawMaxPrice ? Number(rawMaxPrice) : null;
   return {
+    listingType,
+    itemCategory: listingType === "secondhand" ? itemCategory : null,
     department,
     maxPrice: parsedMaxPrice !== null && Number.isFinite(parsedMaxPrice) ? parsedMaxPrice : null,
     query,
@@ -32,6 +39,8 @@ async function requestCount(filters: CountFilters) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      p_listing_type: filters.listingType,
+      p_item_category: filters.itemCategory,
       p_department: filters.department,
       p_max_price: filters.maxPrice,
       p_query: filters.query,

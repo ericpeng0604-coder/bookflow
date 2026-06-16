@@ -33,6 +33,8 @@ function marketplaceRpcParams(filters: MarketplaceFilters, limit: number, cursor
     p_limit: limit + 1,
     p_cursor_created: cursor?.createdAt ?? null,
     p_cursor_id: cursor?.id ?? null,
+    p_listing_type: filters.listingType,
+    p_item_category: filters.itemCategory,
     p_department: filters.department,
     p_max_price: filters.maxPrice,
     p_query: filters.query,
