@@ -11,6 +11,7 @@ export type RequestStatus =
 export type ReviewStatus = "pending" | "approved" | "rejected";
 export type UserRole = "user" | "moderator" | "admin";
 export type AccountStatus = "active" | "suspended";
+export type StudentVerificationStatus = "pending" | "approved" | "rejected";
 export type ModerationVisibility = "visible" | "hidden";
 export type ListingLifecycleState = "active" | "archived" | "withdrawn";
 export type ContactMethod = "none" | "email" | "line";
@@ -186,5 +187,20 @@ export type Feedback = {
   message: string;
   status: FeedbackStatus;
   resolutionNote: string;
+  createdAt: string;
+};
+
+export type StudentVerification = {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  imagePath: string;
+  ocrText: string;
+  qualityFlags: Record<string, unknown>;
+  status: StudentVerificationStatus;
+  reviewNote: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
   createdAt: string;
 };

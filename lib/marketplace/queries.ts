@@ -8,11 +8,12 @@ import {
   mapPublicProfile,
   mapReport,
   mapRequest,
+  mapStudentVerification,
   mapTradeContact,
   mapConversation,
   mapFeedback,
 } from "@/lib/marketplace/mappers";
-import type { Book, Conversation, Feedback, Profile, SellerLifecycle, TradeContact } from "@/lib/types";
+import type { Book, Conversation, Feedback, Profile, SellerLifecycle, StudentVerification, TradeContact } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 
@@ -237,6 +238,15 @@ export async function fetchFeedbackForModeration(client: SupabaseClient): Promis
   return (data ?? []).map((row: Record<string, unknown>) => mapFeedback(row));
 }
 
+export async function fetchStudentVerificationsForReview(client: SupabaseClient): Promise<StudentVerification[]> {
+  const { data, error } = await client.rpc("list_student_verifications_for_review");
+  if (error) {
+    if (["PGRST202", "42883", "42P01"].includes(error.code || "")) return [];
+    throw error;
+  }
+  return (data ?? []).map((row: Record<string, unknown>) => mapStudentVerification(row));
+}
+
 export async function fetchTradeContactsBatch(client: SupabaseClient, requestIds: string[]) {
   if (requestIds.length === 0) return {} as Record<string, TradeContact>;
 
@@ -310,15 +320,16 @@ export async function loadWorkspaceTabData(
 }
 
 export async function loadModerationData(client: SupabaseClient, user: Profile) {
-  const [pendingReviews, hiddenBooks, reports, feedback, adminProfiles] = await Promise.all([
+  const [pendingReviews, hiddenBooks, reports, feedback, studentVerifications, adminProfiles] = await Promise.all([
     fetchPendingReviews(client),
     fetchHiddenBooks(client),
     fetchModerationReports(client),
     fetchFeedbackForModeration(client),
+    fetchStudentVerificationsForReview(client),
     user.role === "admin" ? fetchAdminProfiles(client) : Promise.resolve([] as Profile[]),
   ]);
 
-  return { pendingReviews, hiddenBooks, reports, feedback, adminProfiles };
+  return { pendingReviews, hiddenBooks, reports, feedback, studentVerifications, adminProfiles };
 }
 
 export function mergeProfiles(
