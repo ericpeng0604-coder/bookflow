@@ -54,6 +54,13 @@ import {
   enableBrowserPush,
 } from "@/lib/marketplace/browser-push";
 import {
+  extractBookDraftFromOcr,
+  imageQualityFlags,
+  recognizeImageText,
+  studentVerificationFlagLabels,
+  type StudentVerificationFlags,
+} from "@/lib/marketplace/free-ocr";
+import {
   deleteChatImageUploads,
   fetchTradeMessages,
   mapTradeMessage,
@@ -90,6 +97,7 @@ import type {
   RequestStatus,
   ReviewStatus,
   SellerLifecycle,
+  StudentVerification,
   TradeContact,
   TradeMessage,
   ListingType,
@@ -264,6 +272,7 @@ export function MarketplaceApp() {
   const [contacts, setContacts] = useState<Record<string, TradeContact>>({});
   const [reports, setReports] = useState<Report[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [studentVerifications, setStudentVerifications] = useState<StudentVerification[]>([]);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; label: string } | null>(null);
   const [marketplaceBooks, setMarketplaceBooks] = useState<Book[]>([]);
   const [marketplaceCount, setMarketplaceCount] = useState(0);
@@ -433,6 +442,7 @@ export function MarketplaceApp() {
         setHiddenBooks(data.hiddenBooks);
         setReports(data.reports);
         setFeedback(data.feedback);
+        setStudentVerifications(data.studentVerifications);
         if (data.adminProfiles.length > 0) {
           setStore((previous) => ({
             ...previous,
@@ -1058,6 +1068,32 @@ export function MarketplaceApp() {
     return null;
   }
 
+  async function submitStudentVerification(file: File, ocrText: string, qualityFlags: StudentVerificationFlags) {
+    if (!supabase || !currentUser) return "目前無法上傳學生證";
+    if (currentUser.accountStatus === "suspended") return "你的帳號目前為唯讀模式，不能送出學生證審核";
+
+    const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `${currentUser.id}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from("student-verifications")
+      .upload(path, file, {
+        cacheControl: "3600",
+        contentType: file.type || "image/jpeg",
+        upsert: false,
+      });
+    if (uploadError) return `學生證上傳失敗：${uploadError.message}`;
+
+    const { error } = await supabase.rpc("submit_student_verification", {
+      image_path: path,
+      ocr_text: ocrText,
+      quality_flags: qualityFlags,
+    });
+    if (error) return `送出學生證審核失敗：${error.message}`;
+
+    setToast("學生證已送出，管理員會人工審核");
+    return null;
+  }
+
   async function logout() {
     if (supabase) await supabase.auth.signOut();
     setStore((previous) => ({ ...previous, requests: [], currentUser: null }));
@@ -1608,6 +1644,27 @@ export function MarketplaceApp() {
     setToast(decision === "approved" ? "書籍已通過並公開上架" : "書籍已拒絕");
   }
 
+  async function reviewStudentVerification(verificationId: string, decision: "approved" | "rejected") {
+    if (!supabase || !currentUser) return;
+    const note = decision === "rejected"
+      ? window.prompt("請輸入拒絕原因，使用者會看到這段說明：")?.trim()
+      : window.prompt("審核備註（可留空）")?.trim() || "";
+    if (decision === "rejected" && !note) return;
+
+    const { error } = await supabase.rpc("review_student_verification", {
+      target_id: verificationId,
+      decision,
+      note: note || "",
+    });
+    if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
+      setToast(`學生證審核失敗：${error.message}`);
+      return;
+    }
+    await reloadAfterModerationMutation();
+    setToast(decision === "approved" ? "學生證已通過" : "學生證已拒絕");
+  }
+
   async function changeRole(userId: string, role: UserRole) {
     if (!supabase || !currentUser) return;
     const { error } = await supabase.rpc("set_user_role", {
@@ -1913,7 +1970,7 @@ export function MarketplaceApp() {
           <span><b>虎科書流</b><small>HUST BOOKFLOW</small></span>
         </button>
         <nav>
-          <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isSecondhandMode ? "逛二手" : "找課本"}</button>
+          <button className={view === "home" ? "active" : ""} onClick={() => { switchListingType("book"); setView("home"); }}>找課本</button>
           <button onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}>我要刊登</button>
           <button onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
@@ -1999,9 +2056,18 @@ export function MarketplaceApp() {
             <div id="mobile-navigation" className="mobile-nav" onClick={(event) => event.stopPropagation()}>
               <button
                 className={view === "home" ? "active" : ""}
-                onClick={() => { setView("home"); setMobileMenuOpen(false); }}
+                onClick={() => { switchListingType("book"); setView("home"); setMobileMenuOpen(false); }}
               >
-                {isSecondhandMode ? "逛二手" : "找課本"}
+                找課本
+              </button>
+              <button
+                onClick={() => {
+                  switchListingType(isSecondhandMode ? "book" : "secondhand");
+                  setView("home");
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <Sparkles size={18} />{isSecondhandMode ? "回課本市場" : "逛二手市場"}
               </button>
               <button
                 onClick={() => {
@@ -2673,7 +2739,7 @@ export function MarketplaceApp() {
               <h1>安全與審核後台</h1>
               <p>處理檢舉、刊登審核、商品隱藏與會員權限。</p>
             </div>
-            <div className="admin-count">{pendingReports.length + pendingReviews.length + feedback.filter((item) => item.status === "pending").length} 筆待處理</div>
+            <div className="admin-count">{pendingReports.length + pendingReviews.length + feedback.filter((item) => item.status === "pending").length + studentVerifications.length} 筆待處理</div>
           </div>
 
           <h2 className="admin-section-title">網站問題回報</h2>
@@ -2693,6 +2759,18 @@ export function MarketplaceApp() {
             ))}
           </div>
           {feedback.every((item) => item.status !== "pending") && <EmptyDashboard text="目前沒有等待處理的問題回報" />}
+
+          <h2 className="admin-section-title">學生證審核</h2>
+          <div className="reports-list">
+            {studentVerifications.map((verification) => (
+              <StudentVerificationCard
+                key={verification.id}
+                verification={verification}
+                onReview={reviewStudentVerification}
+              />
+            ))}
+          </div>
+          {studentVerifications.length === 0 && <EmptyDashboard text="目前沒有等待審核的學生證" />}
 
           <h2 className="admin-section-title">待處理檢舉</h2>
           <div className="reports-list">
@@ -2832,6 +2910,7 @@ export function MarketplaceApp() {
           profile={currentUser}
           onClose={() => setModal(null)}
           onSubmit={saveProfile}
+          onSubmitStudentVerification={submitStudentVerification}
         />
       )}
       {modal === "bookForm" && <BookFormModal book={editingBook} defaultListingType={listingType} saving={bookSaving} onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }} onSubmit={saveBook} />}
@@ -2942,19 +3021,85 @@ function AdminOtpModal({
   );
 }
 
+function StudentVerificationCard({
+  verification,
+  onReview,
+}: {
+  verification: StudentVerification;
+  onReview: (verificationId: string, decision: "approved" | "rejected") => void | Promise<void>;
+}) {
+  const [imageUrl, setImageUrl] = useState("");
+  const flags = verification.qualityFlags as Partial<StudentVerificationFlags>;
+  const flagLabels = studentVerificationFlagLabels({
+    schoolMatched: Boolean(flags.schoolMatched),
+    textTooShort: Boolean(flags.textTooShort),
+    imageTooSmall: Boolean(flags.imageTooSmall),
+  });
+
+  useEffect(() => {
+    if (!supabase || !verification.imagePath) return;
+    let active = true;
+    supabase.storage
+      .from("student-verifications")
+      .createSignedUrl(verification.imagePath, 600)
+      .then(({ data }) => {
+        if (active && data?.signedUrl) setImageUrl(data.signedUrl);
+      });
+    return () => {
+      active = false;
+    };
+  }, [verification.imagePath]);
+
+  return (
+    <article className="student-review-card">
+      <div className="student-review-image">
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt={`${verification.userName} 的學生證`} />
+        ) : (
+          <ShieldCheck size={28} />
+        )}
+      </div>
+      <div className="student-review-body">
+        <div className="report-card-head">
+          <span className="report-target user"><ShieldCheck size={14} />待人工審核</span>
+          <time>{timeAgo(verification.createdAt)}</time>
+        </div>
+        <h3>{verification.userName}</h3>
+        <small>{verification.userEmail}</small>
+        <div className="ocr-flags">
+          {flagLabels.map((label) => <span key={label}>{label}</span>)}
+        </div>
+        <textarea className="ocr-text" readOnly value={verification.ocrText || "OCR 未讀到可用文字，請直接人工檢查圖片。"} aria-label="學生證 OCR 文字" />
+        <div className="report-actions">
+          <button className="accept" onClick={() => void onReview(verification.id, "approved")}><Check size={16} />通過學生證</button>
+          <button className="reject" onClick={() => void onReview(verification.id, "rejected")}><X size={16} />拒絕</button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function ProfileModal({
   profile,
   onClose,
   onSubmit,
+  onSubmitStudentVerification,
 }: {
   profile: Profile;
   onClose: () => void;
   onSubmit: (name: string, department: string) => Promise<string | null>;
+  onSubmitStudentVerification: (file: File, ocrText: string, qualityFlags: StudentVerificationFlags) => Promise<string | null>;
 }) {
   const [name, setName] = useState(profile.name);
   const [department, setDepartment] = useState(profile.department);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [studentIdFile, setStudentIdFile] = useState<File | null>(null);
+  const [studentIdOcrText, setStudentIdOcrText] = useState("");
+  const [studentIdFlags, setStudentIdFlags] = useState<StudentVerificationFlags | null>(null);
+  const [studentIdPreview, setStudentIdPreview] = useState("");
+  const [studentIdBusy, setStudentIdBusy] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2963,6 +3108,51 @@ function ProfileModal({
     const message = await onSubmit(name, department);
     if (message) setError(message);
     setSaving(false);
+  }
+
+  async function selectStudentIdImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setStudentIdFile(file);
+    setStudentIdOcrText("");
+    setStudentIdFlags(null);
+    if (!file) {
+      setStudentIdPreview("");
+      return;
+    }
+    setStudentIdPreview(URL.createObjectURL(file));
+    setStudentIdBusy(true);
+    setError("");
+    try {
+      const ocrText = await recognizeImageText(file);
+      const flags = await imageQualityFlags(file, ocrText);
+      setStudentIdOcrText(ocrText);
+      setStudentIdFlags(flags);
+    } catch (ocrError) {
+      const flags = await imageQualityFlags(file, "");
+      setStudentIdFlags(flags);
+      setError(ocrError instanceof Error ? ocrError.message : "學生證 OCR 失敗，仍可送交人工審核");
+    } finally {
+      setStudentIdBusy(false);
+    }
+  }
+
+  async function submitStudentId() {
+    if (!studentIdFile) {
+      setError("請先選擇學生證圖片");
+      return;
+    }
+    setStudentIdBusy(true);
+    setError("");
+    const fallbackFlags = studentIdFlags ?? await imageQualityFlags(studentIdFile, studentIdOcrText);
+    const message = await onSubmitStudentVerification(studentIdFile, studentIdOcrText, fallbackFlags);
+    if (message) setError(message);
+    else {
+      setStudentIdFile(null);
+      setStudentIdOcrText("");
+      setStudentIdFlags(null);
+      setStudentIdPreview("");
+    }
+    setStudentIdBusy(false);
   }
 
   return (
@@ -2989,6 +3179,32 @@ function ProfileModal({
           {saving ? "儲存中..." : "儲存個人資料"}
         </button>
       </form>
+      <div className="student-verification-box">
+        <div>
+          <b>學生證人工審核</b>
+          <span>免費 OCR 只會幫管理員標記線索，最後仍由人工通過或拒絕。</span>
+        </div>
+        <label className="student-id-upload">
+          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectStudentIdImage(event)} />
+          <ImagePlus size={20} />
+          <span>{studentIdFile ? studentIdFile.name : "選擇學生證圖片"}</span>
+        </label>
+        {studentIdPreview && (
+          <div className="student-id-preview">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={studentIdPreview} alt="學生證預覽" />
+          </div>
+        )}
+        {studentIdFlags && (
+          <div className="ocr-flags">
+            {studentVerificationFlagLabels(studentIdFlags).map((label) => <span key={label}>{label}</span>)}
+          </div>
+        )}
+        {studentIdOcrText && <textarea className="ocr-text" readOnly value={studentIdOcrText} aria-label="學生證 OCR 文字" />}
+        <button className="secondary-action wide" type="button" disabled={studentIdBusy || !studentIdFile} onClick={() => void submitStudentId()}>
+          {studentIdBusy ? "處理中..." : "送交學生證審核"}
+        </button>
+      </div>
     </ModalShell>
   );
 }
@@ -3453,18 +3669,76 @@ function BookFormModal({
   };
   const [formListingType, setFormListingType] = useState<ListingType>(initialListingType);
   const [preview, setPreview] = useState(value.imageUrl);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState("");
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [draft, setDraft] = useState({
+    title: value.title,
+    author: value.author,
+    edition: value.edition,
+    department: value.department,
+    course: value.course,
+    teacher: value.teacher,
+    condition: value.condition,
+    price: value.price ? String(value.price) : "",
+    meetup: value.meetup,
+    description: value.description,
+    itemCategory: value.itemCategory === "book" ? DEFAULT_SECONDHAND_CATEGORY : value.itemCategory,
+  });
   const isSecondhand = formListingType === "secondhand";
 
   function selectImage(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    setImageFile(file);
     setPreview(URL.createObjectURL(file));
+  }
+
+  function updateDraft(field: keyof typeof draft, nextValue: string) {
+    setDraft((previous) => ({ ...previous, [field]: nextValue }));
+  }
+
+  async function readBookOcr() {
+    if (!imageFile || isSecondhand) return;
+    setOcrBusy(true);
+    setOcrMessage("");
+    try {
+      const text = await recognizeImageText(imageFile);
+      const ocrDraft = extractBookDraftFromOcr(text);
+      setDraft((previous) => ({
+        ...previous,
+        title: ocrDraft.title || previous.title,
+        author: ocrDraft.author || previous.author,
+        edition: ocrDraft.edition || previous.edition,
+        description: [
+          previous.description,
+          ocrDraft.description,
+        ].filter(Boolean).join(previous.description && ocrDraft.description ? "\n" : ""),
+      }));
+      setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition || ocrDraft.description
+        ? "已從封面填入可辨識的書名、作者或出版資訊，送出前請再確認一次"
+        : "有讀到封面文字，但沒有足夠資訊可自動填入；你仍可手動填寫");
+    } catch (error) {
+      setOcrMessage(error instanceof Error ? error.message : "OCR 辨識失敗，請改用手動填寫");
+    } finally {
+      setOcrBusy(false);
+    }
   }
 
   return (
     <ModalShell title={book ? "編輯刊登" : isSecondhand ? "刊登二手物品" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}>
       <form onSubmit={onSubmit} className="form book-form">
         <fieldset disabled={saving} className="book-form-fields">
+          <input
+            ref={imageInputRef}
+            className="visually-hidden"
+            name="image"
+            required={!book}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={selectImage}
+          />
           <div className="listing-type-control full" role="radiogroup" aria-label="刊登類型">
             <label>
               <input
@@ -3488,9 +3762,30 @@ function BookFormModal({
             </label>
           </div>
 
+          {!isSecondhand && (
+            <div className="photo-assist full">
+              <div>
+                <Sparkles size={18} aria-hidden="true" />
+                <span>
+                  <b>使用照片填寫課本資料</b>
+                  <small>拍清楚封面後，系統會先辨識書名、作者、版本與出版線索；價格仍由你自己填。</small>
+                </span>
+              </div>
+              <div className="photo-assist-actions">
+                <button type="button" className="ghost" onClick={() => imageInputRef.current?.click()}>
+                  <ImagePlus size={16} />{imageFile ? "重新選擇照片" : "選擇封面照片"}
+                </button>
+                <button type="button" disabled={ocrBusy || !imageFile} onClick={() => void readBookOcr()}>
+                  <Sparkles size={16} />{ocrBusy ? "辨識中..." : "使用照片辨識"}
+                </button>
+              </div>
+              <p>{ocrMessage || "辨識結果只會填入草稿，送出前請再確認。"}</p>
+            </div>
+          )}
+
           <label className="full">
             {isSecondhand ? "商品名稱" : "書名"} *
-            <input name="title" required defaultValue={value.title} placeholder={isSecondhand ? "例如：小米檯燈、藍牙耳機" : "例如：資料結構：使用 C++"} />
+            <input name="title" required value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} placeholder={isSecondhand ? "例如：小米檯燈、藍牙耳機" : "例如：資料結構：使用 C++"} />
           </label>
 
           {isSecondhand ? (
@@ -3502,7 +3797,7 @@ function BookFormModal({
               <input type="hidden" name="teacher" value="" />
               <label>
                 二手分類 *
-                <select name="itemCategory" required defaultValue={value.itemCategory === "book" ? DEFAULT_SECONDHAND_CATEGORY : value.itemCategory}>
+                <select name="itemCategory" required value={draft.itemCategory} onChange={(event) => updateDraft("itemCategory", event.target.value)}>
                   {SECONDHAND_CATEGORIES.slice(1).map((item) => <option key={item}>{item}</option>)}
                 </select>
               </label>
@@ -3510,17 +3805,17 @@ function BookFormModal({
           ) : (
             <>
               <input type="hidden" name="itemCategory" value="book" />
-              <label>作者 *<input name="author" required defaultValue={value.author} /></label>
-              <label>版本 *<input name="edition" required defaultValue={value.edition} placeholder="例如：第 2 版" /></label>
-              <label>科系（選填）<select name="department" defaultValue={value.department}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
-              <label>課程（選填）<input name="course" defaultValue={value.course} /></label>
-              <label>授課老師（選填）<input name="teacher" defaultValue={value.teacher} /></label>
+              <label>作者 *<input name="author" required value={draft.author} onChange={(event) => updateDraft("author", event.target.value)} /></label>
+              <label>版本 *<input name="edition" required value={draft.edition} onChange={(event) => updateDraft("edition", event.target.value)} placeholder="例如：第 2 版" /></label>
+              <label>科系（選填）<select name="department" value={draft.department} onChange={(event) => updateDraft("department", event.target.value)}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label>課程（選填）<input name="course" value={draft.course} onChange={(event) => updateDraft("course", event.target.value)} /></label>
+              <label>授課老師（選填）<input name="teacher" value={draft.teacher} onChange={(event) => updateDraft("teacher", event.target.value)} /></label>
             </>
           )}
 
           <label>
             {isSecondhand ? "物況" : "書況"} *
-            <select name="condition" required defaultValue={value.condition}>
+            <select name="condition" required value={draft.condition} onChange={(event) => updateDraft("condition", event.target.value)}>
               <option>近全新</option>
               <option>{isSecondhand ? "狀況良好" : "書況良好"}</option>
               <option>{isSecondhand ? "正常使用痕跡" : "有筆記"}</option>
@@ -3528,14 +3823,24 @@ function BookFormModal({
               <option>損壞嚴重</option>
             </select>
           </label>
-          <label>價格（NT$）*<input name="price" required type="number" min="0" defaultValue={value.price || ""} /></label>
-          <label className="full">面交地點 *<input name="meetup" required defaultValue={value.meetup} placeholder="例如：圖書館一樓" /></label>
+          <label>價格（NT$）*<input name="price" required type="number" min="0" value={draft.price} onChange={(event) => updateDraft("price", event.target.value)} /></label>
+          <label className="full">面交地點 *<input name="meetup" required value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
           <label className="full">
             {isSecondhand ? "商品圖片" : "封面圖片"} *
-            <span className="image-upload">
-              <input name="image" required={!book} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} />
+            <span
+              className="image-upload"
+              role="button"
+              tabIndex={0}
+              onClick={() => imageInputRef.current?.click()}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  imageInputRef.current?.click();
+                }
+              }}
+            >
               <ImagePlus size={22} />
-              <b>{book ? "選擇新圖片（不選則保留原圖）" : "選擇圖片檔"}</b>
+              <b>{imageFile ? imageFile.name : book ? "選擇新圖片（不選則保留原圖）" : "選擇圖片檔"}</b>
               <small>支援 JPG、PNG、WebP，最大 5MB</small>
             </span>
           </label>
@@ -3545,7 +3850,7 @@ function BookFormModal({
               <img src={preview} alt={isSecondhand ? "商品圖片預覽" : "書籍封面預覽"} />
             </div>
           )}
-          <label className="full">{isSecondhand ? "商品說明" : "書況說明"} *<textarea name="description" required rows={3} defaultValue={value.description} /></label>
+          <label className="full">{isSecondhand ? "商品說明" : "書況說明"} *<textarea name="description" required rows={3} value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} /></label>
           <button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button>
         </fieldset>
       </form>

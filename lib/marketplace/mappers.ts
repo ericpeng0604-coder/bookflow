@@ -14,6 +14,7 @@ import type {
   Conversation,
   ContactMethod,
   Feedback,
+  StudentVerification,
   UserRole,
 } from "@/lib/types";
 
@@ -125,6 +126,25 @@ export function mapFeedback(row: Record<string, unknown>): Feedback {
     message: String(row.message || ""),
     status: String(row.status || "pending") as Feedback["status"],
     resolutionNote: String(row.resolution_note || ""),
+    createdAt: String(row.created_at),
+  };
+}
+
+export function mapStudentVerification(row: Record<string, unknown>): StudentVerification {
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    userName: String(row.user_name || "使用者"),
+    userEmail: String(row.user_email || ""),
+    imagePath: String(row.image_path || ""),
+    ocrText: String(row.ocr_text || ""),
+    qualityFlags: typeof row.quality_flags === "object" && row.quality_flags !== null
+      ? row.quality_flags as Record<string, unknown>
+      : {},
+    status: String(row.status || "pending") as StudentVerification["status"],
+    reviewNote: String(row.review_note || ""),
+    reviewedBy: row.reviewed_by ? String(row.reviewed_by) : null,
+    reviewedAt: row.reviewed_at ? String(row.reviewed_at) : null,
     createdAt: String(row.created_at),
   };
 }

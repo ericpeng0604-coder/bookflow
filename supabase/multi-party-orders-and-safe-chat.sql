@@ -807,7 +807,7 @@ declare item record; reminded int := 0; expired int := 0; released int := 0; com
 begin
   for item in select * from public.purchase_requests
     where status = 'pending' and created_at <= reference_time - interval '24 hours'
-      and created_at > reference_time - interval '72 hours' and reminded_at is null
+      and created_at > reference_time - interval '7 days' and reminded_at is null
   loop
     update public.purchase_requests set reminded_at = reference_time where id = item.id;
     insert into public.notifications (
@@ -825,18 +825,18 @@ begin
   end loop;
 
   for item in select * from public.purchase_requests
-    where status = 'pending' and created_at <= reference_time - interval '72 hours'
+    where status = 'pending' and created_at <= reference_time - interval '7 days'
   loop
     update public.purchase_requests set status = 'expired', updated_at = reference_time where id = item.id;
     insert into public.notifications (
       recipient_id, type, book_id, request_id, title, message, dedupe_key
     ) values (
       item.buyer_id, 'order_expired', item.book_id, item.id, '購買請求已失效',
-      '賣家在 72 小時內未處理，此次購買請求已自動失效',
-      'order-expired-72:' || item.id::text
+      '賣家在 7 天內未處理，此次購買請求已自動失效，課本仍會保留在原刊登狀態',
+      'order-expired-7d:' || item.id::text
     ) on conflict (dedupe_key) where dedupe_key is not null do nothing;
     insert into public.order_events (request_id, event_type, dedupe_key)
-    values (item.id, 'expired', 'order-expired-72:' || item.id::text)
+    values (item.id, 'expired', 'order-expired-7d:' || item.id::text)
     on conflict (dedupe_key) where dedupe_key is not null do nothing;
     expired := expired + 1;
   end loop;
