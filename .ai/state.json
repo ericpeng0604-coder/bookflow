@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260616-secondhand-marketplace-and-desktop-menu",
-  "taskTitle": "secondhand marketplace and desktop menu",
-  "baseCommit": "ab710726ba40ea6df5db9288ee007e04a39be92e",
-  "updatedAt": "2026-06-16T05:39:00.919Z",
+  "taskId": "20260617-free-ocr-book-listing-and-student-verifi",
+  "taskTitle": "free OCR book listing and student verification",
+  "baseCommit": "0cc305b9deece291a5a65db4ee198d390f3640de",
+  "updatedAt": "2026-06-17T10:35:22.152Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260616-0539-20260616-secondhand-marketplace-and-desk.md"
+  "historyFile": ".ai/history/20260617-1035-20260617-free-ocr-book-listing-and-stude.md"
 }
