@@ -65,10 +65,34 @@ export function buildBookCoverPrompt(localOcrText: string) {
     "Use null for any field that is not clearly visible.",
     "Set is_book_cover to false for unrelated, unreadable, or non-book images.",
     "Confidence must reflect the visible evidence, not familiarity with the book.",
+    "Return only one JSON object with exactly these keys: is_book_cover, confidence, title, author, edition, publisher.",
     localHint
       ? `Untrusted local OCR hint (may be wrong or contain garbage): ${localHint}`
       : "The local OCR produced no usable hint.",
   ].join("\n");
+}
+
+function bookCoverSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      is_book_cover: { type: "boolean" },
+      confidence: { type: "integer", minimum: 0, maximum: 100 },
+      title: { type: ["string", "null"] },
+      author: { type: ["string", "null"] },
+      edition: { type: ["string", "null"] },
+      publisher: { type: ["string", "null"] },
+    },
+    required: [
+      "is_book_cover",
+      "confidence",
+      "title",
+      "author",
+      "edition",
+      "publisher",
+    ],
+  };
 }
 
 export function buildOpenAiBookCoverRequest(params: {
@@ -96,28 +120,40 @@ export function buildOpenAiBookCoverRequest(params: {
         type: "json_schema",
         name: "book_cover_fields",
         strict: true,
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            is_book_cover: { type: "boolean" },
-            confidence: { type: "integer", minimum: 0, maximum: 100 },
-            title: { type: ["string", "null"] },
-            author: { type: ["string", "null"] },
-            edition: { type: ["string", "null"] },
-            publisher: { type: ["string", "null"] },
-          },
-          required: [
-            "is_book_cover",
-            "confidence",
-            "title",
-            "author",
-            "edition",
-            "publisher",
-          ],
-        },
+        schema: bookCoverSchema(),
       },
     },
+  };
+}
+
+export function buildGatewayBookCoverRequest(params: {
+  model: string;
+  imageDataUrl: string;
+  localOcrText: string;
+}) {
+  return {
+    model: params.model.includes("/") ? params.model : `openai/${params.model}`,
+    reasoning: { effort: "low" },
+    max_output_tokens: 500,
+    providerOptions: {
+      gateway: {
+        zeroDataRetention: true,
+      },
+    },
+    input: [{
+      type: "message",
+      role: "user",
+      content: [
+        { type: "text", text: buildBookCoverPrompt(params.localOcrText) },
+        {
+          type: "image_url",
+          image_url: {
+            url: params.imageDataUrl,
+            detail: "high",
+          },
+        },
+      ],
+    }],
   };
 }
 
@@ -136,4 +172,12 @@ export function extractOpenAiOutputText(value: unknown) {
     }
   }
   return "";
+}
+
+export function parseBookCoverOutputText(value: string) {
+  const trimmed = value.trim();
+  const withoutFence = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  return JSON.parse(withoutFence) as unknown;
 }

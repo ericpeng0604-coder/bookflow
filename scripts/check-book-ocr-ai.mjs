@@ -5,9 +5,11 @@ import { readFileSync } from "node:fs";
 import {
   BOOK_OCR_AI_DEFAULT_MODEL,
   buildBookCoverPrompt,
+  buildGatewayBookCoverRequest,
   buildOpenAiBookCoverRequest,
   extractOpenAiOutputText,
   normalizeAiBookCover,
+  parseBookCoverOutputText,
 } from "../lib/server/book-ocr-ai.ts";
 
 assert.equal(BOOK_OCR_AI_DEFAULT_MODEL, "gpt-5.4-mini");
@@ -50,6 +52,19 @@ assert.equal(request.input[0].content[1].detail, "high");
 assert.equal(request.text.format.strict, true);
 assert.equal(request.text.format.schema.additionalProperties, false);
 
+const gatewayRequest = buildGatewayBookCoverRequest({
+  model: BOOK_OCR_AI_DEFAULT_MODEL,
+  imageDataUrl: "data:image/jpeg;base64,AA==",
+  localOcrText: "",
+});
+assert.equal(gatewayRequest.model, "openai/gpt-5.4-mini");
+assert.equal(gatewayRequest.input[0].content[1].image_url.detail, "high");
+assert.equal(gatewayRequest.providerOptions.gateway.zeroDataRetention, true);
+assert.equal(
+  parseBookCoverOutputText("```json\n{\"is_book_cover\":false}\n```").is_book_cover,
+  false,
+);
+
 assert.equal(
   extractOpenAiOutputText({
     output: [{ content: [{ type: "output_text", text: "{\"title\":\"普通物理學\"}" }] }],
@@ -70,6 +85,8 @@ assert.match(route, /authClient\.auth\.getUser\(token\)/, "AI route must authent
 assert.match(route, /consume_book_ocr_quota/, "AI route must consume persistent quota before calling OpenAI");
 assert.match(route, /image\.size > BOOK_OCR_AI_MAX_FILE_BYTES/, "AI route must enforce image size");
 assert.match(route, /OPENAI_API_KEY/, "AI route must keep the OpenAI key server-side");
+assert.match(route, /VERCEL_OIDC_TOKEN/, "Vercel deployments must support zero-config OIDC auth");
+assert.match(route, /ai-gateway\.vercel\.sh/, "OIDC fallback must use Vercel AI Gateway");
 assert.doesNotMatch(route, /console\.(log|info|debug)/, "AI route must not log uploaded image data");
 assert.match(client, /Authorization: `Bearer \$\{token\}`/, "browser request must forward the signed-in session");
 assert.match(app, /result\.needsAiFallback/, "cloud AI must only run after local OCR requests fallback");

@@ -4,14 +4,17 @@ import {
   BOOK_OCR_AI_ALLOWED_TYPES,
   BOOK_OCR_AI_DEFAULT_MODEL,
   BOOK_OCR_AI_MAX_FILE_BYTES,
+  buildGatewayBookCoverRequest,
   buildOpenAiBookCoverRequest,
   extractOpenAiOutputText,
   normalizeAiBookCover,
+  parseBookCoverOutputText,
 } from "@/lib/server/book-ocr-ai";
 
 export const runtime = "nodejs";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const VERCEL_AI_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/responses";
 const DEFAULT_DAILY_LIMIT = 20;
 
 function configuredDailyLimit() {
@@ -47,8 +50,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "請先登入再使用 AI 封面補強" }, { status: 401 });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  const openAiKey = process.env.OPENAI_API_KEY;
+  const gatewayToken = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
+  if (!openAiKey && !gatewayToken) {
     return NextResponse.json({ error: "AI 封面補強尚未完成服務設定" }, { status: 503 });
   }
 
@@ -89,23 +93,26 @@ export async function POST(request: Request) {
   const bytes = Buffer.from(await image.arrayBuffer());
   const imageDataUrl = `data:${image.type};base64,${bytes.toString("base64")}`;
   const model = process.env.BOOK_OCR_AI_MODEL?.trim() || BOOK_OCR_AI_DEFAULT_MODEL;
+  const useGateway = !openAiKey;
+  const requestBody = useGateway
+    ? buildGatewayBookCoverRequest({ model, imageDataUrl, localOcrText })
+    : buildOpenAiBookCoverRequest({ model, imageDataUrl, localOcrText });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
 
   try {
-    const aiResponse = await fetch(OPENAI_RESPONSES_URL, {
+    const aiResponse = await fetch(
+      useGateway ? VERCEL_AI_GATEWAY_URL : OPENAI_RESPONSES_URL,
+      {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${openAiKey || gatewayToken}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify(buildOpenAiBookCoverRequest({
-        model,
-        imageDataUrl,
-        localOcrText,
-      })),
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
-    });
+      },
+    );
     const aiPayload = await aiResponse.json().catch(() => ({}));
     if (!aiResponse.ok) {
       return NextResponse.json({ error: "AI 封面補強暫時無法完成" }, { status: 502 });
@@ -113,7 +120,7 @@ export async function POST(request: Request) {
     const outputText = extractOpenAiOutputText(aiPayload);
     let structured: unknown;
     try {
-      structured = JSON.parse(outputText);
+      structured = parseBookCoverOutputText(outputText);
     } catch {
       return NextResponse.json({ error: "AI 回傳格式無法辨識" }, { status: 502 });
     }

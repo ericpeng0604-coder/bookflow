@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260618-hybrid-ai-book-cover-recognition-and-pro",
-  "taskTitle": "hybrid AI book cover recognition and production deployment",
-  "baseCommit": "7eef7fe1a3d874ad40a294f25e4844f11d825ec8",
-  "updatedAt": "2026-06-18T13:10:26.596Z",
+  "taskId": "20260618-add-zero-config-vercel-ai-gateway-fallba",
+  "taskTitle": "add zero-config Vercel AI Gateway fallback",
+  "baseCommit": "9907f6772d2e3a05d9e7b354633fa039ef356400",
+  "updatedAt": "2026-06-18T13:19:44.391Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260618-1310-20260618-hybrid-ai-book-cover-recognitio.md"
+  "historyFile": ".ai/history/20260618-1319-20260618-add-zero-config-vercel-ai-gatew.md"
 }
