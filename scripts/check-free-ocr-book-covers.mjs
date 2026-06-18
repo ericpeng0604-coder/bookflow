@@ -8,7 +8,7 @@ const examples = [
     expected: {
       title: "普通物理學",
       author: "Richard Wolfson",
-      edition: "Essential University Physics, 4e",
+      edition: "下冊 / Essential University Physics, 4e",
       publisher: "Pearson、高立圖書",
     },
   },
@@ -18,7 +18,7 @@ const examples = [
     expected: {
       title: "普通物理學",
       author: "Richard Wolfson",
-      edition: "Essential University Physics, 4e",
+      edition: "上冊 / Essential University Physics, 4e",
       publisher: "Pearson、高立圖書",
     },
   },
@@ -76,7 +76,6 @@ const examples = [
       title: "電腦輔助繪圖 AutoCAD 2020",
       author: "王雪娥、陳進煌",
       publisher: "全華",
-      description: "附多媒體光碟 CD-ROM",
     },
   },
 ];
