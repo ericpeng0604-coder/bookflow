@@ -18,6 +18,7 @@
     "load-test:marketplace": "node scripts/load-test-marketplace.mjs",
     "check:filters": "node scripts/check-filters.mjs",
     "check:listing-ui": "node scripts/check-listing-navigation-ui.mjs",
+    "check:mobile-ocr": "node scripts/check-mobile-book-ocr.mjs",
     "check:lifecycle": "node scripts/check-listing-lifecycle.mjs",
     "check:trade": "node scripts/check-trade-workflow.mjs",
     "check:chat-state": "node scripts/check-chat-switching.mjs",

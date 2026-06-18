@@ -362,6 +362,23 @@ exactly one visible file-selection control before relying on source classes.
 input is intentionally hidden, verify its computed browser layout against the
 form styles and add a regression check that rejects duplicate upload controls.
 
+### LESSON-022: OCR output is untrusted until field-level validation
+
+**Observed problem:** Mobile book-cover OCR processed a full-resolution photo
+with a newly created bilingual worker, then wrote a high-confidence
+mixed-script garbage string into the title field.
+
+**Cause:** Engine confidence was treated as field correctness, and every run
+paid the cost of loading broad language data and processing all source pixels.
+
+**Detection:** Benchmark representative phone photos, preserve the raw OCR
+text, and test whether malformed mixed-script strings can enter title, author,
+or edition fields.
+
+**Prevention rule:** Cap OCR image dimensions, warm and reuse workers, use a
+small fast language pass before a lazy fallback, and require known-cover or
+field-level plausibility checks before changing user-entered form values.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

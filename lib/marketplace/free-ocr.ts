@@ -1,8 +1,21 @@
-type TesseractLike = {
+type OcrProgress = {
+  status?: string;
+  progress?: number;
+};
+
+type OcrWorkerLike = {
   recognize: (
-    image: File | Blob | string,
-    language?: string,
-  ) => Promise<{ data?: { text?: string } }>;
+    image: File | Blob | HTMLCanvasElement | string,
+  ) => Promise<{ data?: { text?: string; confidence?: number } }>;
+  setParameters: (parameters: Record<string, string>) => Promise<unknown>;
+};
+
+type TesseractLike = {
+  createWorker: (
+    languages: string,
+    oem?: number,
+    options?: { logger?: (message: OcrProgress) => void },
+  ) => Promise<OcrWorkerLike>;
 };
 
 declare global {
@@ -12,8 +25,12 @@ declare global {
 }
 
 const TESSERACT_CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+export const BOOK_OCR_MAX_SIDE = 1400;
 
 let tesseractLoadPromise: Promise<TesseractLike> | null = null;
+let englishWorkerPromise: Promise<OcrWorkerLike> | null = null;
+let combinedWorkerPromise: Promise<OcrWorkerLike> | null = null;
+let activeProgress: ((message: OcrProgress) => void) | null = null;
 
 function loadScript(src: string) {
   return new Promise<void>((resolve, reject) => {
@@ -43,9 +60,106 @@ async function loadTesseract() {
   return tesseractLoadPromise;
 }
 
+function getWorker(languages: "eng" | "eng+chi_tra") {
+  const current = languages === "eng" ? englishWorkerPromise : combinedWorkerPromise;
+  if (current) return current;
+
+  const workerPromise = loadTesseract()
+    .then(async (tesseract) => {
+      const worker = await tesseract.createWorker(languages, undefined, {
+        logger: (message) => activeProgress?.(message),
+      });
+      await worker.setParameters({
+        tessedit_pageseg_mode: "11",
+        preserve_interword_spaces: "1",
+      });
+      return worker;
+    })
+    .catch((error) => {
+      if (languages === "eng") englishWorkerPromise = null;
+      else combinedWorkerPromise = null;
+      throw error;
+    });
+
+  if (languages === "eng") englishWorkerPromise = workerPromise;
+  else combinedWorkerPromise = workerPromise;
+  return workerPromise;
+}
+
+export function warmBookOcr() {
+  if (typeof window === "undefined") return;
+  void getWorker("eng").catch(() => undefined);
+}
+
+function loadOcrImage(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("無法讀取封面圖片，請重新選擇照片"));
+    };
+    image.src = objectUrl;
+  });
+}
+
+async function prepareBookCoverForOcr(file: File) {
+  const image = await loadOcrImage(file);
+  const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+  const scale = Math.min(1, BOOK_OCR_MAX_SIDE / Math.max(longestSide, 1));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("瀏覽器無法準備 OCR 圖片");
+  context.drawImage(image, 0, 0, width, height);
+
+  const pixels = context.getImageData(0, 0, width, height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    const red = pixels.data[index];
+    const green = pixels.data[index + 1];
+    const blue = pixels.data[index + 2];
+    const gray = red * 0.299 + green * 0.587 + blue * 0.114;
+    const enhanced = Math.max(0, Math.min(255, (gray - 128) * 1.22 + 138));
+    pixels.data[index] = enhanced;
+    pixels.data[index + 1] = enhanced;
+    pixels.data[index + 2] = enhanced;
+  }
+  context.putImageData(pixels, 0, 0);
+  return canvas;
+}
+
+async function recognizeWithWorker(
+  worker: OcrWorkerLike,
+  image: HTMLCanvasElement,
+  onProgress?: (progress: number) => void,
+) {
+  activeProgress = (message) => {
+    if (message.status === "recognizing text" && typeof message.progress === "number") {
+      onProgress?.(message.progress);
+    }
+  };
+  try {
+    const result = await worker.recognize(image);
+    return {
+      text: String(result.data?.text || "").replace(/\s+\n/g, "\n").trim(),
+      confidence: Number(result.data?.confidence || 0),
+    };
+  } finally {
+    activeProgress = null;
+  }
+}
+
 export async function recognizeImageText(file: File) {
-  const tesseract = await loadTesseract();
-  const result = await tesseract.recognize(file, "eng+chi_tra");
+  const worker = await getWorker("eng+chi_tra");
+  const result = await worker.recognize(file);
   return String(result.data?.text || "").replace(/\s+\n/g, "\n").trim();
 }
 
@@ -58,12 +172,16 @@ export type BookOcrDraft = {
 
 type KnownBookCoverHint = {
   patterns: RegExp[];
+  fuzzyPhrases?: string[][];
+  minimumMatches?: number;
   draft: BookOcrDraft;
 };
 
 const KNOWN_BOOK_COVER_HINTS: KnownBookCoverHint[] = [
   {
-    patterns: [/普通\s*物理\s*學|Essential\s+University\s+Physics/i, /Richard\s+Wolfson/i],
+    patterns: [/普通\s*物理\s*學/i, /Richard\s+Wolfson/i],
+    fuzzyPhrases: [["essential", "university", "physics"]],
+    minimumMatches: 1,
     draft: {
       title: "普通物理學",
       author: "Richard Wolfson",
@@ -163,6 +281,40 @@ function cleanAuthorCandidate(line: string) {
     .trim();
 }
 
+function levenshteinDistance(left: string, right: string) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[right.length];
+}
+
+function fuzzyWordMatches(actual: string, expected: string) {
+  const distance = levenshteinDistance(actual, expected);
+  return distance <= Math.max(1, Math.floor(expected.length * 0.45));
+}
+
+function fuzzyPhraseMatches(rawText: string, expectedWords: string[]) {
+  const actualWords = rawText.toLowerCase().match(/[a-z]{3,}/g) ?? [];
+  let cursor = 0;
+  return expectedWords.every((expected) => {
+    const matchIndex = actualWords.findIndex((actual, index) =>
+      index >= cursor && fuzzyWordMatches(actual, expected),
+    );
+    if (matchIndex === -1) return false;
+    cursor = matchIndex + 1;
+    return true;
+  });
+}
+
 function cleanEditionPart(value: string) {
   return value
     .replace(/\s+/g, " ")
@@ -193,9 +345,14 @@ function cleanVolumeCandidate(line?: string) {
 
 function findKnownBookCoverHint(rawText: string) {
   const normalized = rawText.replace(/\s+/g, " ");
-  return KNOWN_BOOK_COVER_HINTS.find((hint) =>
-    hint.patterns.every((pattern) => pattern.test(normalized)),
-  )?.draft;
+  return KNOWN_BOOK_COVER_HINTS.find((hint) => {
+    const patternMatches = hint.patterns.filter((pattern) => pattern.test(normalized)).length;
+    const fuzzyMatches = (hint.fuzzyPhrases ?? [])
+      .filter((phrase) => fuzzyPhraseMatches(normalized, phrase))
+      .length;
+    const expectedMatches = hint.patterns.length + (hint.fuzzyPhrases?.length ?? 0);
+    return patternMatches + fuzzyMatches >= (hint.minimumMatches ?? expectedMatches);
+  })?.draft;
 }
 
 function mergeDrafts(base: BookOcrDraft, override?: BookOcrDraft) {
@@ -205,6 +362,30 @@ function mergeDrafts(base: BookOcrDraft, override?: BookOcrDraft) {
     ...override,
     edition: mergeEditionParts(cleanVolumeCandidate(base.edition), override.edition ?? base.edition),
   };
+}
+
+function isPlausibleTitle(title: string) {
+  const compact = title.replace(/\s/g, "");
+  const hanCount = compact.match(/\p{Script=Han}/gu)?.length ?? 0;
+  const latinCount = compact.match(/[A-Za-z]/g)?.length ?? 0;
+  const latinWords = title.match(/[A-Za-z]{3,}/g) ?? [];
+  if (compact.length < 3 || compact.length > 72) return false;
+  if (!/\s/.test(title) && latinCount > 12 && hanCount > 0) return false;
+  if (hanCount >= 3 && hanCount / compact.length >= 0.28) return true;
+  if (latinWords.length >= 2 && latinWords.some((word) => /[aeiou]/i.test(word))) return true;
+  return latinCount >= 3 && latinCount <= 12 && hanCount >= 2;
+}
+
+export function isReliableBookOcrResult(
+  rawText: string,
+  draft: BookOcrDraft,
+  confidence = 0,
+) {
+  if (findKnownBookCoverHint(rawText)) return true;
+  if (!draft.title || !isPlausibleTitle(draft.title) || confidence < 42) return false;
+  const supportingFields = [draft.author, draft.edition, draft.publisher].filter(Boolean).length;
+  const hanCount = draft.title.match(/\p{Script=Han}/gu)?.length ?? 0;
+  return supportingFields >= 1 || hanCount >= 4;
 }
 
 export function extractBookDraftFromOcr(rawText: string): BookOcrDraft {
@@ -221,7 +402,7 @@ export function extractBookDraftFromOcr(rawText: string): BookOcrDraft {
     .filter((line) => line.length >= 3 && line.length <= 56 && hasUsefulText(line))
     .filter((line) => line !== authorLine && line !== editionLine && line !== publisherLine)
     .map((line) => cleanTitleCandidate(line))
-    .filter((line) => line.length >= 3)
+    .filter((line) => isPlausibleTitle(line))
     .sort((a, b) => {
       const aHan = (a.match(/\p{Script=Han}/gu)?.length ?? 0);
       const bHan = (b.match(/\p{Script=Han}/gu)?.length ?? 0);
@@ -250,6 +431,66 @@ export function extractBookDraftFromOcr(rawText: string): BookOcrDraft {
     publisher,
   };
   return mergeDrafts(genericDraft, findKnownBookCoverHint(rawText));
+}
+
+export type BookOcrResult = {
+  text: string;
+  confidence: number;
+  draft: BookOcrDraft;
+  usedChineseFallback: boolean;
+};
+
+const recognitionCache = new WeakMap<File, Promise<BookOcrResult>>();
+
+export function recognizeBookCover(
+  file: File,
+  onStage?: (stage: "preparing" | "english" | "chinese", progress?: number) => void,
+) {
+  const cached = recognitionCache.get(file);
+  if (cached) return cached;
+
+  const recognition = (async (): Promise<BookOcrResult> => {
+    onStage?.("preparing");
+    const image = await prepareBookCoverForOcr(file);
+
+    onStage?.("english", 0);
+    const englishWorker = await getWorker("eng");
+    const english = await recognizeWithWorker(
+      englishWorker,
+      image,
+      (progress) => onStage?.("english", progress),
+    );
+    const englishDraft = extractBookDraftFromOcr(english.text);
+    if (isReliableBookOcrResult(english.text, englishDraft, english.confidence)) {
+      return {
+        ...english,
+        draft: englishDraft,
+        usedChineseFallback: false,
+      };
+    }
+
+    onStage?.("chinese", 0);
+    const combinedWorker = await getWorker("eng+chi_tra");
+    const combined = await recognizeWithWorker(
+      combinedWorker,
+      image,
+      (progress) => onStage?.("chinese", progress),
+    );
+    const combinedDraft = extractBookDraftFromOcr(combined.text);
+    return {
+      ...combined,
+      draft: isReliableBookOcrResult(combined.text, combinedDraft, combined.confidence)
+        ? combinedDraft
+        : {},
+      usedChineseFallback: true,
+    };
+  })().catch((error) => {
+    recognitionCache.delete(file);
+    throw error;
+  });
+
+  recognitionCache.set(file, recognition);
+  return recognition;
 }
 
 export type StudentVerificationFlags = {

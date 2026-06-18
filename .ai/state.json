@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260618-simplify-desktop-navigation-and-remove-d",
-  "taskTitle": "simplify desktop navigation and remove duplicate listing upload control",
-  "baseCommit": "2c8c760c082f488a7d27266688316f828f5356c0",
-  "updatedAt": "2026-06-18T03:07:18.223Z",
+  "taskId": "20260618-improve-mobile-book-ocr-speed-and-reliab",
+  "taskTitle": "improve mobile book OCR speed and reliability",
+  "baseCommit": "857a96a1ed84b0414a8571ef6d88a30bfb479552",
+  "updatedAt": "2026-06-18T05:13:27.944Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260618-0307-20260618-simplify-desktop-navigation-and.md"
+  "historyFile": ".ai/history/20260618-0513-20260618-improve-mobile-book-ocr-speed-a.md"
 }
