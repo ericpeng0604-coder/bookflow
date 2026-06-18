@@ -438,9 +438,14 @@ export type BookOcrResult = {
   confidence: number;
   draft: BookOcrDraft;
   usedChineseFallback: boolean;
+  needsAiFallback: boolean;
 };
 
 const recognitionCache = new WeakMap<File, Promise<BookOcrResult>>();
+
+function hasEnoughBookFields(draft: BookOcrDraft) {
+  return [draft.title, draft.author, draft.edition, draft.publisher].filter(Boolean).length >= 2;
+}
 
 export function recognizeBookCover(
   file: File,
@@ -461,11 +466,17 @@ export function recognizeBookCover(
       (progress) => onStage?.("english", progress),
     );
     const englishDraft = extractBookDraftFromOcr(english.text);
-    if (isReliableBookOcrResult(english.text, englishDraft, english.confidence)) {
+    const englishReliable = isReliableBookOcrResult(
+      english.text,
+      englishDraft,
+      english.confidence,
+    );
+    if (englishReliable && hasEnoughBookFields(englishDraft)) {
       return {
         ...english,
         draft: englishDraft,
         usedChineseFallback: false,
+        needsAiFallback: false,
       };
     }
 
@@ -477,12 +488,16 @@ export function recognizeBookCover(
       (progress) => onStage?.("chinese", progress),
     );
     const combinedDraft = extractBookDraftFromOcr(combined.text);
+    const combinedReliable = isReliableBookOcrResult(
+      combined.text,
+      combinedDraft,
+      combined.confidence,
+    );
     return {
       ...combined,
-      draft: isReliableBookOcrResult(combined.text, combinedDraft, combined.confidence)
-        ? combinedDraft
-        : {},
+      draft: combinedReliable ? combinedDraft : {},
       usedChineseFallback: true,
+      needsAiFallback: !combinedReliable || !hasEnoughBookFields(combinedDraft),
     };
   })().catch((error) => {
     recognitionCache.delete(file);

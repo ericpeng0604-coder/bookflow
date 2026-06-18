@@ -19,6 +19,7 @@
     "check:filters": "node scripts/check-filters.mjs",
     "check:listing-ui": "node scripts/check-listing-navigation-ui.mjs",
     "check:mobile-ocr": "node scripts/check-mobile-book-ocr.mjs",
+    "check:book-ocr-ai": "node --experimental-strip-types scripts/check-book-ocr-ai.mjs",
     "check:lifecycle": "node scripts/check-listing-lifecycle.mjs",
     "check:trade": "node scripts/check-trade-workflow.mjs",
     "check:chat-state": "node scripts/check-chat-switching.mjs",

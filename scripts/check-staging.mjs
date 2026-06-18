@@ -41,6 +41,13 @@ const rpcProbes = [
     name: "list_feedback_for_moderation",
     body: {},
   },
+  {
+    name: "consume_book_ocr_quota",
+    body: {
+      target_user_id: "00000000-0000-0000-0000-000000000000",
+      daily_limit: 20,
+    },
+  },
 ];
 
 for (const rpc of rpcProbes) {
@@ -60,6 +67,7 @@ for (const table of [
   "conversations",
   "conversation_user_preferences",
   "user_feedback",
+  "book_ocr_daily_usage",
 ]) {
   const serviceResponse = await request(`/rest/v1/${table}?select=*&limit=0`, serviceKey);
   if (!serviceResponse.ok) {

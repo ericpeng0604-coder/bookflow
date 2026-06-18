@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260618-improve-mobile-book-ocr-speed-and-reliab",
-  "taskTitle": "improve mobile book OCR speed and reliability",
-  "baseCommit": "857a96a1ed84b0414a8571ef6d88a30bfb479552",
-  "updatedAt": "2026-06-18T05:13:27.944Z",
+  "taskId": "20260618-hybrid-ai-book-cover-recognition-and-pro",
+  "taskTitle": "hybrid AI book cover recognition and production deployment",
+  "baseCommit": "7eef7fe1a3d874ad40a294f25e4844f11d825ec8",
+  "updatedAt": "2026-06-18T13:10:26.596Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260618-0513-20260618-improve-mobile-book-ocr-speed-a.md"
+  "historyFile": ".ai/history/20260618-1310-20260618-hybrid-ai-book-cover-recognitio.md"
 }

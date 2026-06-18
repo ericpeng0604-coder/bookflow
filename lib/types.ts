@@ -64,6 +64,7 @@ export type Book = {
   course: string;
   teacher: string;
   edition: string;
+  publisher: string;
   condition: string;
   price: number;
   imageUrl: string;

@@ -22,6 +22,7 @@ create table public.books (
   course text not null default '',
   teacher text not null default '',
   edition text not null default '',
+  publisher text not null default '',
   condition text not null,
   price integer not null check (price >= 0),
   image_url text not null default '',

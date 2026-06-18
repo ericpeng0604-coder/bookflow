@@ -30,6 +30,7 @@ export function mapBook(row: Record<string, unknown>): Book {
     course: String(row.course || ""),
     teacher: String(row.teacher || ""),
     edition: String(row.edition || ""),
+    publisher: String(row.publisher || ""),
     condition: String(row.condition),
     price: Number(row.price),
     imageUrl: String(row.image_url),
