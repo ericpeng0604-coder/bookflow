@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：improve mobile book OCR speed and reliability
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`857a96a1ed84b0414a8571ef6d88a30bfb479552`
+- 封存時間：2026-06-18T05:13:27.942Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

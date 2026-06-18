@@ -54,11 +54,12 @@ import {
   enableBrowserPush,
 } from "@/lib/marketplace/browser-push";
 import {
-  extractBookDraftFromOcr,
   imageQualityFlags,
+  recognizeBookCover,
   recognizeImageText,
   studentVerificationFlagLabels,
   type StudentVerificationFlags,
+  warmBookOcr,
 } from "@/lib/marketplace/free-ocr";
 import {
   deleteChatImageUploads,
@@ -3663,6 +3664,7 @@ function BookFormModal({
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrMessage, setOcrMessage] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const ocrRequestRef = useRef(0);
   const [draft, setDraft] = useState({
     title: value.title,
     author: value.author,
@@ -3681,8 +3683,14 @@ function BookFormModal({
   function selectImage(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    ocrRequestRef.current += 1;
+    setOcrBusy(false);
     setImageFile(file);
     setPreview(URL.createObjectURL(file));
+    if (!isSecondhand) {
+      setOcrMessage("照片已準備好；系統正在背景載入快速辨識工具。");
+      warmBookOcr();
+    }
   }
 
   function updateDraft(field: keyof typeof draft, nextValue: string) {
@@ -3691,11 +3699,18 @@ function BookFormModal({
 
   async function readBookOcr() {
     if (!imageFile || isSecondhand) return;
+    const requestId = ++ocrRequestRef.current;
     setOcrBusy(true);
-    setOcrMessage("");
+    setOcrMessage("正在準備封面圖片...");
     try {
-      const text = await recognizeImageText(imageFile);
-      const ocrDraft = extractBookDraftFromOcr(text);
+      const result = await recognizeBookCover(imageFile, (stage, progress) => {
+        const percent = Math.max(1, Math.round((progress ?? 0) * 100));
+        if (stage === "preparing") setOcrMessage("正在縮小並強化封面，避免手機處理過多像素...");
+        if (stage === "english") setOcrMessage(`正在快速辨識封面文字 ${percent}%`);
+        if (stage === "chinese") setOcrMessage(`正在補強繁體中文辨識 ${percent}%`);
+      });
+      if (requestId !== ocrRequestRef.current) return;
+      const ocrDraft = result.draft;
       setDraft((previous) => ({
         ...previous,
         title: ocrDraft.title || previous.title,
@@ -3703,12 +3718,13 @@ function BookFormModal({
         edition: ocrDraft.edition || previous.edition,
       }));
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
-        ? "已從封面填入可辨識的書名、作者或版本資訊；書況與備註仍由你自己填。"
-        : "有讀到封面文字，但沒有足夠資訊可自動填入；你仍可手動填寫");
+        ? `已填入可信的書名、作者或版本資訊${result.usedChineseFallback ? "（已使用中文補強）" : ""}；送出前請再確認。`
+        : "辨識結果可信度不足，因此沒有覆寫欄位。請拍近一點、避免反光，或改用手動填寫。");
     } catch (error) {
+      if (requestId !== ocrRequestRef.current) return;
       setOcrMessage(error instanceof Error ? error.message : "OCR 辨識失敗，請改用手動填寫");
     } finally {
-      setOcrBusy(false);
+      if (requestId === ocrRequestRef.current) setOcrBusy(false);
     }
   }
 

@@ -1,5 +1,8 @@
 import { strict as assert } from "node:assert";
-import { extractBookDraftFromOcr } from "../lib/marketplace/free-ocr.ts";
+import {
+  extractBookDraftFromOcr,
+  isReliableBookOcrResult,
+} from "../lib/marketplace/free-ocr.ts";
 
 const examples = [
   {
@@ -87,4 +90,26 @@ for (const example of examples) {
   }
 }
 
-console.log(`Free OCR book cover checks passed (${examples.length}/${examples.length}).`);
+const mobilePhysicsText = [
+  "Essantinl Umvorstty Physicd de",
+  "Pearson",
+].join("\n");
+const mobilePhysicsDraft = extractBookDraftFromOcr(mobilePhysicsText);
+assert.equal(mobilePhysicsDraft.title, "普通物理學", "fuzzy mobile OCR should recover the known physics title");
+assert.equal(mobilePhysicsDraft.author, "Richard Wolfson", "known cover hint should recover the author");
+assert.equal(
+  isReliableBookOcrResult(mobilePhysicsText, mobilePhysicsDraft, 27),
+  true,
+  "a unique fuzzy known-cover match should remain usable at low OCR confidence",
+);
+
+const mobileGarbageText = "ee7讖呈人mmY—VierieNGsewig2RERATSie";
+const mobileGarbageDraft = extractBookDraftFromOcr(mobileGarbageText);
+assert.equal(mobileGarbageDraft.title, undefined, "mixed-script mobile OCR garbage must not become a title");
+assert.equal(
+  isReliableBookOcrResult(mobileGarbageText, mobileGarbageDraft, 74),
+  false,
+  "high engine confidence must not override field plausibility checks",
+);
+
+console.log(`Free OCR book cover checks passed (${examples.length + 2}/${examples.length + 2}).`);
