@@ -8,6 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const checks = [
   { file: "check-filters.mjs" },
   { file: "check-free-ocr-book-covers.mjs", stripTypes: true },
+  { file: "check-listing-navigation-ui.mjs" },
   { file: "check-listing-lifecycle.mjs" },
   { file: "check-trade-workflow.mjs" },
   { file: "check-chat-switching.mjs" },
