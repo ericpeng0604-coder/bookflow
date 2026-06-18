@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：hybrid AI book cover recognition and production deployment
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`7eef7fe1a3d874ad40a294f25e4844f11d825ec8`
+- 封存時間：2026-06-18T13:10:26.595Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
@@ -15,7 +24,6 @@
 - 實作位於獨立且乾淨的 `codex/mobile-ocr-reliability` 工作樹，未碰主工作區的其他修改。
 - 保留 Tesseract 作為免費第一層；只有低信心或欄位不足時才產生 OpenAI 成本。
 - OpenAI 金鑰只存在伺服器環境，瀏覽器以 Supabase access token 呼叫受保護端點。
-- Vercel 正式環境沒有 OpenAI key 時，會以自動提供的 OIDC token 呼叫 AI Gateway。
 - 封面圖片只用於當次請求，BookFlow 不另行儲存或記錄圖片與模型原始回覆。
 - 出版社成為正式的 `books.publisher` 欄位，市集 RPC、搜尋、表單與顯示同步支援。
 
@@ -30,7 +38,6 @@
   - 新增 `/api/ai/book-cover`。
   - 驗證登入、格式、5MB 上限、25 秒逾時與伺服器設定。
   - 使用 Responses API、圖片輸入及 strict JSON schema。
-  - 支援 Vercel AI Gateway OpenResponses、OIDC 與 Zero Data Retention。
   - 不清楚的欄位必須回傳 null，不允許依常識猜測。
 - 成本與資料庫：
   - 新增 `book_ocr_daily_usage`。
@@ -76,7 +83,7 @@
 
 ## 風險或阻礙
 
-- Vercel 可直接使用 OIDC；本機或其他平台需提供 OpenAI 或 AI Gateway key。
+- 正式環境必須已有有效 `OPENAI_API_KEY`；沒有金鑰時端點會安全回傳 503。
 - Migration 必須先通過 staging 再套用 production，否則 AI 端點會因 quota RPC 不存在而回傳 503。
 - 真實模型辨識必須使用已登入帳號與正式或 preview 環境測試，不能由靜態測試取代。
 

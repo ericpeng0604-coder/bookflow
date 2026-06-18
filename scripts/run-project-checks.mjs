@@ -9,6 +9,7 @@ const checks = [
   { file: "check-filters.mjs" },
   { file: "check-free-ocr-book-covers.mjs", stripTypes: true },
   { file: "check-mobile-book-ocr.mjs" },
+  { file: "check-book-ocr-ai.mjs", stripTypes: true },
   { file: "check-listing-navigation-ui.mjs" },
   { file: "check-listing-lifecycle.mjs" },
   { file: "check-trade-workflow.mjs" },

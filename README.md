@@ -280,8 +280,18 @@ npm run load-test:marketplace
 - `CRON_SECRET`（至少 24 個隨機字元；Vercel Cron 會以此保護 `/api/cron/listing-lifecycle`）
 - `WEB_PUSH_VAPID_PUBLIC_KEY` / `WEB_PUSH_VAPID_PRIVATE_KEY` / `WEB_PUSH_SUBJECT`（瀏覽器推播）
 - `PUSH_DISPATCH_SECRET`（保護 `/api/cron/push`；Supabase `pg_cron` 排程應使用此 secret）
+- `OPENAI_API_KEY`（選填；設定時直接使用 OpenAI）
+- `AI_GATEWAY_API_KEY`（選填；本機或非 Vercel 環境使用 AI Gateway）
+- `BOOK_OCR_AI_MODEL=gpt-5.4-mini`
+- `BOOK_OCR_AI_DAILY_LIMIT=20`（每位登入使用者每日最多呼叫次數）
 
 `vercel.json` 會每天執行一次刊登生命週期排程（`/api/cron/listing-lifecycle`）。瀏覽器推播 hourly 排程由 Supabase `pg_cron` 觸發（見 `supabase/browser-push-and-30-day-confirmation.sql`），需在 Supabase Vault 設定 dispatch URL 與 secret。排程負責建立站內與 Email 提醒、封存逾期販售中課本，以及處理封存滿一年的資料清理。洽談中的課本不會被自動封存。
+
+課本封面辨識會先在使用者瀏覽器內執行免費 OCR。只有結果不可靠或欄位不足時，
+才會將該張封面短暫傳送到伺服器端設定的 OpenAI 視覺模型。BookFlow 不會另外
+保存這次 AI 請求的圖片或原始模型回覆；辨識結果只填入可編輯草稿。在 Vercel
+部署時若未設定 `OPENAI_API_KEY`，系統會使用平台自動提供的 `VERCEL_OIDC_TOKEN`
+呼叫 AI Gateway，並要求 Zero Data Retention，不需另外保存 API 金鑰。
 
 ## 一鍵回復正式網站上一版本
 

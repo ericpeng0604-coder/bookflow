@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：add zero-config Vercel AI Gateway fallback
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`9907f6772d2e3a05d9e7b354633fa039ef356400`
+- 封存時間：2026-06-18T13:19:44.390Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

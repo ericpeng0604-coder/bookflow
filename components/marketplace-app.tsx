@@ -61,6 +61,7 @@ import {
   type StudentVerificationFlags,
   warmBookOcr,
 } from "@/lib/marketplace/free-ocr";
+import { recognizeBookCoverWithAi } from "@/lib/marketplace/book-ocr-ai";
 import {
   deleteChatImageUploads,
   fetchTradeMessages,
@@ -201,6 +202,7 @@ const blankBook: Omit<
   course: "",
   teacher: "",
   edition: "",
+  publisher: "",
   condition: "書況良好",
   price: 0,
   imageUrl: "",
@@ -1177,6 +1179,7 @@ export function MarketplaceApp() {
         course: String(fields.course),
         teacher: String(fields.teacher),
         edition: String(fields.edition),
+        publisher: String(fields.publisher),
         condition: String(fields.condition),
         price: Number(fields.price),
         imageUrl,
@@ -1205,6 +1208,7 @@ export function MarketplaceApp() {
           course: payload.course,
           teacher: payload.teacher,
           edition: payload.edition,
+          publisher: payload.publisher,
           condition: payload.condition,
           price: payload.price,
           image_url: payload.imageUrl,
@@ -2287,7 +2291,7 @@ export function MarketplaceApp() {
                         <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : book.course}</span>
                       )}
                       <h3>{book.title}</h3>
-                      <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : `${book.author} · ${book.edition}`}</p>
+                      <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
                       <div className="card-meta"><span>{book.condition}</span><span><MapPin size={13} aria-hidden="true" />{book.meetup}</span></div>
                       <div className="card-footer"><strong>{money(book.price)}</strong><small>{timeAgo(book.createdAt)}刊登</small></div>
                     </div>
@@ -2350,7 +2354,7 @@ export function MarketplaceApp() {
                 <span className="course-tag">{[selectedBook.department, selectedBook.course].filter(Boolean).join(" · ")}</span>
               )}
               <h1>{selectedBook.title}</h1>
-              {selectedBook.listingType === "book" && <p className="detail-author">{selectedBook.author} · {selectedBook.edition}</p>}
+              {selectedBook.listingType === "book" && <p className="detail-author">{[selectedBook.author, selectedBook.edition, selectedBook.publisher].filter(Boolean).join(" · ")}</p>}
               <strong className="detail-price">{money(selectedBook.price)}</strong>
               <div className="detail-facts">
                 <div><small>{selectedBook.listingType === "secondhand" ? "物況" : "書況"}</small><b>{selectedBook.condition}</b></div>
@@ -2712,7 +2716,7 @@ export function MarketplaceApp() {
                       <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : book.course}</span>
                     )}
                     <h3>{book.title}</h3>
-                    <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : `${book.author} · ${book.edition}`}</p>
+                    <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
                     <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
                   </div>
                 </article>
@@ -2799,7 +2803,7 @@ export function MarketplaceApp() {
                   </div>
                   <div className="moderation-body">
                     <h3>{book.title}</h3>
-                    <p>{book.author} · {book.edition}</p>
+                    <p>{[book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
                     <dl>
                       <div><dt>賣家</dt><dd>{seller?.name || "使用者"}<br /><small>{seller?.email}</small></dd></div>
                       <div><dt>書況</dt><dd>{book.condition}</dd></div>
@@ -3669,6 +3673,7 @@ function BookFormModal({
     title: value.title,
     author: value.author,
     edition: value.edition,
+    publisher: value.publisher,
     department: value.department,
     course: value.course,
     teacher: value.teacher,
@@ -3710,16 +3715,38 @@ function BookFormModal({
         if (stage === "chinese") setOcrMessage(`正在補強繁體中文辨識 ${percent}%`);
       });
       if (requestId !== ocrRequestRef.current) return;
-      const ocrDraft = result.draft;
+      let ocrDraft = result.draft;
+      let usedAiFallback = false;
+      let remainingAiUses: number | null = null;
+      let aiFallbackError = "";
+      if (result.needsAiFallback && supabase) {
+        setOcrMessage("本機辨識不足，正在使用 AI 補強封面資料...");
+        try {
+          const aiResult = await recognizeBookCoverWithAi(supabase, imageFile, result.text);
+          if (requestId !== ocrRequestRef.current) return;
+          if (aiResult.draft.title) {
+            ocrDraft = aiResult.draft;
+            usedAiFallback = true;
+          }
+          remainingAiUses = aiResult.remaining;
+        } catch (aiError) {
+          aiFallbackError = aiError instanceof Error ? aiError.message : "AI 封面補強暫時無法使用";
+        }
+      }
       setDraft((previous) => ({
         ...previous,
-        title: ocrDraft.title || previous.title,
-        author: ocrDraft.author || previous.author,
-        edition: ocrDraft.edition || previous.edition,
+        title: previous.title.trim() ? previous.title : ocrDraft.title || previous.title,
+        author: previous.author.trim() ? previous.author : ocrDraft.author || previous.author,
+        edition: previous.edition.trim() ? previous.edition : ocrDraft.edition || previous.edition,
+        publisher: previous.publisher.trim() ? previous.publisher : ocrDraft.publisher || previous.publisher,
       }));
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
-        ? `已填入可信的書名、作者或版本資訊${result.usedChineseFallback ? "（已使用中文補強）" : ""}；送出前請再確認。`
-        : "辨識結果可信度不足，因此沒有覆寫欄位。請拍近一點、避免反光，或改用手動填寫。");
+        ? usedAiFallback
+          ? `AI 已補強可見的封面資料；今天還可使用 ${remainingAiUses ?? 0} 次，送出前請再確認。`
+          : `已填入可信的書名、作者或版本資訊${result.usedChineseFallback ? "（已使用中文補強）" : ""}；送出前請再確認。${aiFallbackError ? ` AI 補強未完成：${aiFallbackError}` : ""}`
+        : aiFallbackError
+          ? `辨識結果不足，且 ${aiFallbackError}。請拍近一點或改用手動填寫。`
+          : "辨識結果可信度不足，因此沒有覆寫欄位。請拍近一點、避免反光，或改用手動填寫。");
     } catch (error) {
       if (requestId !== ocrRequestRef.current) return;
       setOcrMessage(error instanceof Error ? error.message : "OCR 辨識失敗，請改用手動填寫");
@@ -3772,6 +3799,7 @@ function BookFormModal({
                 </button>
               </div>
               <p>{ocrMessage || "辨識結果只會填入草稿，送出前請再確認。"}</p>
+              <p className="ocr-privacy-note">本機辨識不足時，封面照片會短暫送至雲端 AI 補強；圖片不會由 BookFlow 另行儲存。</p>
             </div>
           )}
 
@@ -3784,6 +3812,7 @@ function BookFormModal({
             <>
               <input type="hidden" name="author" value="" />
               <input type="hidden" name="edition" value="" />
+              <input type="hidden" name="publisher" value="" />
               <input type="hidden" name="department" value="" />
               <input type="hidden" name="course" value="" />
               <input type="hidden" name="teacher" value="" />
@@ -3799,6 +3828,7 @@ function BookFormModal({
               <input type="hidden" name="itemCategory" value="book" />
               <label>作者 *<input name="author" required value={draft.author} onChange={(event) => updateDraft("author", event.target.value)} /></label>
               <label>版本 *<input name="edition" required value={draft.edition} onChange={(event) => updateDraft("edition", event.target.value)} placeholder="例如：第 2 版" /></label>
+              <label>出版社（選填）<input name="publisher" value={draft.publisher} onChange={(event) => updateDraft("publisher", event.target.value)} placeholder="例如：全華、Pearson" /></label>
               <label>科系（選填）<select name="department" value={draft.department} onChange={(event) => updateDraft("department", event.target.value)}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
               <label>課程（選填）<input name="course" value={draft.course} onChange={(event) => updateDraft("course", event.target.value)} /></label>
               <label>授課老師（選填）<input name="teacher" value={draft.teacher} onChange={(event) => updateDraft("teacher", event.target.value)} /></label>

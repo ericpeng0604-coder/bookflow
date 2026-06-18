@@ -397,6 +397,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .photo-assist > div:first-child { display: flex; gap: 10px; align-items: flex-start; color: var(--green); }
 .photo-assist > div:first-child span { display: grid; gap: 3px; }
 .photo-assist small, .photo-assist p { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }
+.photo-assist .ocr-privacy-note { color: #65756e; border-top: 1px solid #dceae4; padding-top: 9px; }
 .photo-assist-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .photo-assist-actions button { border: 0; border-radius: 8px; min-height: 38px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px; background: var(--green); color: white; font-weight: 800; cursor: pointer; }
 .photo-assist-actions button.ghost { border: 1px solid #cfe2da; background: white; color: var(--green); }

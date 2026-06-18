@@ -379,6 +379,24 @@ or edition fields.
 small fast language pass before a lazy fallback, and require known-cover or
 field-level plausibility checks before changing user-entered form values.
 
+### LESSON-023: Cloud OCR fallback needs server-side limits and non-destructive merging
+
+**Observed problem:** Improving weak mobile OCR with a cloud vision model could
+expose a reusable API key, create unbounded cost, or replace text that a user
+typed while recognition was still running.
+
+**Cause:** A browser-side model call and unconditional form assignment treat
+authentication, billing, privacy, and asynchronous user edits as separate
+concerns even though they fail together in the same workflow.
+
+**Detection:** Verify that the model key is server-only, requests require a
+fresh authenticated session, quota is atomic and persistent, uploaded images
+are not logged or stored, and delayed results do not replace non-empty fields.
+
+**Prevention rule:** Put paid vision calls behind an authenticated server
+endpoint with a database-backed daily quota, disclose temporary cloud
+processing, and only fill fields that remain empty when the result arrives.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
