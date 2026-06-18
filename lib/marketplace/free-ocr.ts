@@ -54,7 +54,6 @@ export type BookOcrDraft = {
   author?: string;
   edition?: string;
   publisher?: string;
-  description?: string;
 };
 
 type KnownBookCoverHint = {
@@ -120,7 +119,6 @@ const KNOWN_BOOK_COVER_HINTS: KnownBookCoverHint[] = [
       title: "電腦輔助繪圖 AutoCAD 2020",
       author: "王雪娥、陳進煌",
       publisher: "全華",
-      description: "附多媒體光碟 CD-ROM",
     },
   },
 ];
@@ -165,6 +163,34 @@ function cleanAuthorCandidate(line: string) {
     .trim();
 }
 
+function cleanEditionPart(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function mergeEditionParts(...parts: Array<string | undefined>) {
+  const seen = new Set<string>();
+  const cleanParts = parts
+    .map((part) => part ? cleanEditionPart(part) : "")
+    .filter(Boolean)
+    .filter((part) => {
+      const key = part.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  return cleanParts.length > 0 ? cleanParts.join(" / ") : undefined;
+}
+
+function cleanVolumeCandidate(line?: string) {
+  if (!line) return undefined;
+  const chinese = line.match(/(?:上|下|第一|第二)\s*冊/);
+  if (chinese) return chinese[0].replace(/\s+/g, "");
+  const english = line.match(/(?:Volume|Vol\.?)\s*[12]\b/i);
+  return english?.[0];
+}
+
 function findKnownBookCoverHint(rawText: string) {
   const normalized = rawText.replace(/\s+/g, " ");
   return KNOWN_BOOK_COVER_HINTS.find((hint) =>
@@ -177,9 +203,7 @@ function mergeDrafts(base: BookOcrDraft, override?: BookOcrDraft) {
   return {
     ...base,
     ...override,
-    description: [base.description, override.description]
-      .filter(Boolean)
-      .join(base.description && override.description ? "\n" : "") || undefined,
+    edition: mergeEditionParts(cleanVolumeCandidate(base.edition), override.edition ?? base.edition),
   };
 }
 
@@ -188,11 +212,10 @@ export function extractBookDraftFromOcr(rawText: string): BookOcrDraft {
     .split(/\r?\n/)
     .map(cleanOcrLine)
     .filter((line) => line.length >= 2);
-  const isbn = rawText.match(/(?:ISBN(?:-1[03])?:?\s*)?((?:97[89][-\s]?)?\d[-\s]?\d{2,5}[-\s]?\d{2,7}[-\s]?\d{1,7}[-\s]?[\dX])/i)?.[1]
-    ?.replace(/[\s-]/g, "");
   const authorLine = lines.find((line) => /(作者|編著|主編|譯者|Author|Edited by|Written by)/i.test(line))
     ?? lines.find((line) => /(著|編|譯)/.test(line) && line.length <= 80);
   const editionLine = lines.find((line) => /(第\s*\d+\s*版|edition|版次)/i.test(line));
+  const volumeLine = lines.find((line) => /(?:^|[\s:：])(?:上|下|第一|第二)\s*冊(?:$|[\s:：])|(?:Volume|Vol\.?)\s*[12]\b/i.test(line));
   const publisherLine = lines.find((line) => /(出版社|出版|書局|Press|Publishing|Publisher)/i.test(line));
   const titleCandidates = lines
     .filter((line) => line.length >= 3 && line.length <= 56 && hasUsefulText(line))
@@ -217,18 +240,14 @@ export function extractBookDraftFromOcr(rawText: string): BookOcrDraft {
       return bScore - aScore;
     });
   const title = titleCandidates[0];
-  const descriptionParts = [
-    isbn ? `OCR 辨識 ISBN：${isbn}` : "",
-    publisherLine ? `OCR 辨識出版社/出版資訊：${publisherLine.replace(/^(出版社|Publisher)[:：]?\s*/i, "")}` : "",
-    /Pearson/i.test(rawText) ? "OCR 辨識出版品牌：Pearson" : "",
-  ].filter(Boolean);
+  const publisher = publisherLine?.replace(/^(出版社|Publisher)[:：]?\s*/i, "")
+    || (/Pearson/i.test(rawText) ? "Pearson" : undefined);
 
   const genericDraft = {
     title,
     author: authorLine ? cleanAuthorCandidate(authorLine) : undefined,
-    edition: editionLine,
-    publisher: publisherLine?.replace(/^(出版社|Publisher)[:：]?\s*/i, ""),
-    description: descriptionParts.length > 0 ? descriptionParts.join("\n") : undefined,
+    edition: mergeEditionParts(cleanVolumeCandidate(volumeLine), editionLine),
+    publisher,
   };
   return mergeDrafts(genericDraft, findKnownBookCoverHint(rawText));
 }

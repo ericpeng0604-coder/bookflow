@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260617-free-ocr-book-listing-and-student-verifi",
-  "taskTitle": "free OCR book listing and student verification",
-  "baseCommit": "0cc305b9deece291a5a65db4ee198d390f3640de",
-  "updatedAt": "2026-06-17T10:35:22.152Z",
+  "taskId": "20260618-split-textbook-and-secondhand-listing-en",
+  "taskTitle": "split textbook and secondhand listing entries with OCR volume recognition",
+  "baseCommit": "6f30ef065b6955cfe4993a081b054c856a9a5b11",
+  "updatedAt": "2026-06-18T02:12:24.158Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260617-1035-20260617-free-ocr-book-listing-and-stude.md"
+  "historyFile": ".ai/history/20260618-0212-20260618-split-textbook-and-secondhand-l.md"
 }

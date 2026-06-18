@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：split textbook and secondhand listing entries with OCR volume recognition
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`6f30ef065b6955cfe4993a081b054c856a9a5b11`
+- 封存時間：2026-06-18T02:12:24.157Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

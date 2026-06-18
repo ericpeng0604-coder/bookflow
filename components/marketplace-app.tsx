@@ -260,6 +260,7 @@ export function MarketplaceApp() {
   const [department, setDepartment] = useState(departments[0]);
   const [maxPrice, setMaxPrice] = useState(NO_MAX_PRICE);
   const [modal, setModal] = useState<Modal>(null);
+  const [listingFormType, setListingFormType] = useState<ListingType>("book");
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>("listings");
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [editingRequest, setEditingRequest] = useState<PurchaseRequest | null>(null);
@@ -904,6 +905,12 @@ export function MarketplaceApp() {
     } else {
       setDepartment(departments[0]);
     }
+  }
+
+  function openListingForm(nextType: ListingType) {
+    setEditingBook(null);
+    setListingFormType(nextType);
+    setModal("bookForm");
   }
 
   function requireLogin(action: () => void) {
@@ -1970,8 +1977,10 @@ export function MarketplaceApp() {
           <span><b>虎科書流</b><small>HUST BOOKFLOW</small></span>
         </button>
         <nav>
-          <button className={view === "home" ? "active" : ""} onClick={() => { switchListingType("book"); setView("home"); }}>找課本</button>
-          <button onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}>我要刊登</button>
+          <button className={view === "home" && !isSecondhandMode ? "active" : ""} onClick={() => { switchListingType("book"); setView("home"); }}>課本市場</button>
+          <button className={view === "home" && isSecondhandMode ? "active" : ""} onClick={() => { switchListingType("secondhand"); setView("home"); }}>二手市場</button>
+          <button onClick={() => requireActive(() => openListingForm("book"))}>刊登課本</button>
+          <button onClick={() => requireActive(() => openListingForm("secondhand"))}>刊登二手</button>
           <button onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
         </nav>
@@ -2055,27 +2064,32 @@ export function MarketplaceApp() {
           <div className="mobile-nav-backdrop" onClick={() => setMobileMenuOpen(false)}>
             <div id="mobile-navigation" className="mobile-nav" onClick={(event) => event.stopPropagation()}>
               <button
-                className={view === "home" ? "active" : ""}
+                className={view === "home" && !isSecondhandMode ? "active" : ""}
                 onClick={() => { switchListingType("book"); setView("home"); setMobileMenuOpen(false); }}
               >
-                找課本
+                課本市場
               </button>
               <button
-                onClick={() => {
-                  switchListingType(isSecondhandMode ? "book" : "secondhand");
-                  setView("home");
-                  setMobileMenuOpen(false);
-                }}
+                className={view === "home" && isSecondhandMode ? "active" : ""}
+                onClick={() => { switchListingType("secondhand"); setView("home"); setMobileMenuOpen(false); }}
               >
-                <Sparkles size={18} />{isSecondhandMode ? "回課本市場" : "逛二手市場"}
+                二手市場
               </button>
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  requireActive(() => { setEditingBook(null); setModal("bookForm"); });
+                  requireActive(() => openListingForm("book"));
                 }}
               >
-                我要刊登
+                刊登課本
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  requireActive(() => openListingForm("secondhand"));
+                }}
+              >
+                刊登二手
               </button>
               <button
                 className={view === "dashboard" ? "active" : ""}
@@ -2187,7 +2201,7 @@ export function MarketplaceApp() {
                 className="sell-cta"
                 disabled={currentUser?.accountStatus === "suspended"}
                 aria-disabled={currentUser?.accountStatus === "suspended"}
-                onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}
+                onClick={() => requireActive(() => openListingForm(isSecondhandMode ? "secondhand" : "book"))}
               >
                 <Plus size={18} aria-hidden="true" />{isSecondhandMode ? "刊登二手物品" : "刊登一本書"}
               </button>
@@ -2425,7 +2439,8 @@ export function MarketplaceApp() {
             <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
             <div className="dashboard-head-actions">
               <button className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => setModal("profile"))}><UserRound size={18} />個人資料</button>
-              <button className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => { setEditingBook(null); setModal("bookForm"); })}><Plus size={18} />刊登課本</button>
+              <button className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm("secondhand"))}><Sparkles size={18} />刊登二手</button>
+              <button className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm("book"))}><Plus size={18} />刊登課本</button>
             </div>
           </div>
           {currentUser.accountStatus === "suspended" && (
@@ -2913,7 +2928,7 @@ export function MarketplaceApp() {
           onSubmitStudentVerification={submitStudentVerification}
         />
       )}
-      {modal === "bookForm" && <BookFormModal book={editingBook} defaultListingType={listingType} saving={bookSaving} onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }} onSubmit={saveBook} />}
+      {modal === "bookForm" && <BookFormModal book={editingBook} defaultListingType={listingFormType} saving={bookSaving} onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }} onSubmit={saveBook} />}
       {modal === "contactSettings" && editingBook && (
         <ContactSettingsModal
           book={editingBook}
@@ -3667,7 +3682,6 @@ function BookFormModal({
     listingType: initialListingType,
     itemCategory: initialListingType === "secondhand" ? DEFAULT_SECONDHAND_CATEGORY : "book",
   };
-  const [formListingType, setFormListingType] = useState<ListingType>(initialListingType);
   const [preview, setPreview] = useState(value.imageUrl);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
@@ -3686,7 +3700,7 @@ function BookFormModal({
     description: value.description,
     itemCategory: value.itemCategory === "book" ? DEFAULT_SECONDHAND_CATEGORY : value.itemCategory,
   });
-  const isSecondhand = formListingType === "secondhand";
+  const isSecondhand = initialListingType === "secondhand";
 
   function selectImage(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -3711,13 +3725,9 @@ function BookFormModal({
         title: ocrDraft.title || previous.title,
         author: ocrDraft.author || previous.author,
         edition: ocrDraft.edition || previous.edition,
-        description: [
-          previous.description,
-          ocrDraft.description,
-        ].filter(Boolean).join(previous.description && ocrDraft.description ? "\n" : ""),
       }));
-      setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition || ocrDraft.description
-        ? "已從封面填入可辨識的書名、作者或出版資訊，送出前請再確認一次"
+      setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
+        ? "已從封面填入可辨識的書名、作者或版本資訊；書況與備註仍由你自己填。"
         : "有讀到封面文字，但沒有足夠資訊可自動填入；你仍可手動填寫");
     } catch (error) {
       setOcrMessage(error instanceof Error ? error.message : "OCR 辨識失敗，請改用手動填寫");
@@ -3739,28 +3749,35 @@ function BookFormModal({
             accept="image/jpeg,image/png,image/webp"
             onChange={selectImage}
           />
-          <div className="listing-type-control full" role="radiogroup" aria-label="刊登類型">
-            <label>
-              <input
-                type="radio"
-                name="listingType"
-                value="book"
-                checked={formListingType === "book"}
-                onChange={() => setFormListingType("book")}
-              />
-              課本
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="listingType"
-                value="secondhand"
-                checked={formListingType === "secondhand"}
-                onChange={() => setFormListingType("secondhand")}
-              />
-              二手物品
-            </label>
-          </div>
+          <input type="hidden" name="listingType" value={initialListingType} />
+
+          <label className="full cover-upload-label">
+            {isSecondhand ? "商品圖片" : "封面圖片"} *
+            <span
+              className="image-upload cover-upload"
+              role="button"
+              tabIndex={0}
+              onClick={() => imageInputRef.current?.click()}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  imageInputRef.current?.click();
+                }
+              }}
+            >
+              <span className="upload-icon"><ImagePlus size={24} /></span>
+              <span>
+                <b>{imageFile ? imageFile.name : book ? "更換圖片，或保留原本圖片" : isSecondhand ? "選擇商品照片" : "選擇課本封面"}</b>
+                <small>支援 JPG、PNG、WebP，最大 5MB</small>
+              </span>
+            </span>
+          </label>
+          {preview && (
+            <div className="image-preview full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={preview} alt={isSecondhand ? "商品圖片預覽" : "書籍封面預覽"} />
+            </div>
+          )}
 
           {!isSecondhand && (
             <div className="photo-assist full">
@@ -3825,31 +3842,6 @@ function BookFormModal({
           </label>
           <label>價格（NT$）*<input name="price" required type="number" min="0" value={draft.price} onChange={(event) => updateDraft("price", event.target.value)} /></label>
           <label className="full">面交地點 *<input name="meetup" required value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
-          <label className="full">
-            {isSecondhand ? "商品圖片" : "封面圖片"} *
-            <span
-              className="image-upload"
-              role="button"
-              tabIndex={0}
-              onClick={() => imageInputRef.current?.click()}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  imageInputRef.current?.click();
-                }
-              }}
-            >
-              <ImagePlus size={22} />
-              <b>{imageFile ? imageFile.name : book ? "選擇新圖片（不選則保留原圖）" : "選擇圖片檔"}</b>
-              <small>支援 JPG、PNG、WebP，最大 5MB</small>
-            </span>
-          </label>
-          {preview && (
-            <div className="image-preview full">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview} alt={isSecondhand ? "商品圖片預覽" : "書籍封面預覽"} />
-            </div>
-          )}
           <label className="full">{isSecondhand ? "商品說明" : "書況說明"} *<textarea name="description" required rows={3} value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} /></label>
           <button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button>
         </fieldset>

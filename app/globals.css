@@ -40,8 +40,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .brand-mark { width: 40px; height: 40px; border-radius: 11px 11px 11px 3px; color: white; background: var(--green); display: grid; place-items: center; box-shadow: 5px 5px 0 #b8d7ca; }
 .brand b { display: block; font-size: 20px; letter-spacing: .16em; }
 .brand small { display: block; color: var(--muted); font-size: 8px; letter-spacing: .28em; }
-nav { display: flex; gap: 36px; height: 100%; }
-nav button { border: 0; background: none; font-weight: 600; cursor: pointer; position: relative; }
+nav { display: flex; gap: 22px; height: 100%; }
+nav button { border: 0; background: none; font-weight: 600; cursor: pointer; position: relative; white-space: nowrap; }
 nav button.active:after { content: ""; position: absolute; height: 3px; background: var(--orange); left: 6px; right: 6px; bottom: 0; border-radius: 4px 4px 0 0; }
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .login-button, .user-chip { border: 1px solid var(--line); border-radius: 9px; background: white; padding: 9px 15px; display: flex; align-items: center; gap: 7px; font-weight: 600; cursor: pointer; }
@@ -396,9 +396,6 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .book-form { grid-template-columns: 1fr 1fr; }
 .book-form-fields { display: contents; }
 .book-form-fields:disabled { opacity: .72; }
-.listing-type-control { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: #eef2ef; }
-.listing-type-control label { min-height: 42px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 7px; background: white; cursor: pointer; }
-.listing-type-control input { width: auto; accent-color: var(--green); }
 .photo-assist { border: 1px solid #cfe2da; border-radius: 10px; background: #f4faf7; padding: 13px; display: grid; gap: 11px; }
 .photo-assist > div:first-child { display: flex; gap: 10px; align-items: flex-start; color: var(--green); }
 .photo-assist > div:first-child span { display: grid; gap: 3px; }
@@ -412,9 +409,14 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .form input:focus, .form select:focus, .form textarea:focus { border-color: var(--green); }
 .form .full { grid-column: 1 / -1; }
 .image-upload { min-height: 92px; border: 1px dashed #aebdb6; background: #f7faf8; border-radius: 10px; display: grid; place-items: center; align-content: center; gap: 4px; color: var(--green); cursor: pointer; position: relative; padding: 14px; }
-.image-upload:hover { border-color: var(--green); background: #edf6f2; }
+.image-upload:hover, .image-upload:focus-visible { border-color: var(--green); background: #edf6f2; box-shadow: 0 0 0 4px rgba(30, 99, 79, .09); }
 .image-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .image-upload small { color: var(--muted); font-weight: 400; }
+.cover-upload-label { gap: 8px !important; }
+.cover-upload { min-height: 118px; grid-template-columns: auto 1fr; place-items: center start; align-content: center; text-align: left; gap: 14px; padding: 18px; border-style: solid; border-color: #c8d8d0; background: linear-gradient(135deg, #f8fcfa, #eef7f3); }
+.cover-upload .upload-icon { width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; color: white; background: var(--green); box-shadow: 0 10px 22px rgba(30, 99, 79, .18); }
+.cover-upload span:last-child { display: grid; gap: 5px; min-width: 0; }
+.cover-upload b { max-width: 100%; overflow-wrap: anywhere; font-size: 14px; color: var(--ink); }
 .image-preview { height: 210px; border-radius: 10px; overflow: hidden; background: var(--cream); }
 .image-preview img { width: 100%; height: 100%; object-fit: contain; }
 .ocr-tool { border: 1px solid #d8e3dd; border-radius: 9px; background: #f5faf7; padding: 11px 12px; display: flex; align-items: center; gap: 10px; }
