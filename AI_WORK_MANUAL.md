@@ -345,6 +345,23 @@ arguments before assuming the migration failed.
 use an empty object for zero-argument functions, and treat authorization
 failures separately from signature lookup failures.
 
+### LESSON-021: Hidden file inputs must survive form selector specificity
+
+**Observed problem:** A listing form displayed both the browser's native file
+control and a custom upload card, even though the native input had a visually
+hidden utility class.
+
+**Cause:** The general `.form input` rule had enough specificity to override
+parts of the hidden-input utility, so the control became visible and duplicated
+the upload affordance.
+
+**Detection:** Open every file-upload form in the browser and confirm there is
+exactly one visible file-selection control before relying on source classes.
+
+**Prevention rule:** Prefer one accessible upload control. If a native file
+input is intentionally hidden, verify its computed browser layout against the
+form styles and add a regression check that rejects duplicate upload controls.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

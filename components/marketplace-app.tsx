@@ -1977,10 +1977,8 @@ export function MarketplaceApp() {
           <span><b>虎科書流</b><small>HUST BOOKFLOW</small></span>
         </button>
         <nav>
-          <button className={view === "home" && !isSecondhandMode ? "active" : ""} onClick={() => { switchListingType("book"); setView("home"); }}>課本市場</button>
-          <button className={view === "home" && isSecondhandMode ? "active" : ""} onClick={() => { switchListingType("secondhand"); setView("home"); }}>二手市場</button>
-          <button onClick={() => requireActive(() => openListingForm("book"))}>刊登課本</button>
-          <button onClick={() => requireActive(() => openListingForm("secondhand"))}>刊登二手</button>
+          <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isSecondhandMode ? "逛二手物品" : "找課本"}</button>
+          <button onClick={() => requireActive(() => openListingForm(listingType))}>我要刊登</button>
           <button onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
         </nav>
@@ -2064,32 +2062,31 @@ export function MarketplaceApp() {
           <div className="mobile-nav-backdrop" onClick={() => setMobileMenuOpen(false)}>
             <div id="mobile-navigation" className="mobile-nav" onClick={(event) => event.stopPropagation()}>
               <button
-                className={view === "home" && !isSecondhandMode ? "active" : ""}
-                onClick={() => { switchListingType("book"); setView("home"); setMobileMenuOpen(false); }}
+                onClick={() => {
+                  switchListingType(isSecondhandMode ? "book" : "secondhand");
+                  setView("home");
+                  setMobileMenuOpen(false);
+                }}
               >
-                課本市場
+                {isSecondhandMode ? <BookOpen size={18} /> : <Sparkles size={18} />}
+                {isSecondhandMode ? "回課本市場" : "逛二手物品"}
               </button>
               <button
-                className={view === "home" && isSecondhandMode ? "active" : ""}
-                onClick={() => { switchListingType("secondhand"); setView("home"); setMobileMenuOpen(false); }}
+                className={view === "home" ? "active" : ""}
+                onClick={() => {
+                  setView("home");
+                  setMobileMenuOpen(false);
+                }}
               >
-                二手市場
+                {isSecondhandMode ? "逛二手物品" : "找課本"}
               </button>
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  requireActive(() => openListingForm("book"));
+                  requireActive(() => openListingForm(listingType));
                 }}
               >
-                刊登課本
-              </button>
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  requireActive(() => openListingForm("secondhand"));
-                }}
-              >
-                刊登二手
+                我要刊登
               </button>
               <button
                 className={view === "dashboard" ? "active" : ""}
@@ -2204,26 +2201,6 @@ export function MarketplaceApp() {
                 onClick={() => requireActive(() => openListingForm(isSecondhandMode ? "secondhand" : "book"))}
               >
                 <Plus size={18} aria-hidden="true" />{isSecondhandMode ? "刊登二手物品" : "刊登一本書"}
-              </button>
-            </div>
-            <div className="market-mode-switch" role="tablist" aria-label="市場類型">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={listingType === "book"}
-                className={listingType === "book" ? "active" : ""}
-                onClick={() => switchListingType("book")}
-              >
-                <BookOpen size={16} aria-hidden="true" /> 課本
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={listingType === "secondhand"}
-                className={listingType === "secondhand" ? "active" : ""}
-                onClick={() => switchListingType("secondhand")}
-              >
-                <Sparkles size={16} aria-hidden="true" /> 二手物品
               </button>
             </div>
             <form className="filters" aria-label={isSecondhandMode ? "篩選二手物品" : "篩選課本"} onSubmit={(event) => event.preventDefault()}>
@@ -2439,8 +2416,7 @@ export function MarketplaceApp() {
             <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
             <div className="dashboard-head-actions">
               <button className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => setModal("profile"))}><UserRound size={18} />個人資料</button>
-              <button className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm("secondhand"))}><Sparkles size={18} />刊登二手</button>
-              <button className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm("book"))}><Plus size={18} />刊登課本</button>
+              <button className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm(listingType))}><Plus size={18} />{isSecondhandMode ? "刊登二手物品" : "刊登課本"}</button>
             </div>
           </div>
           {currentUser.accountStatus === "suspended" && (
@@ -3740,38 +3716,21 @@ function BookFormModal({
     <ModalShell title={book ? "編輯刊登" : isSecondhand ? "刊登二手物品" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}>
       <form onSubmit={onSubmit} className="form book-form">
         <fieldset disabled={saving} className="book-form-fields">
+          <p className="listing-file-help full">
+            <b>{isSecondhand ? "商品圖片" : "封面圖片"} *</b>
+            <span>{book ? "不選擇新圖片會保留原圖。" : "支援 JPG、PNG、WebP，最大 5MB。"}</span>
+          </p>
           <input
             ref={imageInputRef}
-            className="visually-hidden"
+            className="listing-file-input full"
             name="image"
             required={!book}
             type="file"
             accept="image/jpeg,image/png,image/webp"
             onChange={selectImage}
+            aria-label={isSecondhand ? "選擇商品照片" : "選擇課本封面"}
           />
           <input type="hidden" name="listingType" value={initialListingType} />
-
-          <label className="full cover-upload-label">
-            {isSecondhand ? "商品圖片" : "封面圖片"} *
-            <span
-              className="image-upload cover-upload"
-              role="button"
-              tabIndex={0}
-              onClick={() => imageInputRef.current?.click()}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  imageInputRef.current?.click();
-                }
-              }}
-            >
-              <span className="upload-icon"><ImagePlus size={24} /></span>
-              <span>
-                <b>{imageFile ? imageFile.name : book ? "更換圖片，或保留原本圖片" : isSecondhand ? "選擇商品照片" : "選擇課本封面"}</b>
-                <small>支援 JPG、PNG、WebP，最大 5MB</small>
-              </span>
-            </span>
-          </label>
           {preview && (
             <div className="image-preview full">
               {/* eslint-disable-next-line @next/next/no-img-element */}

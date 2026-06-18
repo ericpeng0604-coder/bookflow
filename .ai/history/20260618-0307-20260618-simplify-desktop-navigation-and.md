@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：simplify desktop navigation and remove duplicate listing upload control
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`2c8c760c082f488a7d27266688316f828f5356c0`
+- 封存時間：2026-06-18T03:07:18.223Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

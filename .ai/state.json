@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260618-split-textbook-and-secondhand-listing-en",
-  "taskTitle": "split textbook and secondhand listing entries with OCR volume recognition",
-  "baseCommit": "6f30ef065b6955cfe4993a081b054c856a9a5b11",
-  "updatedAt": "2026-06-18T02:12:24.158Z",
+  "taskId": "20260618-simplify-desktop-navigation-and-remove-d",
+  "taskTitle": "simplify desktop navigation and remove duplicate listing upload control",
+  "baseCommit": "2c8c760c082f488a7d27266688316f828f5356c0",
+  "updatedAt": "2026-06-18T03:07:18.223Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260618-0212-20260618-split-textbook-and-secondhand-l.md"
+  "historyFile": ".ai/history/20260618-0307-20260618-simplify-desktop-navigation-and.md"
 }
