@@ -8,6 +8,7 @@ import {
   buildOpenAiBookCoverRequest,
   extractGatewayOutputText,
   extractOpenAiOutputText,
+  extractSafeGatewayErrorCode,
   normalizeAiBookCover,
   parseBookCoverOutputText,
 } from "@/lib/server/book-ocr-ai";
@@ -118,7 +119,14 @@ export async function POST(request: Request) {
     );
     const aiPayload = await aiResponse.json().catch(() => ({}));
     if (!aiResponse.ok) {
-      return NextResponse.json({ error: "AI 封面補強暫時無法完成" }, { status: 502 });
+      const providerCode = useGateway ? extractSafeGatewayErrorCode(aiPayload) : "";
+      const diagnostic = useGateway
+        ? `（Gateway ${aiResponse.status}${providerCode ? `/${providerCode}` : ""}）`
+        : "";
+      return NextResponse.json(
+        { error: `AI 封面補強暫時無法完成${diagnostic}` },
+        { status: 502 },
+      );
     }
     const outputText = useGateway
       ? extractGatewayOutputText(aiPayload)

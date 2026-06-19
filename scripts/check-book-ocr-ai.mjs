@@ -9,6 +9,7 @@ import {
   buildOpenAiBookCoverRequest,
   extractGatewayOutputText,
   extractOpenAiOutputText,
+  extractSafeGatewayErrorCode,
   normalizeAiBookCover,
   parseBookCoverOutputText,
 } from "../lib/server/book-ocr-ai.ts";
@@ -73,6 +74,14 @@ assert.equal(
   "{\"is_book_cover\":true}",
 );
 assert.equal(
+  extractSafeGatewayErrorCode({ error: { code: "insufficient_credits" } }),
+  "insufficient_credits",
+);
+assert.equal(
+  extractSafeGatewayErrorCode({ error: { code: "unsafe code with spaces" } }),
+  "",
+);
+assert.equal(
   parseBookCoverOutputText("```json\n{\"is_book_cover\":false}\n```").is_book_cover,
   false,
 );
@@ -105,6 +114,7 @@ assert.match(
 );
 assert.match(route, /ai-gateway\.vercel\.sh/, "OIDC fallback must use Vercel AI Gateway");
 assert.match(route, /v1\/chat\/completions/, "AI Gateway must use its documented image-compatible Chat Completions API");
+assert.match(route, /Gateway \$\{aiResponse\.status\}/, "Gateway failures must expose only a safe status diagnostic");
 assert.doesNotMatch(route, /console\.(log|info|debug)/, "AI route must not log uploaded image data");
 assert.match(client, /Authorization: `Bearer \$\{token\}`/, "browser request must forward the signed-in session");
 assert.match(app, /result\.needsAiFallback/, "cloud AI must only run after local OCR requests fallback");

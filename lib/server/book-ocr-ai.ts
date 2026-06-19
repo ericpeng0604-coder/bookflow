@@ -191,3 +191,18 @@ export function extractGatewayOutputText(value: unknown) {
   const content = response.choices?.[0]?.message?.content;
   return typeof content === "string" ? content : "";
 }
+
+export function extractSafeGatewayErrorCode(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const payload = value as {
+    code?: unknown;
+    type?: unknown;
+    error?: { code?: unknown; type?: unknown };
+  };
+  const candidate = payload.error?.code
+    ?? payload.error?.type
+    ?? payload.code
+    ?? payload.type;
+  if (typeof candidate !== "string") return "";
+  return /^[a-zA-Z0-9_.-]{1,80}$/.test(candidate) ? candidate : "";
+}
