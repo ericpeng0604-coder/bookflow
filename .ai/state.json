@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260619-fix-production-book-ocr-ai-gateway-image",
-  "taskTitle": "fix production book OCR AI Gateway image format",
-  "baseCommit": "3fd6c7c67548ed30715165fc152ac9e0b32247f1",
-  "updatedAt": "2026-06-19T00:40:37.775Z",
+  "taskId": "20260619-fix-production-book-ocr-gateway-document",
+  "taskTitle": "fix production book OCR Gateway documented parameters",
+  "baseCommit": "965b6b72dac0e5bad65b6592f90c6d7403c885af",
+  "updatedAt": "2026-06-19T00:49:05.765Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260619-0040-20260619-fix-production-book-ocr-ai-gate.md"
+  "historyFile": ".ai/history/20260619-0049-20260619-fix-production-book-ocr-gateway.md"
 }

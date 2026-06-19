@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix production book OCR Gateway documented parameters
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`965b6b72dac0e5bad65b6592f90c6d7403c885af`
+- 封存時間：2026-06-19T00:49:05.764Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

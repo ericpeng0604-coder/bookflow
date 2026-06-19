@@ -433,6 +433,24 @@ response parsing failures.
 OpenAI Chat Completions image and `json_schema` wire format, and do not claim
 provider compatibility until one real deployed request returns parsed fields.
 
+### LESSON-026: Compatibility endpoints require their documented parameter names
+
+**Observed problem:** The production AI Gateway request still failed after
+switching to Chat Completions because it retained provider-native options that
+were not part of the Gateway's documented compatibility request.
+
+**Cause:** `max_completion_tokens` and strict-schema behavior from a provider
+API were mixed into a compatibility endpoint that documents `max_tokens` and a
+plain `json_schema` object.
+
+**Detection:** Compare the complete serialized request against the exact
+compatibility-endpoint example, then verify it with an authenticated deployed
+image instead of checking only the endpoint path and content types.
+
+**Prevention rule:** On compatibility APIs, send only documented parameter
+names and shapes until a deployed request succeeds; add optional provider
+features one at a time with live regression evidence.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

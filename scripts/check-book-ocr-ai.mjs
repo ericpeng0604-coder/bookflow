@@ -59,8 +59,12 @@ const gatewayRequest = buildGatewayBookCoverRequest({
   localOcrText: "",
 });
 assert.equal(gatewayRequest.model, "openai/gpt-5.4-mini");
+assert.equal(gatewayRequest.max_tokens, 500);
+assert.equal(gatewayRequest.stream, false);
+assert.equal("max_completion_tokens" in gatewayRequest, false);
 assert.equal(gatewayRequest.messages[0].content[1].image_url.detail, "high");
 assert.equal(gatewayRequest.response_format.type, "json_schema");
+assert.equal("strict" in gatewayRequest.response_format.json_schema, false);
 assert.equal("providerOptions" in gatewayRequest, false);
 assert.equal(
   extractGatewayOutputText({
