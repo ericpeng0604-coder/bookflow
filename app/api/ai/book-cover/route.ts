@@ -51,7 +51,9 @@ export async function POST(request: Request) {
   }
 
   const openAiKey = process.env.OPENAI_API_KEY;
-  const gatewayToken = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
+  const gatewayToken = process.env.AI_GATEWAY_API_KEY
+    || request.headers.get("x-vercel-oidc-token")
+    || process.env.VERCEL_OIDC_TOKEN;
   if (!openAiKey && !gatewayToken) {
     return NextResponse.json({ error: "AI 封面補強尚未完成服務設定" }, { status: 503 });
   }

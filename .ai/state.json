@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260618-add-zero-config-vercel-ai-gateway-fallba",
-  "taskTitle": "add zero-config Vercel AI Gateway fallback",
-  "baseCommit": "9907f6772d2e3a05d9e7b354633fa039ef356400",
-  "updatedAt": "2026-06-18T13:19:44.391Z",
+  "taskId": "20260619-fix-production-book-ocr-vercel-oidc-runt",
+  "taskTitle": "fix production book OCR Vercel OIDC runtime token",
+  "baseCommit": "5b77a132e95ad48f5b34999b1b3f446665208a70",
+  "updatedAt": "2026-06-19T00:30:30.566Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260618-1319-20260618-add-zero-config-vercel-ai-gatew.md"
+  "historyFile": ".ai/history/20260619-0030-20260619-fix-production-book-ocr-vercel-.md"
 }
