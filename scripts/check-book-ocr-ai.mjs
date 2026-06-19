@@ -118,6 +118,11 @@ assert.match(route, /Gateway \$\{aiResponse\.status\}/, "Gateway failures must e
 assert.doesNotMatch(route, /console\.(log|info|debug)/, "AI route must not log uploaded image data");
 assert.match(client, /Authorization: `Bearer \$\{token\}`/, "browser request must forward the signed-in session");
 assert.match(app, /result\.needsAiFallback/, "cloud AI must only run after local OCR requests fallback");
+assert.match(
+  app,
+  /let ocrDraft = result\.needsAiFallback\s*\?\s*\{ title: "", author: "", edition: "", publisher: "" \}/,
+  "weak local OCR must remain unapplied when cloud fallback fails",
+);
 assert.match(app, /previous\.title\.trim\(\) \? previous\.title/, "OCR must preserve user-entered titles");
 assert.match(app, /ocr-privacy-note/, "the UI must disclose temporary cloud processing");
 assert.match(migration, /primary key \(user_id, usage_date\)/, "quota must be persisted per user and UTC day");

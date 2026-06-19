@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：prevent weak local OCR from filling fields when AI fails
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`503f28a2eed63e945150722a06915f89da34c149`
+- 封存時間：2026-06-19T01:00:57.619Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

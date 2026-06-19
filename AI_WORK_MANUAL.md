@@ -468,6 +468,23 @@ images, credentials, or raw provider messages.
 status and machine codes needed for operations; never log uploaded content or
 raw model responses.
 
+### LESSON-028: A fallback request marks local OCR as untrusted
+
+**Observed problem:** When the cloud provider rejected a request, the form still
+filled a mixed-name garbage string from the local OCR pass even though that pass
+had already requested AI fallback.
+
+**Cause:** The UI applied the local draft after the fallback attempt regardless
+of whether the local recognizer had classified the overall result as weak.
+
+**Detection:** Test a difficult real photo while forcing the AI endpoint to
+fail, then verify every empty book field remains empty and existing manual text
+is preserved.
+
+**Prevention rule:** When local OCR requests cloud fallback, treat its draft as
+untrusted and do not apply it unless a usable cloud result replaces it; failure
+must leave fields blank rather than guessing.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

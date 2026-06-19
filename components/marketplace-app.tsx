@@ -3715,7 +3715,9 @@ function BookFormModal({
         if (stage === "chinese") setOcrMessage(`正在補強繁體中文辨識 ${percent}%`);
       });
       if (requestId !== ocrRequestRef.current) return;
-      let ocrDraft = result.draft;
+      let ocrDraft = result.needsAiFallback
+        ? { title: "", author: "", edition: "", publisher: "" }
+        : result.draft;
       let usedAiFallback = false;
       let remainingAiUses: number | null = null;
       let aiFallbackError = "";

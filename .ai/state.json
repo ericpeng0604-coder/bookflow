@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260619-add-safe-production-gateway-error-diagno",
-  "taskTitle": "add safe production Gateway error diagnostics",
-  "baseCommit": "3ccabce11cbcfee6181144be9faaf3968e2bb14b",
-  "updatedAt": "2026-06-19T00:55:21.485Z",
+  "taskId": "20260619-prevent-weak-local-ocr-from-filling-fiel",
+  "taskTitle": "prevent weak local OCR from filling fields when AI fails",
+  "baseCommit": "503f28a2eed63e945150722a06915f89da34c149",
+  "updatedAt": "2026-06-19T01:00:57.620Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260619-0055-20260619-add-safe-production-gateway-err.md"
+  "historyFile": ".ai/history/20260619-0100-20260619-prevent-weak-local-ocr-from-fil.md"
 }
