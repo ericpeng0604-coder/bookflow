@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260619-fix-production-book-ocr-vercel-oidc-runt",
-  "taskTitle": "fix production book OCR Vercel OIDC runtime token",
-  "baseCommit": "5b77a132e95ad48f5b34999b1b3f446665208a70",
-  "updatedAt": "2026-06-19T00:30:30.566Z",
+  "taskId": "20260619-fix-production-book-ocr-ai-gateway-image",
+  "taskTitle": "fix production book OCR AI Gateway image format",
+  "baseCommit": "3fd6c7c67548ed30715165fc152ac9e0b32247f1",
+  "updatedAt": "2026-06-19T00:40:37.775Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260619-0030-20260619-fix-production-book-ocr-vercel-.md"
+  "historyFile": ".ai/history/20260619-0040-20260619-fix-production-book-ocr-ai-gate.md"
 }

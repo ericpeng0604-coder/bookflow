@@ -6,6 +6,7 @@ import {
   BOOK_OCR_AI_MAX_FILE_BYTES,
   buildGatewayBookCoverRequest,
   buildOpenAiBookCoverRequest,
+  extractGatewayOutputText,
   extractOpenAiOutputText,
   normalizeAiBookCover,
   parseBookCoverOutputText,
@@ -14,7 +15,7 @@ import {
 export const runtime = "nodejs";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const VERCEL_AI_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/responses";
+const VERCEL_AI_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
 const DEFAULT_DAILY_LIMIT = 20;
 
 function configuredDailyLimit() {
@@ -119,7 +120,9 @@ export async function POST(request: Request) {
     if (!aiResponse.ok) {
       return NextResponse.json({ error: "AI 封面補強暫時無法完成" }, { status: 502 });
     }
-    const outputText = extractOpenAiOutputText(aiPayload);
+    const outputText = useGateway
+      ? extractGatewayOutputText(aiPayload)
+      : extractOpenAiOutputText(aiPayload);
     let structured: unknown;
     try {
       structured = parseBookCoverOutputText(outputText);

@@ -7,6 +7,7 @@ import {
   buildBookCoverPrompt,
   buildGatewayBookCoverRequest,
   buildOpenAiBookCoverRequest,
+  extractGatewayOutputText,
   extractOpenAiOutputText,
   normalizeAiBookCover,
   parseBookCoverOutputText,
@@ -58,8 +59,15 @@ const gatewayRequest = buildGatewayBookCoverRequest({
   localOcrText: "",
 });
 assert.equal(gatewayRequest.model, "openai/gpt-5.4-mini");
-assert.equal(gatewayRequest.input[0].content[1].image_url.detail, "high");
-assert.equal(gatewayRequest.providerOptions.gateway.zeroDataRetention, true);
+assert.equal(gatewayRequest.messages[0].content[1].image_url.detail, "high");
+assert.equal(gatewayRequest.response_format.type, "json_schema");
+assert.equal("providerOptions" in gatewayRequest, false);
+assert.equal(
+  extractGatewayOutputText({
+    choices: [{ message: { content: "{\"is_book_cover\":true}" } }],
+  }),
+  "{\"is_book_cover\":true}",
+);
 assert.equal(
   parseBookCoverOutputText("```json\n{\"is_book_cover\":false}\n```").is_book_cover,
   false,
@@ -92,6 +100,7 @@ assert.match(
   "Vercel Functions must read the runtime OIDC token from the request header",
 );
 assert.match(route, /ai-gateway\.vercel\.sh/, "OIDC fallback must use Vercel AI Gateway");
+assert.match(route, /v1\/chat\/completions/, "AI Gateway must use its documented image-compatible Chat Completions API");
 assert.doesNotMatch(route, /console\.(log|info|debug)/, "AI route must not log uploaded image data");
 assert.match(client, /Authorization: `Bearer \$\{token\}`/, "browser request must forward the signed-in session");
 assert.match(app, /result\.needsAiFallback/, "cloud AI must only run after local OCR requests fallback");
