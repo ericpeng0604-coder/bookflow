@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：switch production book OCR fallback to Gemini free tier
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`8352ef6e3be5828f7c74826a8905ada72380976e`
+- 封存時間：2026-06-19T04:32:39.224Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

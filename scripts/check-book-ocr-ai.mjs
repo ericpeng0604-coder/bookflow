@@ -5,16 +5,14 @@ import { readFileSync } from "node:fs";
 import {
   BOOK_OCR_AI_DEFAULT_MODEL,
   buildBookCoverPrompt,
-  buildGatewayBookCoverRequest,
-  buildOpenAiBookCoverRequest,
-  extractGatewayOutputText,
-  extractOpenAiOutputText,
-  extractSafeGatewayErrorCode,
+  buildGeminiBookCoverRequest,
+  extractGeminiOutputText,
+  extractSafeProviderErrorCode,
   normalizeAiBookCover,
   parseBookCoverOutputText,
 } from "../lib/server/book-ocr-ai.ts";
 
-assert.equal(BOOK_OCR_AI_DEFAULT_MODEL, "gpt-5.4-mini");
+assert.equal(BOOK_OCR_AI_DEFAULT_MODEL, "gemini-2.5-flash");
 
 const normalized = normalizeAiBookCover({
   is_book_cover: true,
@@ -45,52 +43,33 @@ const prompt = buildBookCoverPrompt("ee7亂碼");
 assert.match(prompt, /Untrusted local OCR hint/);
 assert.match(prompt, /Do not infer missing values/);
 
-const request = buildOpenAiBookCoverRequest({
+const request = buildGeminiBookCoverRequest({
   model: BOOK_OCR_AI_DEFAULT_MODEL,
-  imageDataUrl: "data:image/jpeg;base64,AA==",
+  imageMimeType: "image/jpeg",
+  imageBase64: "AA==",
   localOcrText: "",
 });
-assert.equal(request.input[0].content[1].detail, "high");
-assert.equal(request.text.format.strict, true);
-assert.equal(request.text.format.schema.additionalProperties, false);
-
-const gatewayRequest = buildGatewayBookCoverRequest({
-  model: BOOK_OCR_AI_DEFAULT_MODEL,
-  imageDataUrl: "data:image/jpeg;base64,AA==",
-  localOcrText: "",
-});
-assert.equal(gatewayRequest.model, "openai/gpt-5.4-mini");
-assert.equal(gatewayRequest.max_tokens, 500);
-assert.equal(gatewayRequest.stream, false);
-assert.equal("max_completion_tokens" in gatewayRequest, false);
-assert.equal(gatewayRequest.messages[0].content[1].image_url.detail, "high");
-assert.equal(gatewayRequest.response_format.type, "json_schema");
-assert.equal("strict" in gatewayRequest.response_format.json_schema, false);
-assert.equal("providerOptions" in gatewayRequest, false);
+assert.equal(request.contents[0].parts[1].inlineData.mimeType, "image/jpeg");
+assert.equal(request.contents[0].parts[1].inlineData.data, "AA==");
+assert.equal(request.generationConfig.responseMimeType, "application/json");
+assert.equal(request.generationConfig.responseJsonSchema.additionalProperties, false);
 assert.equal(
-  extractGatewayOutputText({
-    choices: [{ message: { content: "{\"is_book_cover\":true}" } }],
+  extractGeminiOutputText({
+    candidates: [{ content: { parts: [{ text: "{\"is_book_cover\":true}" }] } }],
   }),
   "{\"is_book_cover\":true}",
 );
 assert.equal(
-  extractSafeGatewayErrorCode({ error: { code: "insufficient_credits" } }),
-  "insufficient_credits",
+  extractSafeProviderErrorCode({ error: { status: "RESOURCE_EXHAUSTED" } }),
+  "RESOURCE_EXHAUSTED",
 );
 assert.equal(
-  extractSafeGatewayErrorCode({ error: { code: "unsafe code with spaces" } }),
+  extractSafeProviderErrorCode({ error: { status: "unsafe code with spaces" } }),
   "",
 );
 assert.equal(
   parseBookCoverOutputText("```json\n{\"is_book_cover\":false}\n```").is_book_cover,
   false,
-);
-
-assert.equal(
-  extractOpenAiOutputText({
-    output: [{ content: [{ type: "output_text", text: "{\"title\":\"普通物理學\"}" }] }],
-  }),
-  "{\"title\":\"普通物理學\"}",
 );
 
 const route = readFileSync(new URL("../app/api/ai/book-cover/route.ts", import.meta.url), "utf8");
@@ -103,18 +82,12 @@ const migration = readFileSync(
 const env = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
 
 assert.match(route, /authClient\.auth\.getUser\(token\)/, "AI route must authenticate the access token");
-assert.match(route, /consume_book_ocr_quota/, "AI route must consume persistent quota before calling OpenAI");
+assert.match(route, /consume_book_ocr_quota/, "AI route must consume persistent quota before calling Gemini");
 assert.match(route, /image\.size > BOOK_OCR_AI_MAX_FILE_BYTES/, "AI route must enforce image size");
-assert.match(route, /OPENAI_API_KEY/, "AI route must keep the OpenAI key server-side");
-assert.match(route, /VERCEL_OIDC_TOKEN/, "Vercel deployments must support zero-config OIDC auth");
-assert.match(
-  route,
-  /request\.headers\.get\("x-vercel-oidc-token"\)/,
-  "Vercel Functions must read the runtime OIDC token from the request header",
-);
-assert.match(route, /ai-gateway\.vercel\.sh/, "OIDC fallback must use Vercel AI Gateway");
-assert.match(route, /v1\/chat\/completions/, "AI Gateway must use its documented image-compatible Chat Completions API");
-assert.match(route, /Gateway \$\{aiResponse\.status\}/, "Gateway failures must expose only a safe status diagnostic");
+assert.match(route, /GEMINI_API_KEY/, "AI route must keep the Gemini key server-side");
+assert.match(route, /generativelanguage\.googleapis\.com/, "AI route must call the official Gemini API");
+assert.match(route, /x-goog-api-key/, "Gemini authentication must stay in a server-side header");
+assert.match(route, /Gemini \$\{aiResponse\.status\}/, "Gemini failures must expose only a safe status diagnostic");
 assert.doesNotMatch(route, /console\.(log|info|debug)/, "AI route must not log uploaded image data");
 assert.match(client, /Authorization: `Bearer \$\{token\}`/, "browser request must forward the signed-in session");
 assert.match(app, /result\.needsAiFallback/, "cloud AI must only run after local OCR requests fallback");
@@ -128,7 +101,7 @@ assert.match(app, /ocr-privacy-note/, "the UI must disclose temporary cloud proc
 assert.match(migration, /primary key \(user_id, usage_date\)/, "quota must be persisted per user and UTC day");
 assert.match(migration, /request_count < daily_limit/, "quota increment must stop at the configured limit");
 assert.match(migration, /grant execute[\s\S]*to service_role/, "only the server role may consume quota");
-assert.match(env, /^OPENAI_API_KEY=$/m);
-assert.match(env, /^BOOK_OCR_AI_MODEL=gpt-5\.4-mini$/m);
+assert.match(env, /^GEMINI_API_KEY=$/m);
+assert.match(env, /^BOOK_OCR_AI_MODEL=gemini-2\.5-flash$/m);
 
 console.log("AI book-cover fallback checks passed.");
