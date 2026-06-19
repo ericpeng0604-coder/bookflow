@@ -1,4 +1,4 @@
-export const BOOK_OCR_AI_DEFAULT_MODEL = "gpt-5.4-mini";
+export const BOOK_OCR_AI_DEFAULT_MODEL = "gemini-2.5-flash";
 export const BOOK_OCR_AI_MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const BOOK_OCR_AI_ALLOWED_TYPES = new Set([
   "image/jpeg",
@@ -95,84 +95,41 @@ function bookCoverSchema() {
   };
 }
 
-export function buildOpenAiBookCoverRequest(params: {
+export function buildGeminiBookCoverRequest(params: {
   model: string;
-  imageDataUrl: string;
+  imageMimeType: string;
+  imageBase64: string;
   localOcrText: string;
 }) {
   return {
-    model: params.model,
-    reasoning: { effort: "low" },
-    max_output_tokens: 500,
-    input: [{
+    contents: [{
       role: "user",
-      content: [
-        { type: "input_text", text: buildBookCoverPrompt(params.localOcrText) },
+      parts: [
+        { text: buildBookCoverPrompt(params.localOcrText) },
         {
-          type: "input_image",
-          image_url: params.imageDataUrl,
-          detail: "high",
-        },
-      ],
-    }],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "book_cover_fields",
-        strict: true,
-        schema: bookCoverSchema(),
-      },
-    },
-  };
-}
-
-export function buildGatewayBookCoverRequest(params: {
-  model: string;
-  imageDataUrl: string;
-  localOcrText: string;
-}) {
-  return {
-    model: params.model.includes("/") ? params.model : `openai/${params.model}`,
-    max_tokens: 500,
-    stream: false,
-    messages: [{
-      role: "user",
-      content: [
-        { type: "text", text: buildBookCoverPrompt(params.localOcrText) },
-        {
-          type: "image_url",
-          image_url: {
-            url: params.imageDataUrl,
-            detail: "high",
+          inlineData: {
+            mimeType: params.imageMimeType,
+            data: params.imageBase64,
           },
         },
       ],
     }],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "book_cover_fields",
-        schema: bookCoverSchema(),
-      },
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseJsonSchema: bookCoverSchema(),
+      maxOutputTokens: 500,
+      temperature: 0.1,
     },
   };
 }
 
-export function extractOpenAiOutputText(value: unknown) {
+export function extractGeminiOutputText(value: unknown) {
   if (!value || typeof value !== "object") return "";
   const response = value as {
-    output_text?: unknown;
-    output?: Array<{ content?: Array<{ type?: string; text?: unknown }> }>;
+    candidates?: Array<{ content?: { parts?: Array<{ text?: unknown }> } }>;
   };
-  if (typeof response.output_text === "string") return response.output_text;
-  for (const item of response.output ?? []) {
-    for (const content of item.content ?? []) {
-      if (content.type === "output_text" && typeof content.text === "string") {
-        return content.text;
-      }
-    }
-  }
-  return "";
+  const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+  return typeof text === "string" ? text : "";
 }
 
 export function parseBookCoverOutputText(value: string) {
@@ -183,25 +140,19 @@ export function parseBookCoverOutputText(value: string) {
   return JSON.parse(withoutFence) as unknown;
 }
 
-export function extractGatewayOutputText(value: unknown) {
-  if (!value || typeof value !== "object") return "";
-  const response = value as {
-    choices?: Array<{ message?: { content?: unknown } }>;
-  };
-  const content = response.choices?.[0]?.message?.content;
-  return typeof content === "string" ? content : "";
-}
-
-export function extractSafeGatewayErrorCode(value: unknown) {
+export function extractSafeProviderErrorCode(value: unknown) {
   if (!value || typeof value !== "object") return "";
   const payload = value as {
     code?: unknown;
+    status?: unknown;
     type?: unknown;
-    error?: { code?: unknown; type?: unknown };
+    error?: { code?: unknown; status?: unknown; type?: unknown };
   };
   const candidate = payload.error?.code
+    ?? payload.error?.status
     ?? payload.error?.type
     ?? payload.code
+    ?? payload.status
     ?? payload.type;
   if (typeof candidate !== "string") return "";
   return /^[a-zA-Z0-9_.-]{1,80}$/.test(candidate) ? candidate : "";

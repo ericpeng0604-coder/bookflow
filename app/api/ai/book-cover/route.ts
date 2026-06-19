@@ -4,19 +4,16 @@ import {
   BOOK_OCR_AI_ALLOWED_TYPES,
   BOOK_OCR_AI_DEFAULT_MODEL,
   BOOK_OCR_AI_MAX_FILE_BYTES,
-  buildGatewayBookCoverRequest,
-  buildOpenAiBookCoverRequest,
-  extractGatewayOutputText,
-  extractOpenAiOutputText,
-  extractSafeGatewayErrorCode,
+  buildGeminiBookCoverRequest,
+  extractGeminiOutputText,
+  extractSafeProviderErrorCode,
   normalizeAiBookCover,
   parseBookCoverOutputText,
 } from "@/lib/server/book-ocr-ai";
 
 export const runtime = "nodejs";
 
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const VERCEL_AI_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
+const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_DAILY_LIMIT = 20;
 
 function configuredDailyLimit() {
@@ -52,11 +49,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "請先登入再使用 AI 封面補強" }, { status: 401 });
   }
 
-  const openAiKey = process.env.OPENAI_API_KEY;
-  const gatewayToken = process.env.AI_GATEWAY_API_KEY
-    || request.headers.get("x-vercel-oidc-token")
-    || process.env.VERCEL_OIDC_TOKEN;
-  if (!openAiKey && !gatewayToken) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
     return NextResponse.json({ error: "AI 封面補強尚未完成服務設定" }, { status: 503 });
   }
 
@@ -95,22 +89,23 @@ export async function POST(request: Request) {
   }
 
   const bytes = Buffer.from(await image.arrayBuffer());
-  const imageDataUrl = `data:${image.type};base64,${bytes.toString("base64")}`;
   const model = process.env.BOOK_OCR_AI_MODEL?.trim() || BOOK_OCR_AI_DEFAULT_MODEL;
-  const useGateway = !openAiKey;
-  const requestBody = useGateway
-    ? buildGatewayBookCoverRequest({ model, imageDataUrl, localOcrText })
-    : buildOpenAiBookCoverRequest({ model, imageDataUrl, localOcrText });
+  const requestBody = buildGeminiBookCoverRequest({
+    model,
+    imageMimeType: image.type,
+    imageBase64: bytes.toString("base64"),
+    localOcrText,
+  });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
 
   try {
     const aiResponse = await fetch(
-      useGateway ? VERCEL_AI_GATEWAY_URL : OPENAI_RESPONSES_URL,
+      `${GEMINI_API_BASE_URL}/${encodeURIComponent(model)}:generateContent`,
       {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${openAiKey || gatewayToken}`,
+        "x-goog-api-key": geminiKey,
         "content-type": "application/json",
       },
       body: JSON.stringify(requestBody),
@@ -119,18 +114,14 @@ export async function POST(request: Request) {
     );
     const aiPayload = await aiResponse.json().catch(() => ({}));
     if (!aiResponse.ok) {
-      const providerCode = useGateway ? extractSafeGatewayErrorCode(aiPayload) : "";
-      const diagnostic = useGateway
-        ? `（Gateway ${aiResponse.status}${providerCode ? `/${providerCode}` : ""}）`
-        : "";
+      const providerCode = extractSafeProviderErrorCode(aiPayload);
+      const diagnostic = `（Gemini ${aiResponse.status}${providerCode ? `/${providerCode}` : ""}）`;
       return NextResponse.json(
         { error: `AI 封面補強暫時無法完成${diagnostic}` },
         { status: 502 },
       );
     }
-    const outputText = useGateway
-      ? extractGatewayOutputText(aiPayload)
-      : extractOpenAiOutputText(aiPayload);
+    const outputText = extractGeminiOutputText(aiPayload);
     let structured: unknown;
     try {
       structured = parseBookCoverOutputText(outputText);

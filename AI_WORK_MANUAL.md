@@ -485,6 +485,22 @@ is preserved.
 untrusted and do not apply it unless a usable cloud result replaces it; failure
 must leave fields blank rather than guessing.
 
+### LESSON-029: Free AI fallback must not depend on a paid-account gate
+
+**Observed problem:** The deployed vision fallback was technically correct but
+Vercel AI Gateway rejected every request with customer verification required,
+which required adding a credit card the project owner did not have.
+
+**Cause:** Provider selection considered model quality and API compatibility but
+not whether the production account could activate the advertised free credits.
+
+**Detection:** Before integrating a free fallback, create the production
+credential and run one authenticated image request without billing enabled.
+
+**Prevention rule:** When no-card operation is required, use a provider whose
+API key and image model work on its actual free tier, keep the key server-side,
+and preserve a safe local/manual fallback when quota is exhausted.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
