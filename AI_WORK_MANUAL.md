@@ -451,6 +451,23 @@ image instead of checking only the endpoint path and content types.
 names and shapes until a deployed request succeeds; add optional provider
 features one at a time with live regression evidence.
 
+### LESSON-027: Privacy-safe diagnostics are required for paid provider failures
+
+**Observed problem:** Multiple deployed image requests returned the same generic
+fallback message, so parameter, billing, routing, and rate-limit failures could
+not be distinguished without another deployment.
+
+**Cause:** The route discarded the upstream HTTP status and machine-readable
+error code together with the sensitive provider payload.
+
+**Detection:** Exercise one authenticated production request and verify that a
+failure reports a provider status and allowlisted code without echoing prompts,
+images, credentials, or raw provider messages.
+
+**Prevention rule:** For paid provider calls, return or record only sanitized
+status and machine codes needed for operations; never log uploaded content or
+raw model responses.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

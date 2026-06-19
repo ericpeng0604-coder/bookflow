@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260619-fix-production-book-ocr-gateway-document",
-  "taskTitle": "fix production book OCR Gateway documented parameters",
-  "baseCommit": "965b6b72dac0e5bad65b6592f90c6d7403c885af",
-  "updatedAt": "2026-06-19T00:49:05.765Z",
+  "taskId": "20260619-add-safe-production-gateway-error-diagno",
+  "taskTitle": "add safe production Gateway error diagnostics",
+  "baseCommit": "3ccabce11cbcfee6181144be9faaf3968e2bb14b",
+  "updatedAt": "2026-06-19T00:55:21.485Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260619-0049-20260619-fix-production-book-ocr-gateway.md"
+  "historyFile": ".ai/history/20260619-0055-20260619-add-safe-production-gateway-err.md"
 }
