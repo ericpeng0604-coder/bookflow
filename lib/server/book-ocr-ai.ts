@@ -133,15 +133,8 @@ export function buildGatewayBookCoverRequest(params: {
 }) {
   return {
     model: params.model.includes("/") ? params.model : `openai/${params.model}`,
-    reasoning: { effort: "low" },
-    max_output_tokens: 500,
-    providerOptions: {
-      gateway: {
-        zeroDataRetention: true,
-      },
-    },
-    input: [{
-      type: "message",
+    max_completion_tokens: 500,
+    messages: [{
       role: "user",
       content: [
         { type: "text", text: buildBookCoverPrompt(params.localOcrText) },
@@ -154,6 +147,14 @@ export function buildGatewayBookCoverRequest(params: {
         },
       ],
     }],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "book_cover_fields",
+        strict: true,
+        schema: bookCoverSchema(),
+      },
+    },
   };
 }
 
@@ -180,4 +181,13 @@ export function parseBookCoverOutputText(value: string) {
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
   return JSON.parse(withoutFence) as unknown;
+}
+
+export function extractGatewayOutputText(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const response = value as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const content = response.choices?.[0]?.message?.content;
+  return typeof content === "string" ? content : "";
 }

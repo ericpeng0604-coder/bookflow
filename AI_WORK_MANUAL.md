@@ -415,6 +415,24 @@ contains the OIDC header before declaring AI Gateway available.
 `request.headers.get("x-vercel-oidc-token")`, with environment variables used
 only as explicit API-key or local-development fallbacks.
 
+### LESSON-025: Provider compatibility needs an authenticated image request
+
+**Observed problem:** After OIDC authentication was fixed, the AI Gateway still
+rejected the production vision request even though the model existed and static
+request-shape checks passed.
+
+**Cause:** Model availability and endpoint documentation were treated as proof
+that the selected provider compatibility surface worked for this exact
+multimodal structured-output request.
+
+**Detection:** Send the real authenticated image through the deployed endpoint
+and distinguish service configuration, authentication, provider request, and
+response parsing failures.
+
+**Prevention rule:** For AI Gateway vision extraction, use the documented
+OpenAI Chat Completions image and `json_schema` wire format, and do not claim
+provider compatibility until one real deployed request returns parsed fields.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

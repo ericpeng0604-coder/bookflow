@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix production book OCR AI Gateway image format
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`3fd6c7c67548ed30715165fc152ac9e0b32247f1`
+- 封存時間：2026-06-19T00:40:37.775Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
