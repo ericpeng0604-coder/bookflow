@@ -133,7 +133,8 @@ export function buildGatewayBookCoverRequest(params: {
 }) {
   return {
     model: params.model.includes("/") ? params.model : `openai/${params.model}`,
-    max_completion_tokens: 500,
+    max_tokens: 500,
+    stream: false,
     messages: [{
       role: "user",
       content: [
@@ -151,7 +152,6 @@ export function buildGatewayBookCoverRequest(params: {
       type: "json_schema",
       json_schema: {
         name: "book_cover_fields",
-        strict: true,
         schema: bookCoverSchema(),
       },
     },
