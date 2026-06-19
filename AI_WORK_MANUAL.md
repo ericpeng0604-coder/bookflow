@@ -397,6 +397,24 @@ are not logged or stored, and delayed results do not replace non-empty fields.
 endpoint with a database-backed daily quota, disclose temporary cloud
 processing, and only fill fields that remain empty when the result arrives.
 
+### LESSON-024: Vercel runtime OIDC tokens arrive in the request header
+
+**Observed problem:** The production AI fallback reported missing service
+configuration even though the application was deployed on Vercel with OIDC
+support.
+
+**Cause:** The route only checked `process.env.VERCEL_OIDC_TOKEN`. Vercel exposes
+that value during builds, but Vercel Functions receive the runtime token through
+the `x-vercel-oidc-token` request header.
+
+**Detection:** Exercise the authenticated production route instead of relying
+only on builds or unauthenticated smoke checks, and verify the runtime request
+contains the OIDC header before declaring AI Gateway available.
+
+**Prevention rule:** In Vercel Functions, read OIDC from
+`request.headers.get("x-vercel-oidc-token")`, with environment variables used
+only as explicit API-key or local-development fallbacks.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

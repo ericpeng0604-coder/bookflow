@@ -86,6 +86,11 @@ assert.match(route, /consume_book_ocr_quota/, "AI route must consume persistent 
 assert.match(route, /image\.size > BOOK_OCR_AI_MAX_FILE_BYTES/, "AI route must enforce image size");
 assert.match(route, /OPENAI_API_KEY/, "AI route must keep the OpenAI key server-side");
 assert.match(route, /VERCEL_OIDC_TOKEN/, "Vercel deployments must support zero-config OIDC auth");
+assert.match(
+  route,
+  /request\.headers\.get\("x-vercel-oidc-token"\)/,
+  "Vercel Functions must read the runtime OIDC token from the request header",
+);
 assert.match(route, /ai-gateway\.vercel\.sh/, "OIDC fallback must use Vercel AI Gateway");
 assert.doesNotMatch(route, /console\.(log|info|debug)/, "AI route must not log uploaded image data");
 assert.match(client, /Authorization: `Bearer \$\{token\}`/, "browser request must forward the signed-in session");

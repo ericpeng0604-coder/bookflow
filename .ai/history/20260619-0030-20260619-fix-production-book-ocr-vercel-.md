@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix production book OCR Vercel OIDC runtime token
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`5b77a132e95ad48f5b34999b1b3f446665208a70`
+- 封存時間：2026-06-19T00:30:30.565Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
