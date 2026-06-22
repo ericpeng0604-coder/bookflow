@@ -600,6 +600,22 @@ before staging, committing, pushing, or deploying.
 **Prevention rule:** Do not rely on PowerShell to stop after a failed external
 command. Check `$LASTEXITCODE` and throw before any following mutation.
 
+### LESSON-036: Structured AI output must allow for multipart and bounded responses
+
+**Observed problem:** A clear university textbook cover reached Gemini, but the
+application reported that the AI response format could not be parsed.
+
+**Cause:** The parser read only the first response text part and the response
+budget was too tight for a structured result from a thinking-capable model.
+
+**Detection:** Test split response parts, fenced or prefixed JSON, incomplete
+JSON, and a real cover whose local OCR cannot read stylized Traditional Chinese
+title text.
+
+**Prevention rule:** Join all provider text parts, extract one complete JSON
+object defensively, reserve enough output tokens, and disable unnecessary
+thinking for deterministic extraction requests.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

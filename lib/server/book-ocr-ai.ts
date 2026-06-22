@@ -129,6 +129,7 @@ export function buildBookCoverPrompt(localOcrText: string) {
     "Use education_level values elementary, junior_high, senior_high, vocational_high, or university.",
     "Use semester values first or second. Use book_type values textbook, workbook, teacher_guide, reference, assessment, or other.",
     "Do not infer missing values from general knowledge, similar books, cover art, or the OCR hint.",
+    "Inspect large stylized Traditional Chinese title text directly even when it has shadows, outlines, gradients, or a photographic background.",
     "Use null for any field that is not clearly visible.",
     "Set is_book_cover to false for unrelated, unreadable, or non-book images.",
     "Confidence must reflect the visible evidence, not familiarity with the book.",
@@ -202,8 +203,11 @@ export function buildGeminiBookCoverRequest(params: {
     generationConfig: {
       responseMimeType: "application/json",
       responseJsonSchema: bookCoverSchema(),
-      maxOutputTokens: 500,
+      maxOutputTokens: 1200,
       temperature: 0.1,
+      thinkingConfig: {
+        thinkingBudget: 0,
+      },
     },
   };
 }
@@ -213,8 +217,10 @@ export function extractGeminiOutputText(value: unknown) {
   const response = value as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: unknown }> } }>;
   };
-  const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
-  return typeof text === "string" ? text : "";
+  return response.candidates?.[0]?.content?.parts
+    ?.map((part) => typeof part.text === "string" ? part.text : "")
+    .join("")
+    .trim() || "";
 }
 
 export function parseBookCoverOutputText(value: string) {
@@ -222,7 +228,39 @@ export function parseBookCoverOutputText(value: string) {
   const withoutFence = trimmed
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
-  return JSON.parse(withoutFence) as unknown;
+  try {
+    return JSON.parse(withoutFence) as unknown;
+  } catch {
+    const start = withoutFence.indexOf("{");
+    if (start < 0) throw new SyntaxError("Gemini response did not contain JSON");
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < withoutFence.length; index += 1) {
+      const character = withoutFence[index];
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (character === "\\") {
+          escaped = true;
+        } else if (character === "\"") {
+          inString = false;
+        }
+        continue;
+      }
+      if (character === "\"") {
+        inString = true;
+      } else if (character === "{") {
+        depth += 1;
+      } else if (character === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          return JSON.parse(withoutFence.slice(start, index + 1)) as unknown;
+        }
+      }
+    }
+    throw new SyntaxError("Gemini response contained incomplete JSON");
+  }
 }
 
 export function extractSafeProviderErrorCode(value: unknown) {

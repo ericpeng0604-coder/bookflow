@@ -42,6 +42,7 @@ assert.equal(normalizeAiBookCover({
 const prompt = buildBookCoverPrompt("ee7亂碼");
 assert.match(prompt, /Untrusted local OCR hint/);
 assert.match(prompt, /Do not infer missing values/);
+assert.match(prompt, /stylized Traditional Chinese title/);
 
 const request = buildGeminiBookCoverRequest({
   model: BOOK_OCR_AI_DEFAULT_MODEL,
@@ -53,9 +54,14 @@ assert.equal(request.contents[0].parts[1].inlineData.mimeType, "image/jpeg");
 assert.equal(request.contents[0].parts[1].inlineData.data, "AA==");
 assert.equal(request.generationConfig.responseMimeType, "application/json");
 assert.equal(request.generationConfig.responseJsonSchema.additionalProperties, false);
+assert.equal(request.generationConfig.maxOutputTokens, 1200);
+assert.equal(request.generationConfig.thinkingConfig.thinkingBudget, 0);
 assert.equal(
   extractGeminiOutputText({
-    candidates: [{ content: { parts: [{ text: "{\"is_book_cover\":true}" }] } }],
+    candidates: [{ content: { parts: [
+      { text: "{\"is_book_" },
+      { text: "cover\":true}" },
+    ] } }],
   }),
   "{\"is_book_cover\":true}",
 );
@@ -70,6 +76,15 @@ assert.equal(
 assert.equal(
   parseBookCoverOutputText("```json\n{\"is_book_cover\":false}\n```").is_book_cover,
   false,
+);
+assert.equal(
+  parseBookCoverOutputText("Here is the result:\n{\"is_book_cover\":true,\"title\":\"微積分\"}\nDone.")
+    .title,
+  "微積分",
+);
+assert.throws(
+  () => parseBookCoverOutputText("{\"is_book_cover\":true"),
+  /incomplete JSON/,
 );
 
 const route = readFileSync(new URL("../app/api/ai/book-cover/route.ts", import.meta.url), "utf8");
