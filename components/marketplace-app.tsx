@@ -4308,7 +4308,6 @@ function BookFormModal({
   const [ocrMessage, setOcrMessage] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const ocrRequestRef = useRef(0);
-  const actionDialog = useActionDialog();
   const baseDraft = {
     title: value.title,
     author: value.author,
@@ -4343,7 +4342,8 @@ function BookFormModal({
       return baseDraft;
     }
   });
-  const dirty = imageFile !== null || ocrReferenceFile !== null || JSON.stringify(draft) !== baseDraftSignature;
+  const draftChanged = JSON.stringify(draft) !== baseDraftSignature;
+  const dirty = imageFile !== null || ocrReferenceFile !== null || draftChanged;
   const isSecondhand = initialListingType === "secondhand";
 
   useEffect(() => () => {
@@ -4351,7 +4351,7 @@ function BookFormModal({
   }, [preview]);
 
   useEffect(() => {
-    if (!dirty) {
+    if (!draftChanged) {
       window.localStorage.removeItem(draftStorageKey);
       return;
     }
@@ -4359,7 +4359,7 @@ function BookFormModal({
       window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [dirty, draft, draftStorageKey]);
+  }, [draftChanged, draft, draftStorageKey]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -4370,17 +4370,17 @@ function BookFormModal({
     return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
   }, [dirty]);
 
-  async function requestClose() {
-    if (!dirty) {
-      onClose();
-      return;
+  function requestClose() {
+    try {
+      if (draftChanged) {
+        window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+      } else {
+        window.localStorage.removeItem(draftStorageKey);
+      }
+    } catch {
+      // Closing the form must still work when browser storage is unavailable.
     }
-    const confirmed = await actionDialog.ask({
-      title: "保留刊登草稿",
-      message: "尚未送出的文字已暫存在這台裝置，下次開啟同一份刊登可繼續填寫；新選的圖片基於隱私不會留在瀏覽器。",
-      confirmLabel: "離開並保留草稿",
-    });
-    if (confirmed !== null) onClose();
+    onClose();
   }
 
   function selectImage(event: React.ChangeEvent<HTMLInputElement>) {
@@ -4531,7 +4531,7 @@ function BookFormModal({
     <ModalShell
       title={book ? "編輯刊登" : isSecondhand ? "刊登二手物品" : "刊登一本課本"}
       subtitle="標示 * 的欄位為必填；文字草稿會自動保留在這台裝置"
-      onClose={() => void requestClose()}
+      onClose={requestClose}
     >
       <form onSubmit={onSubmit} className="form book-form">
         <fieldset disabled={saving} className="book-form-fields">
@@ -4660,14 +4660,6 @@ function BookFormModal({
         </fieldset>
       </form>
     </ModalShell>
-    {actionDialog.dialog && (
-      <ActionDialog
-        key={actionDialog.dialog.id}
-        request={actionDialog.dialog}
-        onCancel={actionDialog.cancel}
-        onConfirm={actionDialog.confirm}
-      />
-    )}
     </>
   );
 }

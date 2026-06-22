@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260622-fix-gemini-ocr-response-parsing-for-styl",
-  "taskTitle": "fix Gemini OCR response parsing for stylized Chinese textbook covers",
-  "baseCommit": "9372a6780be083e0a81d7ac3498088cae6ed0416",
-  "updatedAt": "2026-06-22T02:49:35.361Z",
+  "taskId": "20260622-remove-listing-close-confirmation-and-sa",
+  "taskTitle": "remove listing close confirmation and save text draft immediately",
+  "baseCommit": "3d84d8d43255265d4ef1fd1afc8bea5fa5c66d22",
+  "updatedAt": "2026-06-22T12:45:19.751Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260622-0249-20260622-fix-gemini-ocr-response-parsing.md"
+  "historyFile": ".ai/history/20260622-1245-20260622-remove-listing-close-confirmati.md"
 }
