@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260622-remove-listing-close-confirmation-and-sa",
-  "taskTitle": "remove listing close confirmation and save text draft immediately",
-  "baseCommit": "3d84d8d43255265d4ef1fd1afc8bea5fa5c66d22",
-  "updatedAt": "2026-06-22T12:45:19.751Z",
+  "taskId": "20260622-remove-advanced-textbook-metadata-fields",
+  "taskTitle": "remove advanced textbook metadata fields from listing form",
+  "baseCommit": "b00deb91c4433e3144d396113428956b385f1c54",
+  "updatedAt": "2026-06-22T12:59:31.132Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260622-1245-20260622-remove-listing-close-confirmati.md"
+  "historyFile": ".ai/history/20260622-1259-20260622-remove-advanced-textbook-metada.md"
 }

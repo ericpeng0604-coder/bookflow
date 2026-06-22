@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：remove advanced textbook metadata fields from listing form
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`b00deb91c4433e3144d396113428956b385f1c54`
+- 封存時間：2026-06-22T12:59:31.131Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

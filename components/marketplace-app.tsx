@@ -1470,16 +1470,6 @@ export function MarketplaceApp() {
         title: payload.title,
         author: payload.author,
         edition: payload.edition,
-        publisher: payload.publisher,
-        educationLevel: payload.educationLevel,
-        grade: payload.grade,
-        semester: payload.semester,
-        subject: payload.subject,
-        volume: payload.volume,
-        curriculum: payload.curriculum,
-        bookType: payload.bookType,
-        isbn13: payload.isbn13,
-        approvalNumber: payload.approvalNumber,
       };
 
       if (payload.listingType === "book" && payload.department && !departments.slice(1).includes(payload.department)) {
@@ -4312,16 +4302,6 @@ function BookFormModal({
     title: value.title,
     author: value.author,
     edition: value.edition,
-    publisher: value.publisher,
-    educationLevel: value.educationLevel,
-    grade: value.grade,
-    semester: value.semester,
-    subject: value.subject,
-    volume: value.volume,
-    curriculum: value.curriculum,
-    bookType: value.bookType,
-    isbn13: value.isbn13,
-    approvalNumber: value.approvalNumber,
     department: value.department,
     course: value.course,
     teacher: value.teacher,
@@ -4412,10 +4392,7 @@ function BookFormModal({
     setOcrBusy(true);
     setOcrMessage("正在準備封面圖片...");
     try {
-      const {
-        detectIsbnBarcode,
-        recognizeBookCover,
-      } = await import("@/lib/marketplace/free-ocr");
+      const { recognizeBookCover } = await import("@/lib/marketplace/free-ocr");
       const primaryResult = await recognizeBookCover(imageFile, (stage, progress) => {
         const percent = Math.max(1, Math.round((progress ?? 0) * 100));
         if (stage === "preparing") setOcrMessage("正在縮小並強化封面，避免手機處理過多像素...");
@@ -4426,7 +4403,6 @@ function BookFormModal({
       const referenceResult = ocrReferenceFile
         ? await recognizeBookCover(ocrReferenceFile)
         : null;
-      const barcodeIsbn = await detectIsbnBarcode(ocrReferenceFile || imageFile);
       if (requestId !== ocrRequestRef.current) return;
       const candidates = rankTaiwanTextbookCandidates([
         {
@@ -4438,11 +4414,6 @@ function BookFormModal({
           source: "back_ocr" as const,
           confidence: referenceResult.confidence,
           draft: referenceResult.draft,
-        }] : []),
-        ...(barcodeIsbn ? [{
-          source: "barcode" as const,
-          confidence: 100,
-          draft: { isbn13: barcodeIsbn },
         }] : []),
       ]);
       const mergedLocalDraft = candidates
@@ -4462,18 +4433,12 @@ function BookFormModal({
             title: "",
             author: "",
             edition: "",
-            publisher: "",
-            educationLevel: "",
-            grade: "",
-            semester: "",
-            subject: "",
-            volume: "",
-            curriculum: "",
-            bookType: "",
-            isbn13: "",
-            approvalNumber: "",
           }
-        : mergedLocalDraft;
+        : {
+            title: mergedLocalDraft.title,
+            author: mergedLocalDraft.author,
+            edition: mergedLocalDraft.edition,
+          };
       let usedAiFallback = false;
       let remainingAiUses: number | null = null;
       let aiFallbackError = "";
@@ -4484,7 +4449,11 @@ function BookFormModal({
           const aiResult = await recognizeBookCoverWithAi(supabase, imageFile, localText);
           if (requestId !== ocrRequestRef.current) return;
           if (aiResult.draft.title) {
-            ocrDraft = aiResult.draft;
+            ocrDraft = {
+              title: aiResult.draft.title,
+              author: aiResult.draft.author,
+              edition: aiResult.draft.edition,
+            };
             usedAiFallback = true;
           }
           remainingAiUses = aiResult.remaining;
@@ -4497,24 +4466,12 @@ function BookFormModal({
         title: previous.title.trim() ? previous.title : ocrDraft.title || previous.title,
         author: previous.author.trim() ? previous.author : ocrDraft.author || previous.author,
         edition: previous.edition.trim() ? previous.edition : ocrDraft.edition || previous.edition,
-        publisher: previous.publisher.trim() ? previous.publisher : ocrDraft.publisher || previous.publisher,
-        educationLevel: previous.educationLevel || ocrDraft.educationLevel || "",
-        grade: previous.grade.trim() ? previous.grade : ocrDraft.grade || previous.grade,
-        semester: previous.semester || ocrDraft.semester || "",
-        subject: previous.subject.trim() ? previous.subject : ocrDraft.subject || previous.subject,
-        volume: previous.volume.trim() ? previous.volume : ocrDraft.volume || previous.volume,
-        curriculum: previous.curriculum.trim() ? previous.curriculum : ocrDraft.curriculum || previous.curriculum,
-        bookType: previous.bookType || ocrDraft.bookType || "",
-        isbn13: previous.isbn13.trim() ? previous.isbn13 : ocrDraft.isbn13 || previous.isbn13,
-        approvalNumber: previous.approvalNumber.trim()
-          ? previous.approvalNumber
-          : ocrDraft.approvalNumber || previous.approvalNumber,
       }));
       setOcrOriginalDraft(ocrDraft);
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
         ? usedAiFallback
           ? `AI 已補強可見的封面資料；今天還可使用 ${remainingAiUses ?? 0} 次，送出前請再確認。`
-          : `已填入可信的書名、作者或版本資訊${primaryResult.usedChineseFallback || referenceResult?.usedChineseFallback ? "（已使用中文補強）" : ""}${barcodeIsbn ? "，並讀到 ISBN 條碼" : ""}；送出前請再確認。${aiFallbackError ? ` AI 補強未完成：${aiFallbackError}` : ""}`
+          : `已填入可信的書名、作者或版本資訊${primaryResult.usedChineseFallback || referenceResult?.usedChineseFallback ? "（已使用中文補強）" : ""}；送出前請再確認。${aiFallbackError ? ` AI 補強未完成：${aiFallbackError}` : ""}`
         : aiFallbackError
           ? `辨識結果不足，且 ${aiFallbackError}。請拍近一點或改用手動填寫。`
           : "辨識結果可信度不足，因此沒有覆寫欄位。請拍近一點、避免反光，或改用手動填寫。");
@@ -4613,33 +4570,21 @@ function BookFormModal({
           ) : (
             <>
               <input type="hidden" name="itemCategory" value="book" />
+              <input type="hidden" name="publisher" value={value.publisher} />
+              <input type="hidden" name="educationLevel" value={value.educationLevel} />
+              <input type="hidden" name="grade" value={value.grade} />
+              <input type="hidden" name="semester" value={value.semester} />
+              <input type="hidden" name="subject" value={value.subject} />
+              <input type="hidden" name="volume" value={value.volume} />
+              <input type="hidden" name="curriculum" value={value.curriculum} />
+              <input type="hidden" name="bookType" value={value.bookType} />
+              <input type="hidden" name="isbn13" value={value.isbn13} />
+              <input type="hidden" name="approvalNumber" value={value.approvalNumber} />
               <label>作者 *<input name="author" required maxLength={LISTING_FIELD_LIMITS.author} value={draft.author} onChange={(event) => updateDraft("author", event.target.value)} /></label>
               <label>版本 *<input name="edition" required maxLength={LISTING_FIELD_LIMITS.edition} value={draft.edition} onChange={(event) => updateDraft("edition", event.target.value)} placeholder="例如：第 2 版" /></label>
-              <label>出版社（選填）<input name="publisher" maxLength={LISTING_FIELD_LIMITS.publisher} value={draft.publisher} onChange={(event) => updateDraft("publisher", event.target.value)} placeholder="例如：全華、Pearson" /></label>
               <label>科系（選填）<select name="department" value={draft.department} onChange={(event) => updateDraft("department", event.target.value)}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
               <label>課程（選填）<input name="course" maxLength={LISTING_FIELD_LIMITS.course} value={draft.course} onChange={(event) => updateDraft("course", event.target.value)} /></label>
               <label>授課老師（選填）<input name="teacher" maxLength={LISTING_FIELD_LIMITS.teacher} value={draft.teacher} onChange={(event) => updateDraft("teacher", event.target.value)} /></label>
-              <label>教育階段（選填）
-                <select name="educationLevel" value={draft.educationLevel} onChange={(event) => updateDraft("educationLevel", event.target.value)}>
-                  {EDUCATION_LEVEL_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
-              </label>
-              <label>年級（選填）<input name="grade" maxLength={LISTING_FIELD_LIMITS.grade} value={draft.grade} onChange={(event) => updateDraft("grade", event.target.value)} placeholder="例如：7 或 高1" /></label>
-              <label>學期（選填）
-                <select name="semester" value={draft.semester} onChange={(event) => updateDraft("semester", event.target.value)}>
-                  {SEMESTER_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
-              </label>
-              <label>科目（選填）<input name="subject" maxLength={LISTING_FIELD_LIMITS.subject} value={draft.subject} onChange={(event) => updateDraft("subject", event.target.value)} placeholder="例如：數學、自然科學" /></label>
-              <label>冊次／部別（選填）<input name="volume" maxLength={LISTING_FIELD_LIMITS.volume} value={draft.volume} onChange={(event) => updateDraft("volume", event.target.value)} placeholder="例如：第1冊、必修I" /></label>
-              <label>課綱（選填）<input name="curriculum" maxLength={LISTING_FIELD_LIMITS.curriculum} value={draft.curriculum} onChange={(event) => updateDraft("curriculum", event.target.value)} placeholder="例如：108課綱" /></label>
-              <label>書籍類型（選填）
-                <select name="bookType" value={draft.bookType} onChange={(event) => updateDraft("bookType", event.target.value)}>
-                  {BOOK_TYPE_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
-              </label>
-              <label>ISBN-13（選填）<input name="isbn13" inputMode="numeric" maxLength={LISTING_FIELD_LIMITS.isbn13} value={draft.isbn13} onChange={(event) => updateDraft("isbn13", event.target.value)} placeholder="978xxxxxxxxxx" /></label>
-              <label className="full">審定字號（選填）<input name="approvalNumber" maxLength={LISTING_FIELD_LIMITS.approvalNumber} value={draft.approvalNumber} onChange={(event) => updateDraft("approvalNumber", event.target.value)} /></label>
             </>
           )}
 
