@@ -25,13 +25,13 @@ import {
   ShieldCheck,
   RotateCcw,
   UserCog,
-  SlidersHorizontal,
   Sparkles,
   Trash2,
   UserRound,
   X,
 } from "lucide-react";
-import { FormEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { FormEvent, type MouseEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-data";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import {
@@ -53,15 +53,10 @@ import {
   dispatchBrowserPush,
   enableBrowserPush,
 } from "@/lib/marketplace/browser-push";
-import {
-  imageQualityFlags,
-  recognizeBookCover,
-  recognizeImageText,
-  studentVerificationFlagLabels,
-  type StudentVerificationFlags,
-  warmBookOcr,
+import type {
+  StudentVerificationFlags,
+  BookOcrDraft,
 } from "@/lib/marketplace/free-ocr";
-import { recognizeBookCoverWithAi } from "@/lib/marketplace/book-ocr-ai";
 import {
   deleteChatImageUploads,
   fetchTradeMessages,
@@ -84,6 +79,15 @@ import {
   fetchNotifications,
 } from "@/lib/marketplace/queries";
 import { isAbortError, runGuarded } from "@/lib/marketplace/refresh-guard";
+import {
+  LISTING_FIELD_LIMITS,
+  normalizeAndValidateListingFields,
+} from "@/lib/marketplace/listing-validation";
+import {
+  TAIWAN_TEXTBOOK_CATALOG_VERSION,
+  normalizeTaiwanTextbookQuery,
+  rankTaiwanTextbookCandidates,
+} from "@/lib/marketplace/taiwan-textbook";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   Book,
@@ -109,6 +113,11 @@ import type {
 const STORAGE_KEY = "bookflow-market-v1";
 const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
 const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
+const listingDraftStorageKey = (
+  userId: string,
+  listingType: ListingType,
+  bookId?: string,
+) => `bookflow-listing-draft-v1:${userId}:${bookId || `new-${listingType}`}`;
 
 type View = "home" | "book" | "dashboard" | "admin";
 type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites";
@@ -120,6 +129,49 @@ type Store = {
   profiles: Profile[];
   currentUser: Profile | null;
 };
+
+type ActionDialogRequest = {
+  id: number;
+  title: string;
+  message: string;
+  inputLabel?: string;
+  inputPlaceholder?: string;
+  initialValue?: string;
+  minLength?: number;
+  confirmLabel?: string;
+  danger?: boolean;
+};
+
+function useActionDialog() {
+  const [dialog, setDialog] = useState<ActionDialogRequest | null>(null);
+  const resolver = useRef<((value: string | null) => void) | null>(null);
+  const sequence = useRef(0);
+
+  const ask = useCallback((request: Omit<ActionDialogRequest, "id">) => (
+    new Promise<string | null>((resolve) => {
+      resolver.current?.(null);
+      resolver.current = resolve;
+      sequence.current += 1;
+      setDialog({ ...request, id: sequence.current });
+    })
+  ), []);
+
+  const cancel = useCallback(() => {
+    resolver.current?.(null);
+    resolver.current = null;
+    setDialog(null);
+  }, []);
+
+  const confirm = useCallback((value: string) => {
+    resolver.current?.(value);
+    resolver.current = null;
+    setDialog(null);
+  }, []);
+
+  useEffect(() => () => resolver.current?.(null), []);
+
+  return { dialog, ask, cancel, confirm };
+}
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 120_000;
 const SECONDHAND_CATEGORIES = [ALL_ITEM_CATEGORIES, "3C 電子", "文具用品", "宿舍生活", "服飾配件", "運動休閒", "其他"];
@@ -203,6 +255,15 @@ const blankBook: Omit<
   teacher: "",
   edition: "",
   publisher: "",
+  educationLevel: "",
+  grade: "",
+  semester: "",
+  subject: "",
+  volume: "",
+  curriculum: "",
+  bookType: "",
+  isbn13: "",
+  approvalNumber: "",
   condition: "書況良好",
   price: 0,
   imageUrl: "",
@@ -211,6 +272,57 @@ const blankBook: Omit<
   contactMethod: "none",
   contactValue: "",
 };
+
+const EDUCATION_LEVEL_OPTIONS = [
+  ["", "未指定"],
+  ["elementary", "國小"],
+  ["junior_high", "國中"],
+  ["senior_high", "普通高中"],
+  ["vocational_high", "技高／高職"],
+  ["university", "大專院校"],
+] as const;
+
+const SEMESTER_OPTIONS = [
+  ["", "未指定"],
+  ["first", "上學期"],
+  ["second", "下學期"],
+] as const;
+
+const BOOK_TYPE_OPTIONS = [
+  ["", "未指定"],
+  ["textbook", "課本／教科書"],
+  ["workbook", "習作"],
+  ["teacher_guide", "教師手冊"],
+  ["reference", "自修／講義"],
+  ["assessment", "評量／題庫"],
+  ["other", "其他"],
+] as const;
+
+function optionLabel(
+  options: readonly (readonly [string, string])[],
+  value: string,
+) {
+  return options.find(([option]) => option === value)?.[1] || value;
+}
+
+function textbookMetadata(book: Book) {
+  return [
+    optionLabel(EDUCATION_LEVEL_OPTIONS, book.educationLevel),
+    book.grade ? `${book.grade}年級` : "",
+    optionLabel(SEMESTER_OPTIONS, book.semester),
+    book.subject,
+    book.volume,
+    book.curriculum,
+    optionLabel(BOOK_TYPE_OPTIONS, book.bookType),
+  ].filter(Boolean);
+}
+
+function studentVerificationFlagLabels(flags: StudentVerificationFlags) {
+  const labels = [flags.schoolMatched ? "校名疑似符合" : "未辨識到虎科校名"];
+  if (flags.textTooShort) labels.push("可讀文字偏少");
+  if (flags.imageTooSmall) labels.push("圖片尺寸偏小");
+  return labels;
+}
 
 function money(value: number) {
   return new Intl.NumberFormat("zh-TW", { style: "currency", currency: "TWD", maximumFractionDigits: 0 }).format(value);
@@ -254,6 +366,8 @@ function authErrorMessage(message: string, fallback: string) {
 export function MarketplaceApp() {
   const [store, setStore] = useState<Store>({ books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null });
   const [ready, setReady] = useState(false);
+  const [online, setOnline] = useState(true);
+  const actionDialog = useActionDialog();
   const [view, setView] = useState<View>("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -286,6 +400,8 @@ export function MarketplaceApp() {
   const [myBooks, setMyBooks] = useState<Book[]>([]);
   const [requestBooks, setRequestBooks] = useState<Book[]>([]);
   const [detailBook, setDetailBook] = useState<Book | null>(null);
+  const [bookDetailLoading, setBookDetailLoading] = useState(false);
+  const [bookDetailMissing, setBookDetailMissing] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => new Set());
   const [favoriteBookCache, setFavoriteBookCache] = useState<Book[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -537,7 +653,18 @@ export function MarketplaceApp() {
   useEffect(() => {
     window.localStorage.removeItem(STORAGE_KEY);
     setFavoriteIds(readFavoriteIds());
+    setOnline(navigator.onLine);
     setReady(true);
+  }, []);
+
+  useEffect(() => {
+    const updateConnection = () => setOnline(navigator.onLine);
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    return () => {
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
+    };
   }, []);
 
   useEffect(() => {
@@ -690,13 +817,17 @@ export function MarketplaceApp() {
   }, [store.currentUser]);
 
   useEffect(() => {
-    if (!ready || !store.currentUser) return;
+    if (!ready) return;
     const params = new URLSearchParams(window.location.search);
     const targetView = params.get("view");
     const targetTab = params.get("tab");
     const targetConversation = params.get("conversation");
     const targetBook = params.get("book");
-    if (targetView === "dashboard") {
+    const targetMarket = params.get("market");
+    if (targetMarket === "secondhand" || targetMarket === "book") {
+      setListingType(targetMarket);
+    }
+    if (targetView === "dashboard" && store.currentUser) {
       setView("dashboard");
       if (["listings", "chats", "requests", "received", "favorites"].includes(targetTab || "")) {
         setDashboardTab(targetTab as DashboardTab);
@@ -717,6 +848,29 @@ export function MarketplaceApp() {
       setView("book");
     }
   }, [ready, store.currentUser]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const restorePublicNavigation = () => {
+      const params = new URLSearchParams(window.location.search);
+      const targetMarket = params.get("market");
+      if (targetMarket === "book" || targetMarket === "secondhand") {
+        setListingType(targetMarket);
+      }
+      const targetBook = params.get("book");
+      if (params.get("view") === "book" && targetBook) {
+        setSelectedId(targetBook);
+        setDetailBook(null);
+        setView("book");
+      } else if (params.get("view") !== "dashboard") {
+        setSelectedId(null);
+        setDetailBook(null);
+        setView("home");
+      }
+    };
+    window.addEventListener("popstate", restorePublicNavigation);
+    return () => window.removeEventListener("popstate", restorePublicNavigation);
+  }, [ready]);
 
   useEffect(() => {
     if (!supabase || view !== "admin" || !store.currentUser) return;
@@ -751,9 +905,13 @@ export function MarketplaceApp() {
     ].find((book) => book.id === selectedId);
     if (knownBook) {
       setDetailBook(knownBook);
+      setBookDetailMissing(false);
+      setBookDetailLoading(false);
       return;
     }
     setDetailBook(null);
+    setBookDetailMissing(false);
+    setBookDetailLoading(true);
     const client = supabase;
     const bookId = selectedId;
     void runGuarded("book-detail", async (signal) => {
@@ -761,8 +919,14 @@ export function MarketplaceApp() {
         const book = await fetchBookById(client, bookId);
         if (signal.aborted) return;
         setDetailBook(book);
+        setBookDetailMissing(!book);
       } catch (error) {
-        if (!isAbortError(error)) setDetailBook(null);
+        if (!isAbortError(error)) {
+          setDetailBook(null);
+          setBookDetailMissing(true);
+        }
+      } finally {
+        if (!signal.aborted) setBookDetailLoading(false);
       }
     });
   }, [selectedId, view, marketplaceBooks, myBooks, requestBooks, pendingReviews, hiddenBooks, store.books]);
@@ -840,7 +1004,10 @@ export function MarketplaceApp() {
 
   const filteredBooks = useMemo(() => {
     if (supabase) return marketplaceBooks;
-    const normalized = query.trim().toLowerCase();
+    const normalized = (listingType === "book"
+      ? normalizeTaiwanTextbookQuery(query)
+      : query.trim()).toLowerCase();
+    const searchTokens = normalized.split(/\s+/).filter(Boolean);
     return store.books
       .filter((book) => book.reviewStatus === "approved")
       .filter((book) => book.moderationVisibility === "visible")
@@ -851,12 +1018,29 @@ export function MarketplaceApp() {
       .filter((book) => listingType !== "book" || isAllDepartments(department) || book.department === department)
       .filter((book) => !maxPrice || book.price <= Number(maxPrice))
       .filter((book) =>
-        !normalized
+        searchTokens.length === 0
           ? true
-          : [book.title, book.author, book.course, book.teacher, book.description, book.itemCategory]
+          : searchTokens.every((token) => [
+              book.title,
+              book.author,
+              book.publisher,
+              book.course,
+              book.teacher,
+              book.description,
+              book.itemCategory,
+              book.educationLevel,
+              book.grade ? `${book.grade}年級` : "",
+              optionLabel(SEMESTER_OPTIONS, book.semester),
+              book.subject,
+              book.volume,
+              book.curriculum,
+              optionLabel(BOOK_TYPE_OPTIONS, book.bookType),
+              book.isbn13,
+              book.approvalNumber,
+            ]
               .join(" ")
               .toLowerCase()
-              .includes(normalized),
+              .includes(token)),
       )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [department, itemCategory, listingType, maxPrice, query, store.books, marketplaceBooks]);
@@ -884,11 +1068,30 @@ export function MarketplaceApp() {
   }, [selectedBook, view, store.profiles]);
 
   function openBook(id: string) {
+    const target = filteredBooks.find((book) => book.id === id)
+      ?? myBooks.find((book) => book.id === id)
+      ?? requestBooks.find((book) => book.id === id);
     setSelectedId(id);
     setDetailBook(null);
+    setBookDetailMissing(false);
     setDetailMenuOpen(false);
     setView("book");
+    const params = new URLSearchParams();
+    params.set("view", "book");
+    params.set("book", id);
+    params.set("market", target?.listingType || listingType);
+    window.history.pushState({}, "", `/?${params.toString()}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function returnToMarket() {
+    setView("home");
+    setSelectedId(null);
+    setDetailBook(null);
+    setBookDetailMissing(false);
+    const params = new URLSearchParams();
+    params.set("market", listingType);
+    window.history.pushState({}, "", `/?${params.toString()}`);
   }
 
   function submitHeroSearch() {
@@ -907,6 +1110,11 @@ export function MarketplaceApp() {
       setItemCategory(ALL_ITEM_CATEGORIES);
     } else {
       setDepartment(departments[0]);
+    }
+    if (view === "home") {
+      const params = new URLSearchParams();
+      params.set("market", nextType);
+      window.history.replaceState({}, "", `/?${params.toString()}`);
     }
   }
 
@@ -1078,6 +1286,32 @@ export function MarketplaceApp() {
     return null;
   }
 
+  async function deleteAccount() {
+    if (!supabase) return "帳號刪除服務目前無法使用";
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return "登入狀態已失效，請重新登入";
+
+    try {
+      const response = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ confirmation: "DELETE" }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) return result.error || "帳號刪除暫時無法完成";
+      await supabase.auth.signOut().catch(() => undefined);
+      window.location.assign("/");
+      return null;
+    } catch {
+      return "帳號刪除請求逾時，請稍後再試；若公開資料已停止顯示，可再次操作完成登入帳號刪除";
+    }
+  }
+
   async function submitStudentVerification(file: File, ocrText: string, qualityFlags: StudentVerificationFlags) {
     if (!supabase || !currentUser) return "目前無法上傳學生證";
     if (currentUser.accountStatus === "suspended") return "你的帳號目前為唯讀模式，不能送出學生證審核";
@@ -1170,23 +1404,82 @@ export function MarketplaceApp() {
         return;
       }
 
+      const validated = normalizeAndValidateListingFields({
+        title: String(fields.title),
+        author: String(fields.author),
+        edition: String(fields.edition),
+        publisher: String(fields.publisher),
+        course: String(fields.course),
+        teacher: String(fields.teacher),
+        meetup: String(fields.meetup),
+        description: String(fields.description),
+        educationLevel: String(fields.educationLevel || ""),
+        grade: String(fields.grade || ""),
+        semester: String(fields.semester || ""),
+        subject: String(fields.subject || ""),
+        volume: String(fields.volume || ""),
+        curriculum: String(fields.curriculum || ""),
+        bookType: String(fields.bookType || ""),
+        isbn13: String(fields.isbn13 || ""),
+        approvalNumber: String(fields.approvalNumber || ""),
+        price: Number(fields.price),
+      });
+      if ("error" in validated) {
+        if (uploadedImagePath) {
+          await supabase?.storage.from("book-images").remove([uploadedImagePath]);
+        }
+        setToast(validated.error);
+        return;
+      }
+      const clean = validated.value;
       const payload = {
         listingType: (String(fields.listingType) === "secondhand" ? "secondhand" : "book") as ListingType,
         itemCategory: String(fields.itemCategory || "book"),
-        title: String(fields.title),
-        author: String(fields.author),
+        title: clean.title,
+        author: clean.author,
         department: String(fields.department),
-        course: String(fields.course),
-        teacher: String(fields.teacher),
-        edition: String(fields.edition),
-        publisher: String(fields.publisher),
+        course: clean.course,
+        teacher: clean.teacher,
+        edition: clean.edition,
+        publisher: clean.publisher,
+        educationLevel: clean.educationLevel,
+        grade: clean.grade,
+        semester: clean.semester,
+        subject: clean.subject,
+        volume: clean.volume,
+        curriculum: clean.curriculum,
+        bookType: clean.bookType,
+        isbn13: clean.isbn13,
+        approvalNumber: clean.approvalNumber,
         condition: String(fields.condition),
-        price: Number(fields.price),
+        price: clean.price,
         imageUrl,
-        meetup: String(fields.meetup),
-        description: String(fields.description),
+        meetup: clean.meetup,
+        description: clean.description,
         contactMethod: editingBook?.contactMethod ?? "none",
         contactValue: editingBook?.contactValue ?? "",
+      };
+      let ocrOriginal: Record<string, unknown> | null = null;
+      try {
+        const raw = String(fields.ocrOriginal || "");
+        if (raw) ocrOriginal = JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        ocrOriginal = null;
+      }
+      const correctedOcrFields = {
+        title: payload.title,
+        author: payload.author,
+        edition: payload.edition,
+        publisher: payload.publisher,
+        educationLevel: payload.educationLevel,
+        grade: payload.grade,
+        semester: payload.semester,
+        subject: payload.subject,
+        volume: payload.volume,
+        curriculum: payload.curriculum,
+        bookType: payload.bookType,
+        isbn13: payload.isbn13,
+        approvalNumber: payload.approvalNumber,
       };
 
       if (payload.listingType === "book" && payload.department && !departments.slice(1).includes(payload.department)) {
@@ -1209,6 +1502,15 @@ export function MarketplaceApp() {
           teacher: payload.teacher,
           edition: payload.edition,
           publisher: payload.publisher,
+          education_level: payload.listingType === "book" ? payload.educationLevel : "",
+          grade: payload.listingType === "book" ? payload.grade : "",
+          semester: payload.listingType === "book" ? payload.semester : "",
+          subject: payload.listingType === "book" ? payload.subject : "",
+          volume: payload.listingType === "book" ? payload.volume : "",
+          curriculum: payload.listingType === "book" ? payload.curriculum : "",
+          book_type: payload.listingType === "book" ? payload.bookType : "",
+          isbn13: payload.listingType === "book" ? payload.isbn13 : "",
+          approval_number: payload.listingType === "book" ? payload.approvalNumber : "",
           condition: payload.condition,
           price: payload.price,
           image_url: payload.imageUrl,
@@ -1233,7 +1535,17 @@ export function MarketplaceApp() {
             void supabase.storage.from("book-images").remove([oldImagePath]);
           }
         }
+        if (ocrOriginal && JSON.stringify(ocrOriginal) !== JSON.stringify(correctedOcrFields)) {
+          await supabase.rpc("record_textbook_ocr_feedback", {
+            original_metadata: ocrOriginal,
+            corrected_metadata: correctedOcrFields,
+            catalog_version: TAIWAN_TEXTBOOK_CATALOG_VERSION,
+          });
+        }
         await reloadAfterUserMutation();
+        window.localStorage.removeItem(
+          listingDraftStorageKey(currentUser.id, payload.listingType, editingBook?.id),
+        );
         setEditingBook(null);
         setModal(null);
         setView("dashboard");
@@ -1266,6 +1578,9 @@ export function MarketplaceApp() {
               ...previous.books,
             ],
       }));
+      window.localStorage.removeItem(
+        listingDraftStorageKey(currentUser.id, payload.listingType, editingBook?.id),
+      );
       setEditingBook(null);
       setModal(null);
       setView("dashboard");
@@ -1454,7 +1769,15 @@ export function MarketplaceApp() {
       setToast("你的帳號目前為唯讀模式，不能操作交易");
       return;
     }
-    const reason = window.prompt("請填寫取消原因（至少 2 個字）");
+    const reason = await actionDialog.ask({
+      title: "取消購買意願",
+      message: "取消後這筆交易會結束，聊天室與交易紀錄仍會依平台政策保留供雙方查閱。",
+      inputLabel: "取消原因",
+      inputPlaceholder: "請至少輸入 2 個字",
+      minLength: 2,
+      confirmLabel: "確認取消",
+      danger: true,
+    });
     if (!reason?.trim()) return;
     if (supabase) {
       const { error } = await supabase.rpc("cancel_purchase_request", {
@@ -1550,11 +1873,18 @@ export function MarketplaceApp() {
     setToast("交易已完成");
   }
 
-  function deleteBook(bookId: string) {
+  async function deleteBook(bookId: string) {
     if (currentUser?.accountStatus === "suspended") {
       setToast("你的帳號目前為唯讀模式，不能修改刊登");
       return;
     }
+    const confirmed = await actionDialog.ask({
+      title: "下架刊登",
+      message: "下架後不會再公開顯示；既有交易與聊天室不會被刪除。若目前沒有進行中的交易，之後可從刊登管理恢復。",
+      confirmLabel: "確認下架",
+      danger: true,
+    });
+    if (confirmed === null) return;
     if (supabase && currentUser) {
       const client = supabase;
       void client.rpc("set_listing_lifecycle", {
@@ -1637,7 +1967,14 @@ export function MarketplaceApp() {
   async function reviewBook(bookId: string, decision: "approved" | "rejected") {
     if (!supabase || !currentUser) return;
     const note = decision === "rejected"
-      ? window.prompt("請輸入拒絕原因，賣家會看到這段說明：")?.trim()
+      ? (await actionDialog.ask({
+          title: "拒絕刊登",
+          message: "刊登不會公開，賣家會看到下方原因並可修改後重新送審。",
+          inputLabel: "拒絕原因",
+          minLength: 2,
+          confirmLabel: "拒絕刊登",
+          danger: true,
+        }))?.trim()
       : "";
     if (decision === "rejected" && !note) return;
 
@@ -1658,9 +1995,18 @@ export function MarketplaceApp() {
 
   async function reviewStudentVerification(verificationId: string, decision: "approved" | "rejected") {
     if (!supabase || !currentUser) return;
-    const note = decision === "rejected"
-      ? window.prompt("請輸入拒絕原因，使用者會看到這段說明：")?.trim()
-      : window.prompt("審核備註（可留空）")?.trim() || "";
+    const dialogResult = await actionDialog.ask({
+      title: decision === "rejected" ? "拒絕學生證驗證" : "通過學生證驗證",
+      message: decision === "rejected"
+        ? "驗證會被拒絕，使用者可看到原因並重新送審；原始圖片與 OCR 文字會立即刪除。"
+        : "通過後會更新驗證狀態，原始圖片與 OCR 文字會立即刪除。",
+      inputLabel: decision === "rejected" ? "拒絕原因" : "審核備註（選填）",
+      minLength: decision === "rejected" ? 2 : 0,
+      confirmLabel: decision === "rejected" ? "確認拒絕" : "確認通過",
+      danger: decision === "rejected",
+    });
+    if (dialogResult === null) return;
+    const note = dialogResult.trim();
     if (decision === "rejected" && !note) return;
 
     const { error } = await supabase.rpc("review_student_verification", {
@@ -1740,7 +2086,12 @@ export function MarketplaceApp() {
 
   async function resolveFeedback(feedbackId: string) {
     if (!supabase || !currentUser) return;
-    const note = window.prompt("處理備註（可留空）");
+    const note = await actionDialog.ask({
+      title: "完成問題回報",
+      message: "這會將回報標記為已處理；備註會保留給後台稽核。",
+      inputLabel: "處理備註（選填）",
+      confirmLabel: "標記完成",
+    });
     if (note === null) return;
     const { error } = await supabase.rpc("resolve_feedback", {
       target_feedback_id: feedbackId,
@@ -1783,9 +2134,16 @@ export function MarketplaceApp() {
   async function resolveReport(reportId: string, action: "dismiss" | "resolve" | "hide_book" | "suspend_user") {
     if (!supabase || !currentUser) return;
     const requiresReason = action === "hide_book" || action === "suspend_user";
-    const note = window.prompt(
-      requiresReason ? "請輸入處理原因（會顯示給受處分會員）" : "處理備註（可留空）",
-    );
+    const note = await actionDialog.ask({
+      title: action === "dismiss" ? "駁回檢舉" : "處理檢舉",
+      message: requiresReason
+        ? "此操作會影響商品顯示或會員權限，原因會顯示給受處分會員並保留稽核紀錄。"
+        : "檢舉狀態會更新並保留處理紀錄。",
+      inputLabel: requiresReason ? "處理原因" : "處理備註（選填）",
+      minLength: requiresReason ? 2 : 0,
+      confirmLabel: action === "dismiss" ? "確認駁回" : "確認處理",
+      danger: requiresReason,
+    });
     if (note === null || (requiresReason && !note.trim())) return;
     const { error } = await supabase.rpc("resolve_report", {
       target_report_id: reportId,
@@ -1803,11 +2161,19 @@ export function MarketplaceApp() {
 
   async function changeAccountStatus(userId: string, status: Profile["accountStatus"]) {
     if (!supabase || !currentUser) return;
-    const reason = status === "suspended"
-      ? window.prompt("請輸入停權原因（會員仍可登入查看既有交易）")?.trim()
-      : "";
+    const dialogResult = await actionDialog.ask({
+      title: status === "suspended" ? "停權會員" : "解除停權",
+      message: status === "suspended"
+        ? "會員仍可登入查看既有交易，但不能刊登、下訂或傳送新訊息。原因會顯示給會員並保留稽核紀錄。"
+        : "解除後會員可恢復刊登、下訂與聊天等功能。",
+      inputLabel: status === "suspended" ? "停權原因" : undefined,
+      minLength: status === "suspended" ? 2 : 0,
+      confirmLabel: status === "suspended" ? "確認停權" : "確認解除",
+      danger: status === "suspended",
+    });
+    if (dialogResult === null) return;
+    const reason = dialogResult.trim();
     if (status === "suspended" && !reason) return;
-    if (status === "active" && !window.confirm("確定要解除這個帳號的停權嗎？")) return;
     const { error } = await supabase.rpc("set_account_status", {
       target_user_id: userId,
       new_status: status,
@@ -1973,6 +2339,19 @@ export function MarketplaceApp() {
   const confirmationDue = Boolean(nextConfirmationAt && new Date(nextConfirmationAt).getTime() <= Date.now());
   const isSecondhandMode = listingType === "secondhand";
   const activeMarketLabel = isSecondhandMode ? "二手物品" : "課本";
+  const hasMarketplaceFilters = Boolean(
+    query.trim()
+    || maxPrice !== NO_MAX_PRICE
+    || (isSecondhandMode ? itemCategory !== ALL_ITEM_CATEGORIES : !isAllDepartments(department)),
+  );
+
+  function clearMarketplaceFilters() {
+    setQuery("");
+    setHeroQuery("");
+    setMaxPrice(NO_MAX_PRICE);
+    setDepartment(departments[0]);
+    setItemCategory(ALL_ITEM_CATEGORIES);
+  }
 
   return (
     <main className={isSecondhandMode ? "theme-secondhand" : undefined}>
@@ -2130,6 +2509,12 @@ export function MarketplaceApp() {
         )}
       </header>
 
+      {!online && (
+        <div className="offline-banner" role="status" aria-live="polite">
+          目前為離線模式。你仍可查看已載入內容與草稿；刊登、交易、聊天與辨識會在恢復網路後才能送出。
+        </div>
+      )}
+
       {currentUser && showPushPrompt && (
         <section className="push-permission-card">
           <div>
@@ -2210,7 +2595,7 @@ export function MarketplaceApp() {
             </div>
             <form className="filters" aria-label={isSecondhandMode ? "篩選二手物品" : "篩選課本"} onSubmit={(event) => event.preventDefault()}>
               <label className="filter-search" htmlFor="home-filter-query">
-                <span className="visually-hidden">搜尋課本</span>
+                <span className="visually-hidden">{isSecondhandMode ? "搜尋二手物品" : "搜尋課本"}</span>
                 <Search size={18} aria-hidden="true" />
                 <input
                   id="home-filter-query"
@@ -2265,9 +2650,6 @@ export function MarketplaceApp() {
                 </select>
                 <ChevronDown size={16} aria-hidden="true" />
               </label>
-              <button type="button" className="filter-icon" aria-label="進階篩選（即將推出）" disabled aria-disabled="true">
-                <SlidersHorizontal size={18} aria-hidden="true" />
-              </button>
             </form>
             <p className="result-line" aria-live="polite" aria-atomic="true">
               <b>{supabase ? marketplaceCount : filteredBooks.length}</b> 件{activeMarketLabel}正在等待新主人
@@ -2282,16 +2664,18 @@ export function MarketplaceApp() {
                     aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
                   >
                     <div className="card-image">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={book.imageUrl} alt="" loading="lazy" decoding="async" />
+                      <Image src={book.imageUrl} alt="" width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
                       <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
                     </div>
                     <div className="card-body">
-                      {(book.listingType === "secondhand" ? book.itemCategory : book.course) && (
-                        <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : book.course}</span>
+                      {(book.listingType === "secondhand" ? book.itemCategory : (book.subject || book.course)) && (
+                        <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : (book.subject || book.course)}</span>
                       )}
                       <h3>{book.title}</h3>
                       <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
+                      {book.listingType === "book" && textbookMetadata(book).length > 0 && (
+                        <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
+                      )}
                       <div className="card-meta"><span>{book.condition}</span><span><MapPin size={13} aria-hidden="true" />{book.meetup}</span></div>
                       <div className="card-footer"><strong>{money(book.price)}</strong><small>{timeAgo(book.createdAt)}刊登</small></div>
                     </div>
@@ -2324,8 +2708,17 @@ export function MarketplaceApp() {
             {filteredBooks.length === 0 && !marketplaceLoading && (
               <div className="empty" role="status" aria-live="polite">
                 <BookOpen size={40} aria-hidden="true" />
-                <h3>還沒有符合的{activeMarketLabel}</h3>
-                <p>換個關鍵字或篩選條件看看。</p>
+                <h3>{hasMarketplaceFilters ? `找不到符合條件的${activeMarketLabel}` : `目前還沒有${activeMarketLabel}`}</h3>
+                <p>{hasMarketplaceFilters ? "清除篩選後看看其他刊登。" : `成為第一位刊登${activeMarketLabel}的人，讓校園交換開始流動。`}</p>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={hasMarketplaceFilters
+                    ? clearMarketplaceFilters
+                    : () => requireActive(() => openListingForm(isSecondhandMode ? "secondhand" : "book"))}
+                >
+                  {hasMarketplaceFilters ? "清除篩選" : `刊登${activeMarketLabel}`}
+                </button>
               </div>
             )}
             {marketplaceLoading && filteredBooks.length === 0 && (
@@ -2340,11 +2733,10 @@ export function MarketplaceApp() {
 
       {view === "book" && selectedBook && (
         <section className="detail-page">
-          <button className="back-button" onClick={() => setView("home")}><ArrowLeft size={18} />返回找書</button>
+          <button className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
           <div className="detail-grid">
             <div className="detail-image">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={selectedBook.imageUrl} alt={selectedBook.title} />
+              <Image src={selectedBook.imageUrl} alt={selectedBook.title} width={720} height={960} sizes="(max-width: 800px) 100vw, 42vw" priority />
               <span className={`status ${selectedBook.status}`}>{statusLabels[selectedBook.status]}</span>
             </div>
             <div className="detail-content">
@@ -2355,10 +2747,17 @@ export function MarketplaceApp() {
               )}
               <h1>{selectedBook.title}</h1>
               {selectedBook.listingType === "book" && <p className="detail-author">{[selectedBook.author, selectedBook.edition, selectedBook.publisher].filter(Boolean).join(" · ")}</p>}
+              {selectedBook.listingType === "book" && textbookMetadata(selectedBook).length > 0 && (
+                <div className="textbook-meta-list" aria-label="課本資訊">
+                  {textbookMetadata(selectedBook).map((item) => <span key={item}>{item}</span>)}
+                </div>
+              )}
               <strong className="detail-price">{money(selectedBook.price)}</strong>
               <div className="detail-facts">
                 <div><small>{selectedBook.listingType === "secondhand" ? "物況" : "書況"}</small><b>{selectedBook.condition}</b></div>
                 {selectedBook.listingType === "book" && selectedBook.teacher && <div><small>授課老師</small><b>{selectedBook.teacher}</b></div>}
+                {selectedBook.listingType === "book" && selectedBook.isbn13 && <div><small>ISBN-13</small><b>{selectedBook.isbn13}</b></div>}
+                {selectedBook.listingType === "book" && selectedBook.approvalNumber && <div><small>審定字號</small><b>{selectedBook.approvalNumber}</b></div>}
                 {selectedBook.listingType === "secondhand" && <div><small>分類</small><b>{selectedBook.itemCategory}</b></div>}
                 <div><small>面交地點</small><b>{selectedBook.meetup}</b></div>
               </div>
@@ -2411,6 +2810,18 @@ export function MarketplaceApp() {
               </div>
               <p className="safety-note"><ShieldCheck size={15} />只有被選定的買家，才會依賣家設定看到 Email 或 LINE ID。</p>
             </div>
+          </div>
+        </section>
+      )}
+      {view === "book" && !selectedBook && (
+        <section className="detail-page">
+          <button className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
+          <div className="empty" role="status" aria-live="polite">
+            <BookOpen size={42} aria-hidden="true" />
+            <h1>{bookDetailLoading ? "正在載入刊登..." : "找不到這筆刊登"}</h1>
+            {!bookDetailLoading && bookDetailMissing && (
+              <p>這筆刊登可能已下架、尚未通過審核，或連結已失效。</p>
+            )}
           </div>
         </section>
       )}
@@ -2498,7 +2909,7 @@ export function MarketplaceApp() {
                     </label>
                   )}
                   {book.imageUrl
-                    ? <img src={book.imageUrl} alt="" />
+                    ? <Image src={book.imageUrl} alt="" width={160} height={210} sizes="80px" />
                     : <div className="listing-image-placeholder"><BookOpen size={24} /></div>}
                   <div className="listing-main">
                     <div className="listing-badges">
@@ -2523,7 +2934,7 @@ export function MarketplaceApp() {
                       <>
                         <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
                         <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("contactSettings"); }}><MessageCircle size={16} />聯絡方式</button>
-                        <button disabled={currentUser.accountStatus === "suspended"} className="danger" onClick={() => deleteBook(book.id)}><Trash2 size={16} />下架</button>
+                        <button disabled={currentUser.accountStatus === "suspended"} className="danger" onClick={() => void deleteBook(book.id)}><Trash2 size={16} />下架</button>
                       </>
                     )}
                     {book.lifecycleState === "withdrawn" && (
@@ -2699,8 +3110,7 @@ export function MarketplaceApp() {
               {favoriteBooks.map((book) => (
                 <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id} onClick={() => openBook(book.id)}>
                   <div className="card-image">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={book.imageUrl} alt={book.title} loading="lazy" decoding="async" />
+                    <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
                     <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
                     <button
                       className="heart active"
@@ -2712,11 +3122,14 @@ export function MarketplaceApp() {
                     </button>
                   </div>
                   <div className="card-body">
-                    {(book.listingType === "secondhand" ? book.itemCategory : book.course) && (
-                      <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : book.course}</span>
+                    {(book.listingType === "secondhand" ? book.itemCategory : (book.subject || book.course)) && (
+                      <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : (book.subject || book.course)}</span>
                     )}
                     <h3>{book.title}</h3>
                     <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
+                    {book.listingType === "book" && textbookMetadata(book).length > 0 && (
+                      <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
+                    )}
                     <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
                   </div>
                 </article>
@@ -2797,8 +3210,7 @@ export function MarketplaceApp() {
               return (
                 <article className="moderation-card" key={book.id}>
                   <div className="moderation-image">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={book.imageUrl} alt={book.title} />
+                    <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="220px" />
                     <span className="review-badge pending">待審核</span>
                   </div>
                   <div className="moderation-body">
@@ -2809,6 +3221,9 @@ export function MarketplaceApp() {
                       <div><dt>書況</dt><dd>{book.condition}</dd></div>
                       <div><dt>價格</dt><dd>{money(book.price)}</dd></div>
                       <div><dt>面交</dt><dd>{book.meetup}</dd></div>
+                      {textbookMetadata(book).length > 0 && <div><dt>課本資訊</dt><dd>{textbookMetadata(book).join(" · ")}</dd></div>}
+                      {book.isbn13 && <div><dt>ISBN-13</dt><dd>{book.isbn13}</dd></div>}
+                      {book.approvalNumber && <div><dt>審定字號</dt><dd>{book.approvalNumber}</dd></div>}
                     </dl>
                     <div className="moderation-description">{book.description}</div>
                     <div className="moderation-actions">
@@ -2869,9 +3284,16 @@ export function MarketplaceApp() {
 
       <footer>
         <div className="brand footer-brand"><span className="brand-mark"><BookOpen size={20} /></span><span><b>虎科書流</b><small>HUST BOOKFLOW</small></span></div>
-        <p>讓每一本課本，都找到下一位需要它的人。</p>
+        <p>{isSecondhandMode ? "讓每件校園好物，都找到下一位需要它的人。" : "讓每一本課本，都找到下一位需要它的人。"}</p>
         <button className="footer-feedback" type="button" onClick={() => requireLogin(() => setModal("feedback"))}>問題回報</button>
-        <span>虎科校園二手書交流平台 · Prototype 2026</span>
+        <div className="footer-meta">
+          <span>{isSecondhandMode ? "虎科校園二手交流平台" : "虎科校園課本交流平台"} · 2026</span>
+          <nav aria-label="網站政策">
+            <a href="/privacy">隱私權</a>
+            <a href="/terms">使用條款</a>
+            <a href="/safety">交易安全</a>
+          </nav>
+        </div>
       </footer>
 
       {modal === "login" && (
@@ -2907,9 +3329,19 @@ export function MarketplaceApp() {
           onClose={() => setModal(null)}
           onSubmit={saveProfile}
           onSubmitStudentVerification={submitStudentVerification}
+          onDeleteAccount={deleteAccount}
         />
       )}
-      {modal === "bookForm" && <BookFormModal book={editingBook} defaultListingType={listingFormType} saving={bookSaving} onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }} onSubmit={saveBook} />}
+      {modal === "bookForm" && currentUser && (
+        <BookFormModal
+          book={editingBook}
+          defaultListingType={listingFormType}
+          userId={currentUser.id}
+          saving={bookSaving}
+          onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }}
+          onSubmit={saveBook}
+        />
+      )}
       {modal === "contactSettings" && editingBook && (
         <ContactSettingsModal
           book={editingBook}
@@ -2938,13 +3370,142 @@ export function MarketplaceApp() {
           onSubmit={submitFeedback}
         />
       )}
+      {actionDialog.dialog && (
+        <ActionDialog
+          key={actionDialog.dialog.id}
+          request={actionDialog.dialog}
+          onCancel={actionDialog.cancel}
+          onConfirm={actionDialog.confirm}
+        />
+      )}
       {toast && <div className="toast"><Check size={17} />{toast}</div>}
     </main>
   );
 }
 
 function ModalShell({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={onClose}><X /></button><div className="modal-heading"><span className="brand-mark"><BookOpen size={21} /></span><div><h2>{title}</h2><p>{subtitle}</p></div></div>{children}</div></div>;
+  const headingId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const activeDialog = dialog;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const backdrop = dialog.parentElement;
+    const root = backdrop?.parentElement;
+    const hiddenSiblings = root
+      ? Array.from(root.children).filter((child) => child !== backdrop && child instanceof HTMLElement) as HTMLElement[]
+      : [];
+    hiddenSiblings.forEach((element) => {
+      element.setAttribute("inert", "");
+      element.setAttribute("aria-hidden", "true");
+    });
+    const focusable = () => Array.from(activeDialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+    ));
+    (focusable()[0] ?? activeDialog).focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (items.length === 0) {
+        event.preventDefault();
+        activeDialog.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      hiddenSiblings.forEach((element) => {
+        element.removeAttribute("inert");
+        element.removeAttribute("aria-hidden");
+      });
+      previouslyFocused?.focus();
+    };
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div
+        ref={dialogRef}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button className="modal-close" type="button" onClick={onClose} aria-label="關閉視窗"><X aria-hidden="true" /></button>
+        <div className="modal-heading">
+          <span className="brand-mark"><BookOpen size={21} /></span>
+          <div><h2 id={headingId}>{title}</h2><p>{subtitle}</p></div>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ActionDialog({
+  request,
+  onCancel,
+  onConfirm,
+}: {
+  request: ActionDialogRequest;
+  onCancel: () => void;
+  onConfirm: (value: string) => void;
+}) {
+  const [value, setValue] = useState(request.initialValue || "");
+
+  return (
+    <ModalShell title={request.title} subtitle="請確認這項操作的影響" onClose={onCancel}>
+      <form
+        className="form action-dialog"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onConfirm(value.trim());
+        }}
+      >
+        <p className="action-dialog-copy">{request.message}</p>
+        {request.inputLabel && (
+          <label>
+            {request.inputLabel}
+            <textarea
+              autoFocus
+              rows={4}
+              value={value}
+              minLength={request.minLength || undefined}
+              required={Boolean(request.minLength)}
+              placeholder={request.inputPlaceholder}
+              onChange={(event) => setValue(event.target.value)}
+            />
+          </label>
+        )}
+        <div className="action-dialog-actions">
+          <button type="button" className="ghost" onClick={onCancel}>返回</button>
+          <button type="submit" className={request.danger ? "action-danger" : "primary"}>
+            {request.confirmLabel || "確認"}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
 }
 
 function AdminOtpModal({
@@ -3062,7 +3623,6 @@ function StudentVerificationCard({
           <time>{timeAgo(verification.createdAt)}</time>
         </div>
         <h3>{verification.userName}</h3>
-        <small>{verification.userEmail}</small>
         <div className="ocr-flags">
           {flagLabels.map((label) => <span key={label}>{label}</span>)}
         </div>
@@ -3081,11 +3641,13 @@ function ProfileModal({
   onClose,
   onSubmit,
   onSubmitStudentVerification,
+  onDeleteAccount,
 }: {
   profile: Profile;
   onClose: () => void;
   onSubmit: (name: string, department: string) => Promise<string | null>;
   onSubmitStudentVerification: (file: File, ocrText: string, qualityFlags: StudentVerificationFlags) => Promise<string | null>;
+  onDeleteAccount: () => Promise<string | null>;
 }) {
   const [name, setName] = useState(profile.name);
   const [department, setDepartment] = useState(profile.department);
@@ -3096,6 +3658,13 @@ function ProfileModal({
   const [studentIdFlags, setStudentIdFlags] = useState<StudentVerificationFlags | null>(null);
   const [studentIdPreview, setStudentIdPreview] = useState("");
   const [studentIdBusy, setStudentIdBusy] = useState(false);
+  const [studentIdConsent, setStudentIdConsent] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const actionDialog = useActionDialog();
+
+  useEffect(() => () => {
+    if (studentIdPreview.startsWith("blob:")) URL.revokeObjectURL(studentIdPreview);
+  }, [studentIdPreview]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3119,11 +3688,13 @@ function ProfileModal({
     setStudentIdBusy(true);
     setError("");
     try {
+      const { imageQualityFlags, recognizeImageText } = await import("@/lib/marketplace/free-ocr");
       const ocrText = await recognizeImageText(file);
       const flags = await imageQualityFlags(file, ocrText);
       setStudentIdOcrText(ocrText);
       setStudentIdFlags(flags);
     } catch (ocrError) {
+      const { imageQualityFlags } = await import("@/lib/marketplace/free-ocr");
       const flags = await imageQualityFlags(file, "");
       setStudentIdFlags(flags);
       setError(ocrError instanceof Error ? ocrError.message : "學生證 OCR 失敗，仍可送交人工審核");
@@ -3137,9 +3708,16 @@ function ProfileModal({
       setError("請先選擇學生證圖片");
       return;
     }
+    if (!studentIdConsent) {
+      setError("請先同意學生證資料處理與保存政策");
+      return;
+    }
     setStudentIdBusy(true);
     setError("");
-    const fallbackFlags = studentIdFlags ?? await imageQualityFlags(studentIdFile, studentIdOcrText);
+    const fallbackFlags: StudentVerificationFlags = studentIdFlags
+      ? studentIdFlags
+      : await import("@/lib/marketplace/free-ocr")
+        .then(({ imageQualityFlags }) => imageQualityFlags(studentIdFile, studentIdOcrText));
     const message = await onSubmitStudentVerification(studentIdFile, studentIdOcrText, fallbackFlags);
     if (message) setError(message);
     else {
@@ -3147,11 +3725,37 @@ function ProfileModal({
       setStudentIdOcrText("");
       setStudentIdFlags(null);
       setStudentIdPreview("");
+      setStudentIdConsent(false);
     }
     setStudentIdBusy(false);
   }
 
+  async function requestAccountDeletion() {
+    const confirmation = await actionDialog.ask({
+      title: "刪除並匿名化帳號",
+      message: "此操作無法復原。公開個資、非必要圖片與推播訂閱會移除；進行中的交易會取消。必要的交易、防詐與管理稽核紀錄會以匿名方式保留。",
+      inputLabel: "輸入 DELETE 確認",
+      inputPlaceholder: "DELETE",
+      minLength: 6,
+      confirmLabel: "永久刪除帳號",
+      danger: true,
+    });
+    if (confirmation === null) return;
+    if (confirmation !== "DELETE") {
+      setError("請完整輸入大寫 DELETE 才能刪除帳號");
+      return;
+    }
+    setDeletingAccount(true);
+    setError("");
+    const message = await onDeleteAccount();
+    if (message) {
+      setError(message);
+      setDeletingAccount(false);
+    }
+  }
+
   return (
+    <>
     <ModalShell title="個人資料" subtitle="更新其他使用者會看到的姓名與系所" onClose={onClose}>
       <form className="form" onSubmit={(event) => void submit(event)}>
         <label>
@@ -3197,11 +3801,42 @@ function ProfileModal({
           </div>
         )}
         {studentIdOcrText && <textarea className="ocr-text" readOnly value={studentIdOcrText} aria-label="學生證 OCR 文字" />}
-        <button className="secondary-action wide" type="button" disabled={studentIdBusy || !studentIdFile} onClick={() => void submitStudentId()}>
+        <label className="student-id-consent">
+          <input
+            type="checkbox"
+            checked={studentIdConsent}
+            onChange={(event) => setStudentIdConsent(event.target.checked)}
+          />
+          <span>我同意學生證圖片僅供人工資格審核；審核完成後立即刪除敏感圖片與 OCR 文字，審核紀錄最多保留 30 天。</span>
+        </label>
+        <button className="secondary-action wide" type="button" disabled={studentIdBusy || !studentIdFile || !studentIdConsent} onClick={() => void submitStudentId()}>
           {studentIdBusy ? "處理中..." : "送交學生證審核"}
         </button>
       </div>
+      <div className="account-deletion-box">
+        <div>
+          <b>刪除帳號與個人資料</b>
+          <span>公開資料會匿名化，登入帳號與非必要圖片會移除；依法或安全所需的最小交易紀錄會保留。</span>
+        </div>
+        <button
+          className="account-delete-button"
+          type="button"
+          disabled={deletingAccount}
+          onClick={() => void requestAccountDeletion()}
+        >
+          <Trash2 size={16} />{deletingAccount ? "刪除中..." : "刪除帳號"}
+        </button>
+      </div>
     </ModalShell>
+    {actionDialog.dialog && (
+      <ActionDialog
+        key={actionDialog.dialog.id}
+        request={actionDialog.dialog}
+        onCancel={actionDialog.cancel}
+        onConfirm={actionDialog.confirm}
+      />
+    )}
+    </>
   );
 }
 
@@ -3647,12 +4282,14 @@ function ResetPasswordModal({
 function BookFormModal({
   book,
   defaultListingType,
+  userId,
   saving,
   onClose,
   onSubmit,
 }: {
   book: Book | null;
   defaultListingType: ListingType;
+  userId: string;
   saving: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
@@ -3665,15 +4302,27 @@ function BookFormModal({
   };
   const [preview, setPreview] = useState(value.imageUrl);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [ocrReferenceFile, setOcrReferenceFile] = useState<File | null>(null);
+  const [ocrOriginalDraft, setOcrOriginalDraft] = useState<BookOcrDraft | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrMessage, setOcrMessage] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const ocrRequestRef = useRef(0);
-  const [draft, setDraft] = useState({
+  const actionDialog = useActionDialog();
+  const baseDraft = {
     title: value.title,
     author: value.author,
     edition: value.edition,
     publisher: value.publisher,
+    educationLevel: value.educationLevel,
+    grade: value.grade,
+    semester: value.semester,
+    subject: value.subject,
+    volume: value.volume,
+    curriculum: value.curriculum,
+    bookType: value.bookType,
+    isbn13: value.isbn13,
+    approvalNumber: value.approvalNumber,
     department: value.department,
     course: value.course,
     teacher: value.teacher,
@@ -3682,19 +4331,74 @@ function BookFormModal({
     meetup: value.meetup,
     description: value.description,
     itemCategory: value.itemCategory === "book" ? DEFAULT_SECONDHAND_CATEGORY : value.itemCategory,
+  };
+  const baseDraftSignature = JSON.stringify(baseDraft);
+  const draftStorageKey = listingDraftStorageKey(userId, initialListingType, book?.id);
+  const [draft, setDraft] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem(draftStorageKey);
+      if (!saved) return baseDraft;
+      return { ...baseDraft, ...(JSON.parse(saved) as Partial<typeof baseDraft>) };
+    } catch {
+      return baseDraft;
+    }
   });
+  const dirty = imageFile !== null || ocrReferenceFile !== null || JSON.stringify(draft) !== baseDraftSignature;
   const isSecondhand = initialListingType === "secondhand";
 
+  useEffect(() => () => {
+    if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
+  }, [preview]);
+
+  useEffect(() => {
+    if (!dirty) {
+      window.localStorage.removeItem(draftStorageKey);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [dirty, draft, draftStorageKey]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [dirty]);
+
+  async function requestClose() {
+    if (!dirty) {
+      onClose();
+      return;
+    }
+    const confirmed = await actionDialog.ask({
+      title: "保留刊登草稿",
+      message: "尚未送出的文字已暫存在這台裝置，下次開啟同一份刊登可繼續填寫；新選的圖片基於隱私不會留在瀏覽器。",
+      confirmLabel: "離開並保留草稿",
+    });
+    if (confirmed !== null) onClose();
+  }
+
   function selectImage(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []).slice(0, 2);
+    const file = files[0];
     if (!file) return;
     ocrRequestRef.current += 1;
     setOcrBusy(false);
     setImageFile(file);
+    setOcrReferenceFile(files[1] || null);
     setPreview(URL.createObjectURL(file));
     if (!isSecondhand) {
-      setOcrMessage("照片已準備好；系統正在背景載入快速辨識工具。");
-      warmBookOcr();
+      setOcrMessage(files[1]
+        ? "正面與背面照片已準備好；系統會合併封面文字與背面 ISBN 線索。"
+        : "照片已準備好；若有背面 ISBN，可一次選擇正反兩張照片提高辨識率。");
+      void import("@/lib/marketplace/free-ocr")
+        .then(({ warmBookOcr }) => warmBookOcr())
+        .catch(() => undefined);
     }
   }
 
@@ -3708,23 +4412,76 @@ function BookFormModal({
     setOcrBusy(true);
     setOcrMessage("正在準備封面圖片...");
     try {
-      const result = await recognizeBookCover(imageFile, (stage, progress) => {
+      const {
+        detectIsbnBarcode,
+        recognizeBookCover,
+      } = await import("@/lib/marketplace/free-ocr");
+      const primaryResult = await recognizeBookCover(imageFile, (stage, progress) => {
         const percent = Math.max(1, Math.round((progress ?? 0) * 100));
         if (stage === "preparing") setOcrMessage("正在縮小並強化封面，避免手機處理過多像素...");
         if (stage === "english") setOcrMessage(`正在快速辨識封面文字 ${percent}%`);
         if (stage === "chinese") setOcrMessage(`正在補強繁體中文辨識 ${percent}%`);
       });
       if (requestId !== ocrRequestRef.current) return;
-      let ocrDraft = result.needsAiFallback
-        ? { title: "", author: "", edition: "", publisher: "" }
-        : result.draft;
+      const referenceResult = ocrReferenceFile
+        ? await recognizeBookCover(ocrReferenceFile)
+        : null;
+      const barcodeIsbn = await detectIsbnBarcode(ocrReferenceFile || imageFile);
+      if (requestId !== ocrRequestRef.current) return;
+      const candidates = rankTaiwanTextbookCandidates([
+        {
+          source: "front_ocr",
+          confidence: primaryResult.confidence,
+          draft: primaryResult.draft,
+        },
+        ...(referenceResult ? [{
+          source: "back_ocr" as const,
+          confidence: referenceResult.confidence,
+          draft: referenceResult.draft,
+        }] : []),
+        ...(barcodeIsbn ? [{
+          source: "barcode" as const,
+          confidence: 100,
+          draft: { isbn13: barcodeIsbn },
+        }] : []),
+      ]);
+      const mergedLocalDraft = candidates
+        .slice()
+        .reverse()
+        .reduce<BookOcrDraft>((combined, candidate) => ({
+          ...combined,
+          ...Object.fromEntries(
+            Object.entries(candidate.draft).filter(([, field]) => Boolean(field)),
+          ),
+        }), {});
+      const localText = [primaryResult.text, referenceResult?.text].filter(Boolean).join("\n");
+      const needsAiFallback = !mergedLocalDraft.title
+        || (primaryResult.needsAiFallback && (referenceResult?.needsAiFallback ?? true));
+      let ocrDraft = needsAiFallback
+        ? {
+            title: "",
+            author: "",
+            edition: "",
+            publisher: "",
+            educationLevel: "",
+            grade: "",
+            semester: "",
+            subject: "",
+            volume: "",
+            curriculum: "",
+            bookType: "",
+            isbn13: "",
+            approvalNumber: "",
+          }
+        : mergedLocalDraft;
       let usedAiFallback = false;
       let remainingAiUses: number | null = null;
       let aiFallbackError = "";
-      if (result.needsAiFallback && supabase) {
+      if (needsAiFallback && supabase) {
         setOcrMessage("本機辨識不足，正在使用 AI 補強封面資料...");
         try {
-          const aiResult = await recognizeBookCoverWithAi(supabase, imageFile, result.text);
+          const { recognizeBookCoverWithAi } = await import("@/lib/marketplace/book-ocr-ai");
+          const aiResult = await recognizeBookCoverWithAi(supabase, imageFile, localText);
           if (requestId !== ocrRequestRef.current) return;
           if (aiResult.draft.title) {
             ocrDraft = aiResult.draft;
@@ -3741,11 +4498,23 @@ function BookFormModal({
         author: previous.author.trim() ? previous.author : ocrDraft.author || previous.author,
         edition: previous.edition.trim() ? previous.edition : ocrDraft.edition || previous.edition,
         publisher: previous.publisher.trim() ? previous.publisher : ocrDraft.publisher || previous.publisher,
+        educationLevel: previous.educationLevel || ocrDraft.educationLevel || "",
+        grade: previous.grade.trim() ? previous.grade : ocrDraft.grade || previous.grade,
+        semester: previous.semester || ocrDraft.semester || "",
+        subject: previous.subject.trim() ? previous.subject : ocrDraft.subject || previous.subject,
+        volume: previous.volume.trim() ? previous.volume : ocrDraft.volume || previous.volume,
+        curriculum: previous.curriculum.trim() ? previous.curriculum : ocrDraft.curriculum || previous.curriculum,
+        bookType: previous.bookType || ocrDraft.bookType || "",
+        isbn13: previous.isbn13.trim() ? previous.isbn13 : ocrDraft.isbn13 || previous.isbn13,
+        approvalNumber: previous.approvalNumber.trim()
+          ? previous.approvalNumber
+          : ocrDraft.approvalNumber || previous.approvalNumber,
       }));
+      setOcrOriginalDraft(ocrDraft);
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
         ? usedAiFallback
           ? `AI 已補強可見的封面資料；今天還可使用 ${remainingAiUses ?? 0} 次，送出前請再確認。`
-          : `已填入可信的書名、作者或版本資訊${result.usedChineseFallback ? "（已使用中文補強）" : ""}；送出前請再確認。${aiFallbackError ? ` AI 補強未完成：${aiFallbackError}` : ""}`
+          : `已填入可信的書名、作者或版本資訊${primaryResult.usedChineseFallback || referenceResult?.usedChineseFallback ? "（已使用中文補強）" : ""}${barcodeIsbn ? "，並讀到 ISBN 條碼" : ""}；送出前請再確認。${aiFallbackError ? ` AI 補強未完成：${aiFallbackError}` : ""}`
         : aiFallbackError
           ? `辨識結果不足，且 ${aiFallbackError}。請拍近一點或改用手動填寫。`
           : "辨識結果可信度不足，因此沒有覆寫欄位。請拍近一點、避免反光，或改用手動填寫。");
@@ -3758,7 +4527,12 @@ function BookFormModal({
   }
 
   return (
-    <ModalShell title={book ? "編輯刊登" : isSecondhand ? "刊登二手物品" : "刊登一本課本"} subtitle="標示 * 的欄位為必填" onClose={onClose}>
+    <>
+    <ModalShell
+      title={book ? "編輯刊登" : isSecondhand ? "刊登二手物品" : "刊登一本課本"}
+      subtitle="標示 * 的欄位為必填；文字草稿會自動保留在這台裝置"
+      onClose={() => void requestClose()}
+    >
       <form onSubmit={onSubmit} className="form book-form">
         <fieldset disabled={saving} className="book-form-fields">
           <p className="listing-file-help full">
@@ -3771,11 +4545,13 @@ function BookFormModal({
             name="image"
             required={!book}
             type="file"
+            multiple={!isSecondhand}
             accept="image/jpeg,image/png,image/webp"
             onChange={selectImage}
             aria-label={isSecondhand ? "選擇商品照片" : "選擇課本封面"}
           />
           <input type="hidden" name="listingType" value={initialListingType} />
+          <input type="hidden" name="ocrOriginal" value={ocrOriginalDraft ? JSON.stringify(ocrOriginalDraft) : ""} />
           {preview && (
             <div className="image-preview full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -3807,7 +4583,7 @@ function BookFormModal({
 
           <label className="full">
             {isSecondhand ? "商品名稱" : "書名"} *
-            <input name="title" required value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} placeholder={isSecondhand ? "例如：小米檯燈、藍牙耳機" : "例如：資料結構：使用 C++"} />
+            <input name="title" required maxLength={LISTING_FIELD_LIMITS.title} value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} placeholder={isSecondhand ? "例如：小米檯燈、藍牙耳機" : "例如：資料結構：使用 C++"} />
           </label>
 
           {isSecondhand ? (
@@ -3818,6 +4594,15 @@ function BookFormModal({
               <input type="hidden" name="department" value="" />
               <input type="hidden" name="course" value="" />
               <input type="hidden" name="teacher" value="" />
+              <input type="hidden" name="educationLevel" value="" />
+              <input type="hidden" name="grade" value="" />
+              <input type="hidden" name="semester" value="" />
+              <input type="hidden" name="subject" value="" />
+              <input type="hidden" name="volume" value="" />
+              <input type="hidden" name="curriculum" value="" />
+              <input type="hidden" name="bookType" value="" />
+              <input type="hidden" name="isbn13" value="" />
+              <input type="hidden" name="approvalNumber" value="" />
               <label>
                 二手分類 *
                 <select name="itemCategory" required value={draft.itemCategory} onChange={(event) => updateDraft("itemCategory", event.target.value)}>
@@ -3828,12 +4613,33 @@ function BookFormModal({
           ) : (
             <>
               <input type="hidden" name="itemCategory" value="book" />
-              <label>作者 *<input name="author" required value={draft.author} onChange={(event) => updateDraft("author", event.target.value)} /></label>
-              <label>版本 *<input name="edition" required value={draft.edition} onChange={(event) => updateDraft("edition", event.target.value)} placeholder="例如：第 2 版" /></label>
-              <label>出版社（選填）<input name="publisher" value={draft.publisher} onChange={(event) => updateDraft("publisher", event.target.value)} placeholder="例如：全華、Pearson" /></label>
+              <label>作者 *<input name="author" required maxLength={LISTING_FIELD_LIMITS.author} value={draft.author} onChange={(event) => updateDraft("author", event.target.value)} /></label>
+              <label>版本 *<input name="edition" required maxLength={LISTING_FIELD_LIMITS.edition} value={draft.edition} onChange={(event) => updateDraft("edition", event.target.value)} placeholder="例如：第 2 版" /></label>
+              <label>出版社（選填）<input name="publisher" maxLength={LISTING_FIELD_LIMITS.publisher} value={draft.publisher} onChange={(event) => updateDraft("publisher", event.target.value)} placeholder="例如：全華、Pearson" /></label>
               <label>科系（選填）<select name="department" value={draft.department} onChange={(event) => updateDraft("department", event.target.value)}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
-              <label>課程（選填）<input name="course" value={draft.course} onChange={(event) => updateDraft("course", event.target.value)} /></label>
-              <label>授課老師（選填）<input name="teacher" value={draft.teacher} onChange={(event) => updateDraft("teacher", event.target.value)} /></label>
+              <label>課程（選填）<input name="course" maxLength={LISTING_FIELD_LIMITS.course} value={draft.course} onChange={(event) => updateDraft("course", event.target.value)} /></label>
+              <label>授課老師（選填）<input name="teacher" maxLength={LISTING_FIELD_LIMITS.teacher} value={draft.teacher} onChange={(event) => updateDraft("teacher", event.target.value)} /></label>
+              <label>教育階段（選填）
+                <select name="educationLevel" value={draft.educationLevel} onChange={(event) => updateDraft("educationLevel", event.target.value)}>
+                  {EDUCATION_LEVEL_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+              </label>
+              <label>年級（選填）<input name="grade" maxLength={LISTING_FIELD_LIMITS.grade} value={draft.grade} onChange={(event) => updateDraft("grade", event.target.value)} placeholder="例如：7 或 高1" /></label>
+              <label>學期（選填）
+                <select name="semester" value={draft.semester} onChange={(event) => updateDraft("semester", event.target.value)}>
+                  {SEMESTER_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+              </label>
+              <label>科目（選填）<input name="subject" maxLength={LISTING_FIELD_LIMITS.subject} value={draft.subject} onChange={(event) => updateDraft("subject", event.target.value)} placeholder="例如：數學、自然科學" /></label>
+              <label>冊次／部別（選填）<input name="volume" maxLength={LISTING_FIELD_LIMITS.volume} value={draft.volume} onChange={(event) => updateDraft("volume", event.target.value)} placeholder="例如：第1冊、必修I" /></label>
+              <label>課綱（選填）<input name="curriculum" maxLength={LISTING_FIELD_LIMITS.curriculum} value={draft.curriculum} onChange={(event) => updateDraft("curriculum", event.target.value)} placeholder="例如：108課綱" /></label>
+              <label>書籍類型（選填）
+                <select name="bookType" value={draft.bookType} onChange={(event) => updateDraft("bookType", event.target.value)}>
+                  {BOOK_TYPE_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+              </label>
+              <label>ISBN-13（選填）<input name="isbn13" inputMode="numeric" maxLength={LISTING_FIELD_LIMITS.isbn13} value={draft.isbn13} onChange={(event) => updateDraft("isbn13", event.target.value)} placeholder="978xxxxxxxxxx" /></label>
+              <label className="full">審定字號（選填）<input name="approvalNumber" maxLength={LISTING_FIELD_LIMITS.approvalNumber} value={draft.approvalNumber} onChange={(event) => updateDraft("approvalNumber", event.target.value)} /></label>
             </>
           )}
 
@@ -3847,13 +4653,22 @@ function BookFormModal({
               <option>損壞嚴重</option>
             </select>
           </label>
-          <label>價格（NT$）*<input name="price" required type="number" min="0" value={draft.price} onChange={(event) => updateDraft("price", event.target.value)} /></label>
-          <label className="full">面交地點 *<input name="meetup" required value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
-          <label className="full">{isSecondhand ? "商品說明" : "書況說明"} *<textarea name="description" required rows={3} value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} /></label>
+          <label>價格（NT$）*<input name="price" required type="number" min="0" max={LISTING_FIELD_LIMITS.price} step="1" value={draft.price} onChange={(event) => updateDraft("price", event.target.value)} /></label>
+          <label className="full">面交地點 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
+          <label className="full">{isSecondhand ? "商品說明" : "書況說明"} *<textarea name="description" required maxLength={LISTING_FIELD_LIMITS.description} rows={3} value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} /></label>
           <button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button>
         </fieldset>
       </form>
     </ModalShell>
+    {actionDialog.dialog && (
+      <ActionDialog
+        key={actionDialog.dialog.id}
+        request={actionDialog.dialog}
+        onCancel={actionDialog.cancel}
+        onConfirm={actionDialog.confirm}
+      />
+    )}
+    </>
   );
 }
 
@@ -3917,11 +4732,33 @@ function RequestModal({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const [message, setMessage] = useState(request?.message || REQUEST_PHRASES[0]);
+  const [versionConfirmed, setVersionConfirmed] = useState(book.listingType !== "book");
+  const versionDetails = [
+    book.publisher && `出版社：${book.publisher}`,
+    book.edition && `版本：${book.edition}`,
+    book.volume && `冊次：${book.volume}`,
+    book.curriculum && `課綱：${book.curriculum}`,
+    book.isbn13 && `ISBN：${book.isbn13}`,
+  ].filter(Boolean);
 
   return (
     <ModalShell title="確認下訂" subtitle={`想購買《${book.title}》`} onClose={onClose}>
       <form onSubmit={onSubmit} className="form">
         <div className="request-summary"><span>{book.condition}</span><b>{money(book.price)}</b><span><MapPin size={14} />{book.meetup}</span></div>
+        {book.listingType === "book" && (
+          <label className="version-confirmation">
+            <input
+              type="checkbox"
+              checked={versionConfirmed}
+              onChange={(event) => setVersionConfirmed(event.target.checked)}
+              required
+            />
+            <span>
+              <b>我已確認不是買錯版本</b>
+              <small>{versionDetails.length > 0 ? versionDetails.join(" · ") : "此刊登的版本資料不完整，請先在聊聊向賣家確認出版社、冊次、ISBN 與課綱。"}</small>
+            </span>
+          </label>
+        )}
         <div className="phrase-list">
           <small>快速選擇常用語</small>
           <div className="phrase-chips">
@@ -3948,7 +4785,7 @@ function RequestModal({
             placeholder="介紹一下方便面交的時間，或想確認的書況..."
           />
         </label>
-        <button className="primary wide" type="submit">
+        <button className="primary wide" type="submit" disabled={!versionConfirmed}>
           {request ? <Pencil size={17} /> : <MessageCircle size={17} />}
           {request ? "儲存訂單修改" : "確認下訂"}
         </button>
@@ -4033,6 +4870,7 @@ function TradeChatPanel({
   const [messageCursor, setMessageCursor] = useState<{ createdAt: string; id: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const actionDialog = useActionDialog();
   const bottomRef = useRef<HTMLDivElement>(null);
   const otherUserId = conversation.buyerId === currentUserId ? conversation.sellerId : conversation.buyerId;
 
@@ -4202,24 +5040,42 @@ function TradeChatPanel({
 
   async function closeChat() {
     if (!supabase) return;
-    const reason = window.prompt("可選填結束聊天室的原因") || "";
+    const reason = await actionDialog.ask({
+      title: "結束聊天室",
+      message: "結束後雙方都不能再傳送新訊息或圖片，既有紀錄會保持唯讀；之後仍可從商品頁重新建立聊天室。",
+      inputLabel: "結束原因（選填）",
+      confirmLabel: "確認結束",
+      danger: true,
+    });
+    if (reason === null) return;
     const { error: closeError } = await supabase.rpc("close_conversation", {
       target_conversation_id: conversation.id,
-      reason,
+      reason: reason.trim(),
     });
     if (closeError) setError(closeError.message);
     else onChanged();
   }
 
-  function hideChat() {
-    if (!window.confirm("這會將已結束的聊聊從你的清單刪除，另一位使用者仍可保留自己的紀錄。確定刪除嗎？")) {
-      return;
-    }
+  async function hideChat() {
+    const confirmed = await actionDialog.ask({
+      title: "從清單移除聊天室",
+      message: "這只會從你的清單隱藏已結束的聊天室；另一位使用者仍可保留自己的紀錄，必要的交易與安全紀錄也不會被刪除。",
+      confirmLabel: "確認移除",
+      danger: true,
+    });
+    if (confirmed === null) return;
     onHide();
   }
 
   async function blockUser() {
-    if (!supabase || !window.confirm("封鎖後雙方不能再傳送訊息，仍要封鎖嗎？")) return;
+    if (!supabase) return;
+    const confirmed = await actionDialog.ask({
+      title: "封鎖使用者",
+      message: "封鎖後雙方不能再傳送新訊息或圖片；既有交易與聊天室紀錄仍會保留，之後可由平台支援協助處理爭議。",
+      confirmLabel: "確認封鎖",
+      danger: true,
+    });
+    if (confirmed === null) return;
     const { error: blockError } = await supabase.rpc("set_user_block", {
       target_user_id: otherUserId,
       should_block: true,
@@ -4230,7 +5086,15 @@ function TradeChatPanel({
 
   async function reportChat(messageId?: string) {
     if (!supabase) return;
-    const details = window.prompt("請簡短說明檢舉原因")?.trim();
+    const details = (await actionDialog.ask({
+      title: messageId ? "檢舉這則訊息" : "檢舉聊天室",
+      message: "檢舉會交由管理員審查；請描述具體情況，避免放入密碼、驗證碼或其他不必要的個資。",
+      inputLabel: "檢舉說明",
+      inputPlaceholder: "請至少輸入 2 個字",
+      minLength: 2,
+      confirmLabel: "送出檢舉",
+      danger: true,
+    }))?.trim();
     if (!details) return;
     const { error: reportError } = await supabase.rpc("submit_chat_report", {
       target_conversation_id: conversation.id,
@@ -4250,7 +5114,7 @@ function TradeChatPanel({
           <button type="button" onClick={() => void reportChat()}><Flag size={14} />檢舉</button>
           <button type="button" onClick={() => void blockUser()}><Ban size={14} />封鎖</button>
           {conversation.status === "active" && <button type="button" onClick={() => void closeChat()}><X size={14} />結束</button>}
-          {conversation.status === "closed" && <button type="button" onClick={hideChat}><Trash2 size={14} />刪除</button>}
+          {conversation.status === "closed" && <button type="button" onClick={() => void hideChat()}><Trash2 size={14} />刪除</button>}
         </div>
       </div>
       <div className="trade-chat-log">
@@ -4319,6 +5183,14 @@ function TradeChatPanel({
           </button>
           <img src={enlargedImageUrl} alt="放大的聊聊圖片" onMouseDown={(event) => event.stopPropagation()} />
         </div>
+      )}
+      {actionDialog.dialog && (
+        <ActionDialog
+          key={actionDialog.dialog.id}
+          request={actionDialog.dialog}
+          onCancel={actionDialog.cancel}
+          onConfirm={actionDialog.confirm}
+        />
       )}
     </div>
   );

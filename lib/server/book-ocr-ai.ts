@@ -1,3 +1,8 @@
+import {
+  canonicalPublisher,
+  normalizeIsbn13,
+} from "../marketplace/taiwan-textbook.ts";
+
 export const BOOK_OCR_AI_DEFAULT_MODEL = "gemini-2.5-flash";
 export const BOOK_OCR_AI_MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const BOOK_OCR_AI_ALLOWED_TYPES = new Set([
@@ -11,6 +16,15 @@ export type AiBookOcrDraft = {
   author?: string;
   edition?: string;
   publisher?: string;
+  educationLevel?: string;
+  grade?: string;
+  semester?: string;
+  subject?: string;
+  volume?: string;
+  curriculum?: string;
+  bookType?: string;
+  isbn13?: string;
+  approvalNumber?: string;
 };
 
 type StructuredBookCover = {
@@ -20,6 +34,15 @@ type StructuredBookCover = {
   author: string | null;
   edition: string | null;
   publisher: string | null;
+  education_level: string | null;
+  grade: string | null;
+  semester: string | null;
+  subject: string | null;
+  volume: string | null;
+  curriculum: string | null;
+  book_type: string | null;
+  isbn13: string | null;
+  approval_number: string | null;
 };
 
 const FIELD_LIMITS = {
@@ -27,6 +50,15 @@ const FIELD_LIMITS = {
   author: 160,
   edition: 120,
   publisher: 120,
+  educationLevel: 40,
+  grade: 20,
+  semester: 20,
+  subject: 80,
+  volume: 40,
+  curriculum: 40,
+  bookType: 40,
+  isbn13: 13,
+  approvalNumber: 100,
 } as const;
 
 function cleanField(value: unknown, limit: number) {
@@ -34,6 +66,11 @@ function cleanField(value: unknown, limit: number) {
   const cleaned = value.replace(/\s+/g, " ").trim();
   if (!cleaned) return undefined;
   return cleaned.slice(0, limit);
+}
+
+function cleanEnum(value: unknown, allowed: readonly string[]) {
+  const cleaned = cleanField(value, 40);
+  return cleaned && allowed.includes(cleaned) ? cleaned : undefined;
 }
 
 export function normalizeAiBookCover(value: unknown) {
@@ -44,12 +81,40 @@ export function normalizeAiBookCover(value: unknown) {
   const confidence = Number.isFinite(parsed.confidence)
     ? Math.max(0, Math.min(100, Math.round(Number(parsed.confidence))))
     : 0;
-  const draft: AiBookOcrDraft = {
+  const draftEntries = {
     title: cleanField(parsed.title, FIELD_LIMITS.title),
     author: cleanField(parsed.author, FIELD_LIMITS.author),
     edition: cleanField(parsed.edition, FIELD_LIMITS.edition),
     publisher: cleanField(parsed.publisher, FIELD_LIMITS.publisher),
+    educationLevel: cleanEnum(parsed.education_level, [
+      "elementary",
+      "junior_high",
+      "senior_high",
+      "vocational_high",
+      "university",
+    ]),
+    grade: cleanField(parsed.grade, FIELD_LIMITS.grade),
+    semester: cleanEnum(parsed.semester, ["first", "second"]),
+    subject: cleanField(parsed.subject, FIELD_LIMITS.subject),
+    volume: cleanField(parsed.volume, FIELD_LIMITS.volume),
+    curriculum: cleanField(parsed.curriculum, FIELD_LIMITS.curriculum),
+    bookType: cleanEnum(parsed.book_type, [
+      "textbook",
+      "workbook",
+      "teacher_guide",
+      "reference",
+      "assessment",
+      "other",
+    ]),
+    isbn13: typeof parsed.isbn13 === "string" ? normalizeIsbn13(parsed.isbn13) : undefined,
+    approvalNumber: cleanField(parsed.approval_number, FIELD_LIMITS.approvalNumber),
   };
+  draftEntries.publisher = draftEntries.publisher
+    ? canonicalPublisher(draftEntries.publisher) || draftEntries.publisher
+    : undefined;
+  const draft = Object.fromEntries(
+    Object.entries(draftEntries).filter(([, field]) => Boolean(field)),
+  ) as AiBookOcrDraft;
   const usable = parsed.is_book_cover === true
     && confidence >= 45
     && Boolean(draft.title);
@@ -60,12 +125,14 @@ export function buildBookCoverPrompt(localOcrText: string) {
   const localHint = localOcrText.replace(/\s+/g, " ").trim().slice(0, 2000);
   return [
     "Read this textbook cover and extract only text that is visibly supported by the image.",
-    "Return title, author, edition or volume, and publisher.",
+    "Return visible Taiwan textbook metadata when present: title, author, edition, publisher, education level, grade, semester, subject, volume, curriculum, book type, ISBN-13, and approval number.",
+    "Use education_level values elementary, junior_high, senior_high, vocational_high, or university.",
+    "Use semester values first or second. Use book_type values textbook, workbook, teacher_guide, reference, assessment, or other.",
     "Do not infer missing values from general knowledge, similar books, cover art, or the OCR hint.",
     "Use null for any field that is not clearly visible.",
     "Set is_book_cover to false for unrelated, unreadable, or non-book images.",
     "Confidence must reflect the visible evidence, not familiarity with the book.",
-    "Return only one JSON object with exactly these keys: is_book_cover, confidence, title, author, edition, publisher.",
+    "Return only one JSON object with exactly these keys: is_book_cover, confidence, title, author, edition, publisher, education_level, grade, semester, subject, volume, curriculum, book_type, isbn13, approval_number.",
     localHint
       ? `Untrusted local OCR hint (may be wrong or contain garbage): ${localHint}`
       : "The local OCR produced no usable hint.",
@@ -83,6 +150,15 @@ function bookCoverSchema() {
       author: { type: ["string", "null"] },
       edition: { type: ["string", "null"] },
       publisher: { type: ["string", "null"] },
+      education_level: { type: ["string", "null"] },
+      grade: { type: ["string", "null"] },
+      semester: { type: ["string", "null"] },
+      subject: { type: ["string", "null"] },
+      volume: { type: ["string", "null"] },
+      curriculum: { type: ["string", "null"] },
+      book_type: { type: ["string", "null"] },
+      isbn13: { type: ["string", "null"] },
+      approval_number: { type: ["string", "null"] },
     },
     required: [
       "is_book_cover",
@@ -91,6 +167,15 @@ function bookCoverSchema() {
       "author",
       "edition",
       "publisher",
+      "education_level",
+      "grade",
+      "semester",
+      "subject",
+      "volume",
+      "curriculum",
+      "book_type",
+      "isbn13",
+      "approval_number",
     ],
   };
 }

@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：complete site quality hardening and Taiwan textbook recognition
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`0148e0455903f50932c2de8d3785790f7de0bb45`
+- 封存時間：2026-06-22T02:29:07.783Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

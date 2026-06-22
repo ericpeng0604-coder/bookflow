@@ -501,6 +501,105 @@ credential and run one authenticated image request without billing enabled.
 API key and image model work on its actual free tier, keep the key server-side,
 and preserve a safe local/manual fallback when quota is exhausted.
 
+### LESSON-030: Schema additions must update column grants and review triggers together
+
+**Observed problem:** New listing fields such as publisher and marketplace type
+were accepted by the form but omitted from the seller update grant or the
+change-detection trigger that sends edited listings back to review.
+
+**Cause:** The table, explicit column allowlist, RPC return shape, and review
+trigger evolved in separate migrations.
+
+**Detection:** For every new seller-editable column, compare insert/update
+payloads, column grants, review-trigger tuples, mapper fields, and list RPC
+return columns in one schema-contract test.
+
+**Prevention rule:** Treat listing-schema changes as one atomic contract:
+storage, grants, moderation reset, RPCs, mappers, forms, and tests must change
+together.
+
+### LESSON-031: Paid quota needs reservation, idempotency, and release states
+
+**Observed problem:** A provider timeout, 429, 5xx, malformed response, or
+unusable recognition result could consume a user's daily AI allowance even
+though no usable value was delivered.
+
+**Cause:** Usage was incremented before the provider call without a reversible
+reservation or replay key.
+
+**Detection:** Force provider failure and concurrent duplicate requests, then
+verify only one reservation exists and failed work returns capacity.
+
+**Prevention rule:** Reserve quota under an idempotency key, serialize concurrent
+requests, mark only usable results completed, and release every failed or
+expired reservation.
+
+### LESSON-032: Sensitive verification data needs deletion as part of the workflow
+
+**Observed problem:** Student-card images and OCR text could remain after review
+because row status and Storage cleanup were treated as separate operations.
+
+**Cause:** The verification workflow had no pending dedupe, consent timestamp,
+retention deadline, synchronized deletion, or access audit.
+
+**Detection:** Review, reject, withdraw, and expire a verification in staging;
+confirm both the Storage object and sensitive row fields are removed and the
+audit event remains.
+
+**Prevention rule:** Build sensitive-data deletion into the same privileged
+transaction as the status change, then run a scheduled retention cleanup as a
+second safety net.
+
+### LESSON-033: Direct config imports must be direct package dependencies
+
+**Observed problem:** A clean dependency layout could not run ESLint because
+`eslint.config.mjs` imported `@eslint/eslintrc` even though the project relied
+on another package manager hoisting it transitively.
+
+**Cause:** A transitive dependency happened to be reachable in one
+`node_modules` layout and was mistaken for a declared project dependency.
+
+**Detection:** Run lint from a clean, isolated install with strict dependency
+resolution instead of reusing an old shared `node_modules`.
+
+**Prevention rule:** Any package imported by repository code or configuration
+must be declared directly in `dependencies` or `devDependencies`.
+
+### LESSON-034: Isolate worktree dependencies and keep one package manager
+
+**Observed problem:** Running a package manager in an isolated worktree followed
+the worktree's `node_modules` junction and updated the main workspace dependency
+directory.
+
+**Cause:** PowerShell failed to remove the reparse point, but the install
+continued without rechecking whether the path was still a junction. A later
+verification also invoked pnpm over an npm-created dependency tree, causing
+both package managers to reorganize the same directory.
+
+**Detection:** Inspect `LinkType` and `Target`, remove the exact junction, then
+assert the path no longer exists before invoking any package manager. Record
+which package manager created the independent dependency tree and use only that
+manager (or direct local binaries) for the rest of the run.
+
+**Prevention rule:** Never install through a worktree dependency junction. Stop
+immediately if junction removal fails; use a tested literal reparse-point
+deletion method and create an independent dependency directory first. Do not
+run pnpm commands against an npm-created `node_modules`, or vice versa.
+
+### LESSON-035: Gate later shell steps on each command exit code
+
+**Observed problem:** A commit proceeded after `git diff --cached --check`
+reported trailing whitespace because PowerShell continued to the next command.
+
+**Cause:** Multiple validation and mutation commands were placed in one script
+without explicitly checking `$LASTEXITCODE`.
+
+**Detection:** After every external validation command, assert its exit code
+before staging, committing, pushing, or deploying.
+
+**Prevention rule:** Do not rely on PowerShell to stop after a failed external
+command. Check `$LASTEXITCODE` and throw before any following mutation.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

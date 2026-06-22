@@ -25,6 +25,7 @@ export function browserPushState(subscription: PushSubscription | null): Browser
 export async function currentPushSubscription() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
   const registration = await navigator.serviceWorker.register("/sw.js");
+  void registration.update().catch(() => undefined);
   return registration.pushManager.getSubscription();
 }
 
@@ -36,6 +37,7 @@ export async function enableBrowserPush(client: SupabaseClient) {
   if (permission !== "granted") throw new Error("你尚未允許瀏覽器推播通知");
 
   const registration = await navigator.serviceWorker.register("/sw.js");
+  void registration.update().catch(() => undefined);
   const keyResponse = await fetch("/api/notifications/push/public-key");
   if (!keyResponse.ok) throw new Error("推播服務尚未完成設定");
   const { publicKey } = await keyResponse.json() as { publicKey: string };

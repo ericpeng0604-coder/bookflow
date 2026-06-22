@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="虎科書流">
+  <rect width="512" height="512" rx="112" fill="#1d6a57"/>
+  <path d="M124 120h172c51 0 92 41 92 92v180H212c-49 0-88-39-88-88V120Z" fill="#fffef9"/>
+  <path d="M212 120v272M172 190h120M172 244h120M172 298h88" fill="none" stroke="#1d6a57" stroke-width="28" stroke-linecap="round"/>
+  <path d="M292 392h96V212c0-51-41-92-92-92h-4v272Z" fill="#e88a4b" opacity=".92"/>
+</svg>

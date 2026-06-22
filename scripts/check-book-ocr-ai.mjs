@@ -82,7 +82,9 @@ const migration = readFileSync(
 const env = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
 
 assert.match(route, /authClient\.auth\.getUser\(token\)/, "AI route must authenticate the access token");
-assert.match(route, /consume_book_ocr_quota/, "AI route must consume persistent quota before calling Gemini");
+assert.match(route, /reserve_book_ocr_quota/, "AI route must reserve persistent quota before calling Gemini");
+assert.match(route, /finalize_book_ocr_quota/, "AI route must complete or release the quota reservation");
+assert.match(client, /X-Idempotency-Key/, "browser requests must use an idempotency key");
 assert.match(route, /image\.size > BOOK_OCR_AI_MAX_FILE_BYTES/, "AI route must enforce image size");
 assert.match(route, /GEMINI_API_KEY/, "AI route must keep the Gemini key server-side");
 assert.match(route, /generativelanguage\.googleapis\.com/, "AI route must call the official Gemini API");
@@ -90,17 +92,22 @@ assert.match(route, /x-goog-api-key/, "Gemini authentication must stay in a serv
 assert.match(route, /Gemini \$\{aiResponse\.status\}/, "Gemini failures must expose only a safe status diagnostic");
 assert.doesNotMatch(route, /console\.(log|info|debug)/, "AI route must not log uploaded image data");
 assert.match(client, /Authorization: `Bearer \$\{token\}`/, "browser request must forward the signed-in session");
-assert.match(app, /result\.needsAiFallback/, "cloud AI must only run after local OCR requests fallback");
+assert.match(app, /const needsAiFallback =[\s\S]*if \(needsAiFallback && supabase\)/, "cloud AI must only run after local OCR requests fallback");
 assert.match(
   app,
-  /let ocrDraft = result\.needsAiFallback\s*\?\s*\{ title: "", author: "", edition: "", publisher: "" \}/,
+  /let ocrDraft = needsAiFallback\s*\?\s*\{[\s\S]*?title: "",[\s\S]*?approvalNumber: "",[\s\S]*?\}\s*: mergedLocalDraft/,
   "weak local OCR must remain unapplied when cloud fallback fails",
 );
 assert.match(app, /previous\.title\.trim\(\) \? previous\.title/, "OCR must preserve user-entered titles");
 assert.match(app, /ocr-privacy-note/, "the UI must disclose temporary cloud processing");
-assert.match(migration, /primary key \(user_id, usage_date\)/, "quota must be persisted per user and UTC day");
-assert.match(migration, /request_count < daily_limit/, "quota increment must stop at the configured limit");
-assert.match(migration, /grant execute[\s\S]*to service_role/, "only the server role may consume quota");
+const hardeningMigration = readFileSync(
+  new URL("../supabase/migrations/20260622090000_site_quality_hardening.sql", import.meta.url),
+  "utf8",
+);
+assert.match(migration, /primary key \(user_id, usage_date\)/, "daily usage must remain persisted");
+assert.match(hardeningMigration, /pg_advisory_xact_lock/, "quota reservations must serialize concurrent requests");
+assert.match(hardeningMigration, /status in \('reserved', 'completed', 'released'\)/, "quota must support release after provider failure");
+assert.match(hardeningMigration, /grant execute[\s\S]*reserve_book_ocr_quota[\s\S]*to service_role/, "only the server role may reserve quota");
 assert.match(env, /^GEMINI_API_KEY=$/m);
 assert.match(env, /^BOOK_OCR_AI_MODEL=gemini-2\.5-flash$/m);
 

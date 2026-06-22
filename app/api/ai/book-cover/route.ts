@@ -10,6 +10,11 @@ import {
   normalizeAiBookCover,
   parseBookCoverOutputText,
 } from "@/lib/server/book-ocr-ai";
+import {
+  enforceRateLimit,
+  exceedsContentLength,
+  isFormDataRequest,
+} from "@/lib/server/api-security";
 
 export const runtime = "nodejs";
 
@@ -53,6 +58,27 @@ export async function POST(request: Request) {
   if (!geminiKey) {
     return NextResponse.json({ error: "AI 封面補強尚未完成服務設定" }, { status: 503 });
   }
+  if (!isFormDataRequest(request)) {
+    return NextResponse.json({ error: "請使用 multipart/form-data 上傳圖片" }, { status: 415 });
+  }
+  if (exceedsContentLength(request, BOOK_OCR_AI_MAX_FILE_BYTES + 512 * 1024)) {
+    return NextResponse.json({ error: "上傳內容過大" }, { status: 413 });
+  }
+  const idempotencyKey = request.headers.get("x-idempotency-key")?.trim() || "";
+  if (!/^[a-zA-Z0-9_-]{16,100}$/.test(idempotencyKey)) {
+    return NextResponse.json({ error: "缺少有效的請求識別碼" }, { status: 400 });
+  }
+  try {
+    const rateLimited = await enforceRateLimit(authenticated.admin, request, {
+      scope: "book-cover-ai",
+      identity: authenticated.userId,
+      limit: 30,
+      windowSeconds: 3600,
+    });
+    if (rateLimited) return rateLimited;
+  } catch {
+    return NextResponse.json({ error: "AI 安全檢查暫時無法使用" }, { status: 503 });
+  }
 
   let form: FormData;
   try {
@@ -74,18 +100,32 @@ export async function POST(request: Request) {
 
   const dailyLimit = configuredDailyLimit();
   const { data: quotaRows, error: quotaError } = await authenticated.admin.rpc(
-    "consume_book_ocr_quota",
-    { target_user_id: authenticated.userId, daily_limit: dailyLimit },
+    "reserve_book_ocr_quota",
+    {
+      target_user_id: authenticated.userId,
+      request_key: idempotencyKey,
+      daily_limit: dailyLimit,
+    },
   );
   if (quotaError) {
     return NextResponse.json({ error: "AI 使用額度暫時無法確認" }, { status: 503 });
   }
   const quota = Array.isArray(quotaRows) ? quotaRows[0] : quotaRows;
   if (!quota?.allowed) {
+    if (quota?.reservation_state && quota.reservation_state !== "exhausted") {
+      return NextResponse.json(
+        { error: "這次辨識請求已處理或仍在進行中，請重新選擇照片後再試" },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       { error: `今天的 AI 封面補強額度已用完（每日 ${dailyLimit} 次）` },
       { status: 429 },
     );
+  }
+  const reservationId = String(quota.reservation_id || "");
+  if (!reservationId) {
+    return NextResponse.json({ error: "AI 使用額度暫時無法保留" }, { status: 503 });
   }
 
   const bytes = Buffer.from(await image.arrayBuffer());
@@ -98,6 +138,17 @@ export async function POST(request: Request) {
   });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
+  let quotaFinalized = false;
+  const admin = authenticated.admin;
+
+  async function finalizeQuota(succeeded: boolean) {
+    if (quotaFinalized) return;
+    quotaFinalized = true;
+    await admin.rpc("finalize_book_ocr_quota", {
+      target_reservation_id: reservationId,
+      succeeded,
+    });
+  }
 
   try {
     const aiResponse = await fetch(
@@ -114,6 +165,7 @@ export async function POST(request: Request) {
     );
     const aiPayload = await aiResponse.json().catch(() => ({}));
     if (!aiResponse.ok) {
+      await finalizeQuota(false);
       const providerCode = extractSafeProviderErrorCode(aiPayload);
       const diagnostic = `（Gemini ${aiResponse.status}${providerCode ? `/${providerCode}` : ""}）`;
       return NextResponse.json(
@@ -126,22 +178,26 @@ export async function POST(request: Request) {
     try {
       structured = parseBookCoverOutputText(outputText);
     } catch {
+      await finalizeQuota(false);
       return NextResponse.json({ error: "AI 回傳格式無法辨識" }, { status: 502 });
     }
     const normalized = normalizeAiBookCover(structured);
     if (!normalized.usable) {
+      await finalizeQuota(false);
       return NextResponse.json({
         draft: {},
         confidence: normalized.confidence,
         remaining: Number(quota.remaining ?? 0),
       });
     }
+    await finalizeQuota(true);
     return NextResponse.json({
       draft: normalized.draft,
       confidence: normalized.confidence,
       remaining: Number(quota.remaining ?? 0),
     });
   } catch (error) {
+    await finalizeQuota(false).catch(() => undefined);
     const message = error instanceof Error && error.name === "AbortError"
       ? "AI 封面補強逾時，請稍後重試"
       : "AI 封面補強連線失敗";
