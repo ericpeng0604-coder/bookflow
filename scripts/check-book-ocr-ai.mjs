@@ -110,8 +110,13 @@ assert.match(client, /Authorization: `Bearer \$\{token\}`/, "browser request mus
 assert.match(app, /const needsAiFallback =[\s\S]*if \(needsAiFallback && supabase\)/, "cloud AI must only run after local OCR requests fallback");
 assert.match(
   app,
-  /let ocrDraft = needsAiFallback\s*\?\s*\{[\s\S]*?title: "",[\s\S]*?approvalNumber: "",[\s\S]*?\}\s*: mergedLocalDraft/,
+  /let ocrDraft = needsAiFallback\s*\?\s*\{[\s\S]*?title: "",[\s\S]*?author: "",[\s\S]*?edition: "",[\s\S]*?\}\s*:\s*\{[\s\S]*?title: mergedLocalDraft\.title,[\s\S]*?edition: mergedLocalDraft\.edition/,
   "weak local OCR must remain unapplied when cloud fallback fails",
+);
+assert.doesNotMatch(
+  app,
+  /previous\.publisher\.trim\(\) \? previous\.publisher : ocrDraft\.publisher/,
+  "OCR must not populate metadata fields removed from the listing form",
 );
 assert.match(app, /previous\.title\.trim\(\) \? previous\.title/, "OCR must preserve user-entered titles");
 assert.match(app, /ocr-privacy-note/, "the UI must disclose temporary cloud processing");

@@ -73,8 +73,27 @@ assert.match(
   /function requestClose\(\)[\s\S]*localStorage\.setItem\(draftStorageKey, JSON\.stringify\(draft\)\)[\s\S]*onClose\(\)/,
   "closing a listing form must synchronously save changed text before closing",
 );
+for (const removedLabel of [
+  "出版社（選填）",
+  "教育階段（選填）",
+  "年級（選填）",
+  "學期（選填）",
+  "科目（選填）",
+  "冊次／部別（選填）",
+  "課綱（選填）",
+  "書籍類型（選填）",
+  "ISBN-13（選填）",
+  "審定字號（選填）",
+]) {
+  assert.doesNotMatch(app, new RegExp(removedLabel), `listing form must not show ${removedLabel}`);
+}
+assert.match(
+  app,
+  /name="publisher" value=\{value\.publisher\}/,
+  "editing an existing listing must preserve removed metadata",
+);
 assert.match(app, /rankTaiwanTextbookCandidates/, "multi-source OCR candidates must be ranked");
-assert.match(app, /detectIsbnBarcode/, "EAN-13 ISBN scanning must be wired");
+assert.doesNotMatch(app, /detectIsbnBarcode/, "removed ISBN input must not trigger invisible barcode metadata");
 assert.match(app, /我已確認不是買錯版本/, "buyers must confirm textbook version details");
 
 const migration = read("supabase/migrations/20260622090000_site_quality_hardening.sql");
