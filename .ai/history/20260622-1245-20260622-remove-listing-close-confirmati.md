@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：remove listing close confirmation and save text draft immediately
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`3d84d8d43255265d4ef1fd1afc8bea5fa5c66d22`
+- 封存時間：2026-06-22T12:45:19.750Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

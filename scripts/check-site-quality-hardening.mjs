@@ -67,6 +67,12 @@ assert.ok("error" in invalidIsbn);
 const app = read("components/marketplace-app.tsx");
 assert.doesNotMatch(app, /window\.(prompt|confirm)/, "important actions must use in-app dialogs");
 assert.match(app, /bookflow-listing-draft-v1/, "listing drafts must persist locally");
+assert.doesNotMatch(app, /保留刊登草稿|離開並保留草稿/, "closing a listing form must not show a draft confirmation");
+assert.match(
+  app,
+  /function requestClose\(\)[\s\S]*localStorage\.setItem\(draftStorageKey, JSON\.stringify\(draft\)\)[\s\S]*onClose\(\)/,
+  "closing a listing form must synchronously save changed text before closing",
+);
 assert.match(app, /rankTaiwanTextbookCandidates/, "multi-source OCR candidates must be ranked");
 assert.match(app, /detectIsbnBarcode/, "EAN-13 ISBN scanning must be wired");
 assert.match(app, /我已確認不是買錯版本/, "buyers must confirm textbook version details");

@@ -592,13 +592,17 @@ run pnpm commands against an npm-created `node_modules`, or vice versa.
 reported trailing whitespace because PowerShell continued to the next command.
 
 **Cause:** Multiple validation and mutation commands were placed in one script
-without explicitly checking `$LASTEXITCODE`.
+without explicitly checking `$LASTEXITCODE`. Later, token-saving attempts also
+minified PowerShell so aggressively that required spaces around `foreach` and
+named parameters were removed.
 
 **Detection:** After every external validation command, assert its exit code
 before staging, committing, pushing, or deploying.
 
 **Prevention rule:** Do not rely on PowerShell to stop after a failed external
 command. Check `$LASTEXITCODE` and throw before any following mutation.
+Keep release scripts readable and one statement per line; never save tokens by
+minifying PowerShell syntax.
 
 ### LESSON-036: Structured AI output must allow for multipart and bounded responses
 
