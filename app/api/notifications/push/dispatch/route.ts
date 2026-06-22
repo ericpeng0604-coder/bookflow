@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { deliverBrowserPush } from "@/lib/server/notification-push";
+import { enforceRateLimit } from "@/lib/server/api-security";
 
 export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -21,6 +22,17 @@ export async function POST(request: Request) {
   const admin = createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  try {
+    const rateLimited = await enforceRateLimit(admin, request, {
+      scope: "notification-push-dispatch",
+      identity: data.user.id,
+      limit: 8,
+      windowSeconds: 60,
+    });
+    if (rateLimited) return rateLimited;
+  } catch {
+    return NextResponse.json({ error: "Push dispatch is temporarily unavailable" }, { status: 503 });
+  }
   try {
     return NextResponse.json(await deliverBrowserPush(admin, {
       actorId: data.user.id,

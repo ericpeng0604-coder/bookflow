@@ -48,6 +48,8 @@ export async function deliverNotificationEmails(
     .from("notifications")
     .select("id,recipient_id,title,message,email_attempts")
     .is("email_sent_at", null)
+    .is("email_abandoned_at", null)
+    .lt("email_attempts", 5)
     .or(`email_next_attempt_at.is.null,email_next_attempt_at.lte.${new Date().toISOString()}`)
     .order("created_at", { ascending: true })
     .limit(options?.limit ?? 50);
@@ -104,6 +106,7 @@ export async function deliverNotificationEmails(
             </div>
           `,
         }),
+        signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) throw new Error(`Resend HTTP ${response.status}`);
 
@@ -127,7 +130,10 @@ export async function deliverNotificationEmails(
         .update({
           email_attempts: attempts,
           email_last_error: error instanceof Error ? error.message.slice(0, 500) : "Unknown email error",
-          email_next_attempt_at: new Date(Date.now() + retryHours * 60 * 60 * 1000).toISOString(),
+          email_next_attempt_at: attempts >= 5
+            ? null
+            : new Date(Date.now() + retryHours * 60 * 60 * 1000).toISOString(),
+          email_abandoned_at: attempts >= 5 ? new Date().toISOString() : null,
         })
         .eq("id", notification.id)
         .is("email_sent_at", null);

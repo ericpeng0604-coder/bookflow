@@ -1,4 +1,5 @@
 import { departments } from "@/lib/demo-data";
+import { normalizeTaiwanTextbookQuery } from "./taiwan-textbook.ts";
 import type { ListingType } from "@/lib/types";
 
 /** Sentinel for "no max price" — avoids Chinese string comparisons in query logic. */
@@ -35,6 +36,8 @@ export function buildMarketplaceFilters(
     itemCategory: listingType === "secondhand" && itemCategory !== ALL_ITEM_CATEGORIES ? itemCategory : null,
     department: listingType === "book" && !isAllDepartments(department) ? department : null,
     maxPrice: parseMaxPriceFilter(maxPrice),
-    query: query.trim() || null,
+    query: listingType === "book"
+      ? normalizeTaiwanTextbookQuery(query) || null
+      : query.trim() || null,
   };
 }

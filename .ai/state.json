@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260619-switch-production-book-ocr-fallback-to-g",
-  "taskTitle": "switch production book OCR fallback to Gemini free tier",
-  "baseCommit": "8352ef6e3be5828f7c74826a8905ada72380976e",
-  "updatedAt": "2026-06-19T04:32:39.224Z",
+  "taskId": "20260622-complete-site-quality-hardening-and-taiw",
+  "taskTitle": "complete site quality hardening and Taiwan textbook recognition",
+  "baseCommit": "0148e0455903f50932c2de8d3785790f7de0bb45",
+  "updatedAt": "2026-06-22T02:29:07.784Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260619-0432-20260619-switch-production-book-ocr-fall.md"
+  "historyFile": ".ai/history/20260622-0229-20260622-complete-site-quality-hardening.md"
 }

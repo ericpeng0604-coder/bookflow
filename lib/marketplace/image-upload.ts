@@ -3,6 +3,7 @@ const MAX_WIDTH = 1000;
 const TARGET_BYTES = 400 * 1024;
 const INITIAL_QUALITY = 0.8;
 const MIN_QUALITY = 0.55;
+const MAX_IMAGE_PIXELS = 40_000_000;
 
 function loadImage(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -30,13 +31,23 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number)
   });
 }
 
-function resolveImageMimeType(file: File) {
-  if (["image/jpeg", "image/png", "image/webp"].includes(file.type)) return file.type;
-
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
-  if (extension === "png") return "image/png";
-  if (extension === "webp") return "image/webp";
+async function detectImageMimeType(file: File) {
+  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (
+    bytes[0] === 0x89
+    && bytes[1] === 0x50
+    && bytes[2] === 0x4e
+    && bytes[3] === 0x47
+    && bytes[4] === 0x0d
+    && bytes[5] === 0x0a
+    && bytes[6] === 0x1a
+    && bytes[7] === 0x0a
+  ) return "image/png";
+  if (
+    String.fromCharCode(...bytes.slice(0, 4)) === "RIFF"
+    && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP"
+  ) return "image/webp";
   return null;
 }
 
@@ -44,13 +55,20 @@ export async function compressImage(
   file: File,
   options?: { maxWidth?: number; targetBytes?: number; outputName?: string },
 ) {
-  if (!resolveImageMimeType(file)) {
+  const detectedMimeType = await detectImageMimeType(file);
+  if (!detectedMimeType) {
     throw new Error("無法辨識圖片格式，請改用 JPG、PNG 或 WebP");
+  }
+  if (file.type && file.type !== detectedMimeType) {
+    throw new Error("圖片內容與檔案格式不一致，請重新匯出圖片後再試");
   }
   if (file.size > MAX_UPLOAD_BYTES) throw new Error("原始圖片大小不能超過 5MB");
 
   const image = await loadImage(file);
   if (image.width < 1 || image.height < 1) throw new Error("無法讀取圖片");
+  if (image.width * image.height > MAX_IMAGE_PIXELS) {
+    throw new Error("圖片像素過大，請先縮小到 4,000 萬像素以下");
+  }
   const maxWidth = options?.maxWidth ?? MAX_WIDTH;
   const targetBytes = options?.targetBytes ?? TARGET_BYTES;
   const scale = image.width > maxWidth ? maxWidth / image.width : 1;
@@ -64,9 +82,15 @@ export async function compressImage(
   if (!context) throw new Error("無法處理圖片");
   context.drawImage(image, 0, 0, width, height);
 
-  const outputType = "image/webp";
+  let outputType = "image/webp";
   let quality = INITIAL_QUALITY;
-  let blob = await canvasToBlob(canvas, outputType, quality);
+  let blob: Blob;
+  try {
+    blob = await canvasToBlob(canvas, outputType, quality);
+  } catch {
+    outputType = "image/jpeg";
+    blob = await canvasToBlob(canvas, outputType, quality);
+  }
   while (blob.size > targetBytes && quality > MIN_QUALITY) {
     quality = Math.max(MIN_QUALITY, quality - 0.08);
     blob = await canvasToBlob(canvas, outputType, quality);
@@ -77,7 +101,8 @@ export async function compressImage(
   }
 
   const baseName = options?.outputName || file.name.replace(/\.[^.]+$/, "") || "image";
-  return new File([blob], `${baseName}.webp`, { type: blob.type });
+  const extension = blob.type === "image/webp" ? "webp" : "jpg";
+  return new File([blob], `${baseName}.${extension}`, { type: blob.type });
 }
 
 export function compressBookImage(file: File) {

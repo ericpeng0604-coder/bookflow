@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <>
       <a className="skip-link" href="#market">
-        跳到課本列表
+        跳到市場列表
       </a>
       <MarketplaceApp />
     </>

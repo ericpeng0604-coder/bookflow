@@ -1,5 +1,8 @@
 import { unstable_cache } from "next/cache";
+import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRateLimit } from "@/lib/server/api-security";
+import { normalizeTaiwanTextbookQuery } from "@/lib/marketplace/taiwan-textbook";
 
 type CountFilters = {
   listingType: string;
@@ -14,7 +17,8 @@ function normalizedFilters(request: NextRequest): CountFilters {
   const listingType = rawListingType === "secondhand" ? "secondhand" : "book";
   const itemCategory = request.nextUrl.searchParams.get("itemCategory")?.trim() || null;
   const department = request.nextUrl.searchParams.get("department")?.trim() || null;
-  const query = request.nextUrl.searchParams.get("query")?.trim().slice(0, 80) || null;
+  const rawQuery = request.nextUrl.searchParams.get("query")?.trim().slice(0, 80) || "";
+  const query = (listingType === "book" ? normalizeTaiwanTextbookQuery(rawQuery) : rawQuery) || null;
   const rawMaxPrice = request.nextUrl.searchParams.get("maxPrice");
   const parsedMaxPrice = rawMaxPrice ? Number(rawMaxPrice) : null;
   return {
@@ -46,6 +50,7 @@ async function requestCount(filters: CountFilters) {
       p_query: filters.query,
     }),
     cache: "no-store",
+    signal: AbortSignal.timeout(5_000),
   });
   if (!response.ok) throw new Error(`Catalog count failed (${response.status})`);
   return Number(await response.json());
@@ -55,6 +60,19 @@ export async function GET(request: NextRequest) {
   const filters = normalizedFilters(request);
   const cacheKey = Buffer.from(JSON.stringify(filters)).toString("base64url");
   try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (url && serviceRoleKey) {
+      const admin = createClient(url, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const rateLimited = await enforceRateLimit(admin, request, {
+        scope: "marketplace-count",
+        limit: 120,
+        windowSeconds: 60,
+      });
+      if (rateLimited) return rateLimited;
+    }
     const count = await unstable_cache(
       () => requestCount(filters),
       ["marketplace-count", cacheKey],

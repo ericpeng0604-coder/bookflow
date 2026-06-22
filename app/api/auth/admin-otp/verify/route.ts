@@ -1,5 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import {
+  enforceRateLimit,
+  exceedsContentLength,
+  isJsonRequest,
+} from "@/lib/server/api-security";
 
 type JwtPayload = {
   session_id?: string;
@@ -53,6 +58,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "此帳號沒有管理員權限" }, { status: 403 });
   }
 
+  if (!isJsonRequest(request)) {
+    return NextResponse.json({ error: "請使用 JSON 傳送驗證碼" }, { status: 415 });
+  }
+  if (exceedsContentLength(request, 2048)) {
+    return NextResponse.json({ error: "請求內容過大" }, { status: 413 });
+  }
+  const admin = createClient(url, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  try {
+    const rateLimited = await enforceRateLimit(admin, request, {
+      scope: "admin-otp-verify",
+      identity: authData.user.id,
+      limit: 10,
+      windowSeconds: 600,
+    });
+    if (rateLimited) return rateLimited;
+  } catch {
+    return NextResponse.json({ error: "安全驗證服務暫時無法使用" }, { status: 503 });
+  }
+
   const body = await request.json().catch(() => null) as { code?: unknown } | null;
   const code = typeof body?.code === "string" ? body.code.trim() : "";
   if (!/^\d{8}$/.test(code)) {
@@ -71,9 +97,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "驗證碼錯誤或已過期，請重新寄送" }, { status: 400 });
   }
 
-  const admin = createClient(url, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
   const { error: verificationError } = await admin
     .from("admin_login_verifications")
     .upsert({

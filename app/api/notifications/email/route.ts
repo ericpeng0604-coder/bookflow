@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { deliverNotificationEmails } from "@/lib/server/notification-email";
+import { enforceRateLimit } from "@/lib/server/api-security";
 
 export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -28,6 +29,17 @@ export async function POST(request: Request) {
   const admin = createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  try {
+    const rateLimited = await enforceRateLimit(admin, request, {
+      scope: "notification-email-dispatch",
+      identity: authData.user.id,
+      limit: 8,
+      windowSeconds: 60,
+    });
+    if (rateLimited) return rateLimited;
+  } catch {
+    return NextResponse.json({ error: "Email dispatch is temporarily unavailable" }, { status: 503 });
+  }
   const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   try {
     return NextResponse.json(await deliverNotificationEmails(admin, {

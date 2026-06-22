@@ -11,7 +11,7 @@ export type RequestStatus =
 export type ReviewStatus = "pending" | "approved" | "rejected";
 export type UserRole = "user" | "moderator" | "admin";
 export type AccountStatus = "active" | "suspended";
-export type StudentVerificationStatus = "pending" | "approved" | "rejected";
+export type StudentVerificationStatus = "pending" | "approved" | "rejected" | "withdrawn";
 export type ModerationVisibility = "visible" | "hidden";
 export type ListingLifecycleState = "active" | "archived" | "withdrawn";
 export type ContactMethod = "none" | "email" | "line";
@@ -65,6 +65,15 @@ export type Book = {
   teacher: string;
   edition: string;
   publisher: string;
+  educationLevel: string;
+  grade: string;
+  semester: string;
+  subject: string;
+  volume: string;
+  curriculum: string;
+  bookType: string;
+  isbn13: string;
+  approvalNumber: string;
   condition: string;
   price: number;
   imageUrl: string;
@@ -195,7 +204,6 @@ export type StudentVerification = {
   id: string;
   userId: string;
   userName: string;
-  userEmail: string;
   imagePath: string;
   ocrText: string;
   qualityFlags: Record<string, unknown>;

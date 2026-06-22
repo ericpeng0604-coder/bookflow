@@ -42,11 +42,33 @@ const rpcProbes = [
     body: {},
   },
   {
-    name: "consume_book_ocr_quota",
+    name: "reserve_book_ocr_quota",
     body: {
       target_user_id: "00000000-0000-0000-0000-000000000000",
+      request_key: "00000000-0000-4000-8000-000000000000",
       daily_limit: 20,
     },
+  },
+  {
+    name: "consume_api_rate_limit",
+    body: {
+      rate_scope: "staging-probe",
+      rate_key_hash: "00000000000000000000000000000000",
+      request_limit: 1,
+      window_seconds: 60,
+    },
+  },
+  {
+    name: "record_textbook_ocr_feedback",
+    body: {
+      original_metadata: {},
+      corrected_metadata: {},
+      catalog_version: "staging-probe",
+    },
+  },
+  {
+    name: "anonymize_account_for_deletion",
+    body: { target_user_id: "00000000-0000-0000-0000-000000000000" },
   },
 ];
 
@@ -68,6 +90,13 @@ for (const table of [
   "conversation_user_preferences",
   "user_feedback",
   "book_ocr_daily_usage",
+  "book_ocr_quota_reservations",
+  "api_rate_limits",
+  "api_abuse_events",
+  "student_verification_audit_logs",
+  "moderation_audit_logs",
+  "textbook_ocr_feedback",
+  "account_deletion_requests",
 ]) {
   const serviceResponse = await request(`/rest/v1/${table}?select=*&limit=0`, serviceKey);
   if (!serviceResponse.ok) {

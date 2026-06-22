@@ -131,11 +131,20 @@ export async function GET(request: Request) {
     console.error("Lifecycle browser push delivery failed", error);
   }
 
+  const [{ data: verificationCleanup }, { data: operationalCleanup }] = await Promise.all([
+    admin.rpc("cleanup_sensitive_verification_data", { reference_time: now.toISOString() }),
+    admin.rpc("cleanup_operational_data", { reference_time: now.toISOString() }),
+  ]);
+
   return NextResponse.json({
     ok: true,
     lifecycle,
     cleanup: { deleted, sanitized, failed: cleanupFailed },
     email,
     push,
+    privacyCleanup: {
+      studentVerifications: Number(verificationCleanup || 0),
+      operational: operationalCleanup ?? {},
+    },
   });
 }

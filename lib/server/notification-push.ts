@@ -86,6 +86,8 @@ export async function deliverBrowserPush(
     .select("id,recipient_id,type,book_id,request_id,conversation_id,title,message,push_attempts")
     .in("type", [...IMPORTANT_TYPES])
     .is("push_sent_at", null)
+    .is("push_abandoned_at", null)
+    .lt("push_attempts", 5)
     .or(`push_next_attempt_at.is.null,push_next_attempt_at.lte.${now}`)
     .order("created_at", { ascending: true })
     .limit(options?.limit ?? 50);
@@ -153,7 +155,7 @@ export async function deliverBrowserPush(
             url: notificationUrl(notification),
             tag: `bookflow-${notification.id}`,
           }),
-          { TTL: 60 * 60 * 24 },
+          { TTL: 60 * 60 * 24, timeout: 15_000 },
         );
         delivered = true;
         await admin.from("push_subscriptions").update({
@@ -197,7 +199,10 @@ export async function deliverBrowserPush(
       await admin.from("notifications").update({
         push_attempts: attempts,
         push_last_error: errors.join("; ").slice(0, 500),
-        push_next_attempt_at: new Date(Date.now() + retryHours * 3600000).toISOString(),
+        push_next_attempt_at: attempts >= 5
+          ? null
+          : new Date(Date.now() + retryHours * 3600000).toISOString(),
+        push_abandoned_at: attempts >= 5 ? new Date().toISOString() : null,
       }).eq("id", notification.id).is("push_sent_at", null);
       failed += 1;
     }

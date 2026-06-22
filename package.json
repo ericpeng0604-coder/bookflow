@@ -20,6 +20,8 @@
     "check:listing-ui": "node scripts/check-listing-navigation-ui.mjs",
     "check:mobile-ocr": "node scripts/check-mobile-book-ocr.mjs",
     "check:book-ocr-ai": "node --experimental-strip-types scripts/check-book-ocr-ai.mjs",
+    "check:taiwan-textbooks": "node --experimental-strip-types scripts/check-taiwan-textbooks.mjs",
+    "benchmark:taiwan-textbooks": "node --experimental-strip-types scripts/benchmark-taiwan-textbooks.mjs",
     "check:lifecycle": "node scripts/check-listing-lifecycle.mjs",
     "check:trade": "node scripts/check-trade-workflow.mjs",
     "check:chat-state": "node scripts/check-chat-switching.mjs",
@@ -32,6 +34,7 @@
     "check:notification-delivery": "node --experimental-strip-types scripts/check-notification-delivery.mjs",
     "check:trade-chat": "node scripts/check-trade-chat.mjs",
     "check:home-accessibility": "node scripts/check-home-accessibility.mjs",
+    "check:site-hardening": "node --experimental-strip-types scripts/check-site-quality-hardening.mjs",
     "check:push-subscription-api": "node scripts/check-push-subscription-api.mjs",
     "check:google-auth": "node scripts/check-google-auth.mjs",
     "check:workflows": "node scripts/check-workflows.mjs",
@@ -51,6 +54,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

@@ -18,7 +18,7 @@ const checks = [
   ["filter query label", homeBlock.includes('htmlFor="home-filter-query"')],
   ["filter department label", homeBlock.includes('htmlFor="home-filter-department"')],
   ["filter price label", homeBlock.includes('htmlFor="home-filter-price"')],
-  ["filter icon accessible name", homeBlock.includes('aria-label="進階篩選（即將推出）"')],
+  ["unfinished advanced filter removed", !homeBlock.includes("進階篩選（即將推出）")],
   ["book cards keyboard buttons", homeBlock.includes('className="book-card-main"') && !homeBlock.includes('onClick={() => openBook(book.id)}>\n                  <div className="card-image"')],
   ["favorite button stays separate", homeBlock.includes('aria-pressed={favoriteIds.has(book.id)}')],
   ["book list semantics", homeBlock.includes('role="list"') && homeBlock.includes('role="listitem"')],

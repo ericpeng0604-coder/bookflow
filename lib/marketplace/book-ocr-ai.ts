@@ -20,10 +20,14 @@ export async function recognizeBookCoverWithAi(
   const body = new FormData();
   body.set("image", file);
   body.set("localOcrText", localOcrText.slice(0, 4000));
+  const idempotencyKey = crypto.randomUUID();
 
   const response = await fetch("/api/ai/book-cover", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "X-Idempotency-Key": idempotencyKey,
+    },
     body,
   });
   const payload = await response.json().catch(() => ({})) as AiBookOcrResponse;

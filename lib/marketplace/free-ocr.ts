@@ -1,3 +1,8 @@
+import {
+  extractTaiwanTextbookMetadata,
+  normalizeIsbn13,
+} from "./taiwan-textbook.ts";
+
 type OcrProgress = {
   status?: string;
   progress?: number;
@@ -18,13 +23,6 @@ type TesseractLike = {
   ) => Promise<OcrWorkerLike>;
 };
 
-declare global {
-  interface Window {
-    Tesseract?: TesseractLike;
-  }
-}
-
-const TESSERACT_CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 export const BOOK_OCR_MAX_SIDE = 1400;
 
 let tesseractLoadPromise: Promise<TesseractLike> | null = null;
@@ -32,31 +30,16 @@ let englishWorkerPromise: Promise<OcrWorkerLike> | null = null;
 let combinedWorkerPromise: Promise<OcrWorkerLike> | null = null;
 let activeProgress: ((message: OcrProgress) => void) | null = null;
 
-function loadScript(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
-    if (existing) {
-      if (window.Tesseract) resolve();
-      else existing.addEventListener("load", () => resolve(), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("OCR 載入失敗，請稍後再試或改用手動填寫"));
-    document.head.appendChild(script);
-  });
-}
-
 async function loadTesseract() {
   if (typeof window === "undefined") throw new Error("OCR 只能在瀏覽器中執行");
-  if (window.Tesseract) return window.Tesseract;
-  tesseractLoadPromise ??= loadScript(TESSERACT_CDN).then(() => {
-    if (!window.Tesseract) throw new Error("OCR 尚未準備完成，請稍後再試");
-    return window.Tesseract;
-  });
+  tesseractLoadPromise ??= import("tesseract.js")
+    .then((module) => ({
+      createWorker: module.createWorker as unknown as TesseractLike["createWorker"],
+    }))
+    .catch(() => {
+      tesseractLoadPromise = null;
+      throw new Error("本機 OCR 載入失敗，將改用 AI 補強或手動填寫");
+    });
   return tesseractLoadPromise;
 }
 
@@ -163,11 +146,46 @@ export async function recognizeImageText(file: File) {
   return String(result.data?.text || "").replace(/\s+\n/g, "\n").trim();
 }
 
+type DetectedBarcode = { rawValue?: string };
+type BarcodeDetectorLike = {
+  detect: (source: ImageBitmap) => Promise<DetectedBarcode[]>;
+};
+type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorLike;
+
+export async function detectIsbnBarcode(file: File) {
+  if (typeof window === "undefined") return undefined;
+  const Detector = (window as typeof window & {
+    BarcodeDetector?: BarcodeDetectorConstructor;
+  }).BarcodeDetector;
+  if (!Detector || typeof createImageBitmap !== "function") return undefined;
+  const bitmap = await createImageBitmap(file);
+  try {
+    const detector = new Detector({ formats: ["ean_13"] });
+    const results = await detector.detect(bitmap);
+    return results
+      .map((result) => normalizeIsbn13(result.rawValue || ""))
+      .find(Boolean);
+  } catch {
+    return undefined;
+  } finally {
+    bitmap.close();
+  }
+}
+
 export type BookOcrDraft = {
   title?: string;
   author?: string;
   edition?: string;
   publisher?: string;
+  educationLevel?: string;
+  grade?: string;
+  semester?: string;
+  subject?: string;
+  volume?: string;
+  curriculum?: string;
+  bookType?: string;
+  isbn13?: string;
+  approvalNumber?: string;
 };
 
 type KnownBookCoverHint = {
@@ -429,6 +447,7 @@ export function extractBookDraftFromOcr(rawText: string): BookOcrDraft {
     author: authorLine ? cleanAuthorCandidate(authorLine) : undefined,
     edition: mergeEditionParts(cleanVolumeCandidate(volumeLine), editionLine),
     publisher,
+    ...extractTaiwanTextbookMetadata(rawText),
   };
   return mergeDrafts(genericDraft, findKnownBookCoverHint(rawText));
 }
@@ -499,9 +518,14 @@ export function recognizeBookCover(
       usedChineseFallback: true,
       needsAiFallback: !combinedReliable || !hasEnoughBookFields(combinedDraft),
     };
-  })().catch((error) => {
-    recognitionCache.delete(file);
-    throw error;
+  })().catch(() => {
+    return {
+      text: "",
+      confidence: 0,
+      draft: {},
+      usedChineseFallback: false,
+      needsAiFallback: true,
+    };
   });
 
   recognitionCache.set(file, recognition);
