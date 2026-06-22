@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix Gemini OCR response parsing for stylized Chinese textbook covers
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`9372a6780be083e0a81d7ac3498088cae6ed0416`
+- 封存時間：2026-06-22T02:49:35.361Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

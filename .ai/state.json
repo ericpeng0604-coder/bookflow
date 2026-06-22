@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260622-complete-site-quality-hardening-and-taiw",
-  "taskTitle": "complete site quality hardening and Taiwan textbook recognition",
-  "baseCommit": "0148e0455903f50932c2de8d3785790f7de0bb45",
-  "updatedAt": "2026-06-22T02:29:07.784Z",
+  "taskId": "20260622-fix-gemini-ocr-response-parsing-for-styl",
+  "taskTitle": "fix Gemini OCR response parsing for stylized Chinese textbook covers",
+  "baseCommit": "9372a6780be083e0a81d7ac3498088cae6ed0416",
+  "updatedAt": "2026-06-22T02:49:35.361Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260622-0229-20260622-complete-site-quality-hardening.md"
+  "historyFile": ".ai/history/20260622-0249-20260622-fix-gemini-ocr-response-parsing.md"
 }
