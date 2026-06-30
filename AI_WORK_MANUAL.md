@@ -638,6 +638,23 @@ when practical, and run them directly with Node. Add dependency installation
 only when the smoke script actually imports packages or build artifacts that
 require it.
 
+### LESSON-038: Modal focus traps must not depend on unstable callbacks
+
+**Observed problem:** Typing into controlled fields inside the listing modal
+made the modal jump upward and move focus away from the active input.
+
+**Cause:** The modal focus-trap effect depended on an inline close callback.
+Each controlled input render recreated that callback, so the effect cleaned up
+and re-ran its initial-focus behavior while the user was typing.
+
+**Detection:** Type into each controlled field in a scrollable modal while
+watching the active element and modal scroll position. Add a static regression
+check that focus-trap setup does not depend on an unstable render callback.
+
+**Prevention rule:** Keep changing global-handler callbacks in refs and run
+initial modal focus-trap setup only when the modal is mounted or when the
+actual focus target changes.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
