@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：prevent listing price Enter from submitting form
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`e3df07a518093825b299be01ec925df0bacf5be8`
+- 封存時間：2026-06-30T14:27:13.045Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
