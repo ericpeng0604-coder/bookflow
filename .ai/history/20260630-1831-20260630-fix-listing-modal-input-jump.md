@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix listing modal input jump
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`f293bae848f14a4b6fd026e2b4a10e071383cb5d`
+- 封存時間：2026-06-30T18:31:41.657Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

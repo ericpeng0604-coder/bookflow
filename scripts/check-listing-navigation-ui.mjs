@@ -9,6 +9,7 @@ const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8")
 const header = app.slice(app.indexOf('<header className="site-header">'), app.indexOf("</header>"));
 const market = app.slice(app.indexOf('<section className="market"'), app.indexOf('view === "book"'));
 const listingForm = app.slice(app.indexOf("function BookFormModal"), app.indexOf("function ContactSettingsModal"));
+const modalShell = app.slice(app.indexOf("function ModalShell"), app.indexOf("function ActionDialog"));
 
 assert.ok(
   header.includes('switchListingType(isSecondhandMode ? "book" : "secondhand")'),
@@ -33,5 +34,16 @@ assert.equal(
 );
 assert.ok(listingForm.includes('className="listing-file-input full"'), "the file control must use the styled input");
 assert.ok(css.includes(".listing-file-input::file-selector-button"), "the native file button must be styled");
+assert.ok(
+  modalShell.includes("const onCloseRef = useRef(onClose)")
+    && modalShell.includes("onCloseRef.current = onClose")
+    && modalShell.includes("onCloseRef.current()"),
+  "modal close handlers must stay current without rerunning the focus trap",
+);
+assert.doesNotMatch(
+  modalShell,
+  /previouslyFocused\?\.focus\(\);\s*\};\s*}, \[onClose\]\);/,
+  "modal focus trap must not rerun on every input render",
+);
 
 console.log("Listing navigation and upload UI checks passed.");

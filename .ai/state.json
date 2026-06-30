@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260630-speed-up-production-smoke-workflow",
-  "taskTitle": "speed up production smoke workflow",
-  "baseCommit": "0f6f7e9c15edbb3964fc1f02803a6aa184f60dd4",
-  "updatedAt": "2026-06-30T14:35:15.632Z",
+  "taskId": "20260630-fix-listing-modal-input-jump",
+  "taskTitle": "fix listing modal input jump",
+  "baseCommit": "f293bae848f14a4b6fd026e2b4a10e071383cb5d",
+  "updatedAt": "2026-06-30T18:31:41.657Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260630-1435-20260630-speed-up-production-smoke-workf.md"
+  "historyFile": ".ai/history/20260630-1831-20260630-fix-listing-modal-input-jump.md"
 }
