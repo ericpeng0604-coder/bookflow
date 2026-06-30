@@ -35,6 +35,7 @@ const SENSITIVE_PATTERNS = [
   /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b/,
   /(?:password|passwd|密碼)\s*[:=]\s*[^\s`]{6,}/i,
 ];
+const UNREADABLE_TEXT_PATTERN = /[\uFFFD\uE000-\uF8FF]/u;
 
 function findGitRoot() {
   try {
@@ -166,6 +167,8 @@ function sectionContent(markdown, title) {
 }
 
 function validateHandoff(markdown) {
+  validateReadableText(markdown, "AI_HANDOFF.md");
+
   const missing = REQUIRED_SECTIONS.filter(
     (section) => !sectionContent(markdown, section),
   );
@@ -177,6 +180,12 @@ function validateHandoff(markdown) {
     if (pattern.test(markdown)) {
       fail("交接內容疑似包含密碼、Token 或私鑰，請移除敏感資訊。");
     }
+  }
+}
+
+function validateReadableText(content, label) {
+  if (UNREADABLE_TEXT_PATTERN.test(content)) {
+    fail(`${label} 含有疑似中文亂碼，請用 UTF-8 重新讀寫後再提交。`);
   }
 }
 
@@ -340,6 +349,7 @@ function checkSecretsInHistory(files) {
     const fullPath = resolve(ROOT, file);
     if (!existsSync(fullPath)) continue;
     const content = readFileSync(fullPath, "utf8");
+    validateReadableText(content, file);
     for (const pattern of SENSITIVE_PATTERNS) {
       if (pattern.test(content)) {
         fail(`${file} 疑似包含敏感資訊。`);

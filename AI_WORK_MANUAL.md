@@ -655,6 +655,24 @@ check that focus-trap setup does not depend on an unstable render callback.
 initial modal focus-trap setup only when the modal is mounted or when the
 actual focus target changes.
 
+### LESSON-039: Validate Chinese handoff text before committing
+
+**Observed problem:** AI handoff and history text containing Traditional
+Chinese could appear as mojibake in terminal output, making it unclear whether
+the committed Markdown was readable.
+
+**Cause:** PowerShell and terminal output can decode UTF-8 Markdown with the
+wrong display encoding. Without an automated check, corrupted handoff text can
+be mistaken for a harmless display issue or committed unnoticed.
+
+**Detection:** Read handoff files with explicit UTF-8 and run the AI
+collaboration check before staging. Treat Unicode replacement characters and
+private-use glyphs in AI handoff/history Markdown as suspicious mojibake.
+
+**Prevention rule:** Keep AI handoff and history files UTF-8, validate them
+with the project checker, and reject commits when generated collaboration
+Markdown contains unreadable mojibake markers.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
