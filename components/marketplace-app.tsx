@@ -3431,7 +3431,7 @@ function ModalShell({ title, subtitle, onClose, children }: { title: string; sub
   }, [onClose]);
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
         className="modal"
@@ -3439,7 +3439,7 @@ function ModalShell({ title, subtitle, onClose, children }: { title: string; sub
         aria-modal="true"
         aria-labelledby={headingId}
         tabIndex={-1}
-        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <button className="modal-close" type="button" onClick={onClose} aria-label="關閉視窗"><X aria-hidden="true" /></button>
         <div className="modal-heading">
@@ -4581,7 +4581,7 @@ function BookFormModal({
               <input type="hidden" name="isbn13" value={value.isbn13} />
               <input type="hidden" name="approvalNumber" value={value.approvalNumber} />
               <label>作者 *<input name="author" required maxLength={LISTING_FIELD_LIMITS.author} value={draft.author} onChange={(event) => updateDraft("author", event.target.value)} /></label>
-              <label>版本 *<input name="edition" required maxLength={LISTING_FIELD_LIMITS.edition} value={draft.edition} onChange={(event) => updateDraft("edition", event.target.value)} placeholder="例如：第 2 版" /></label>
+              <label>版本（選填）<input name="edition" maxLength={LISTING_FIELD_LIMITS.edition} value={draft.edition} onChange={(event) => updateDraft("edition", event.target.value)} placeholder="例如：第 2 版" /></label>
               <label>科系（選填）<select name="department" value={draft.department} onChange={(event) => updateDraft("department", event.target.value)}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
               <label>課程（選填）<input name="course" maxLength={LISTING_FIELD_LIMITS.course} value={draft.course} onChange={(event) => updateDraft("course", event.target.value)} /></label>
               <label>授課老師（選填）<input name="teacher" maxLength={LISTING_FIELD_LIMITS.teacher} value={draft.teacher} onChange={(event) => updateDraft("teacher", event.target.value)} /></label>
