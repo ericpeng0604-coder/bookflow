@@ -39,13 +39,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
       - name: Verify deployed release
         env:
           RELEASE_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.base_url || 'https://bookflow-green.vercel.app' }}
           EXPECTED_COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_commit || github.event.deployment.sha }}
-        run: npm run release:smoke
+        run: node scripts/release-smoke.mjs
       - name: Add release evidence
         if: ${{ success() }}
         env:

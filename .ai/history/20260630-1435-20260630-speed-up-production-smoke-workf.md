@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：speed up production smoke workflow
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`0f6f7e9c15edbb3964fc1f02803a6aa184f60dd4`
+- 封存時間：2026-06-30T14:35:15.632Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
