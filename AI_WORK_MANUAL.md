@@ -673,6 +673,23 @@ private-use glyphs in AI handoff/history Markdown as suspicious mojibake.
 with the project checker, and reject commits when generated collaboration
 Markdown contains unreadable mojibake markers.
 
+### LESSON-040: Auth claim parsers must accept documented variants
+
+**Observed problem:** A valid administrator OTP flow could be blocked with a
+"use the administrator password first" error before checking the submitted code.
+
+**Cause:** The server-side JWT parser assumed the authentication method claim
+always used one object shape, so another valid password-authenticated claim
+shape was treated as missing password proof.
+
+**Detection:** When an auth gate rejects a freshly password-authenticated user,
+decode only non-secret claim structure in a local test fixture and compare the
+parser against every documented claim variant.
+
+**Prevention rule:** Keep auth claim parsing strict about required security
+facts but tolerant of documented representation variants, and add a focused
+regression check for each accepted shape.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

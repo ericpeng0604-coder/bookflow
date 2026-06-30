@@ -8,7 +8,7 @@ import {
 
 type JwtPayload = {
   session_id?: string;
-  amr?: Array<{ method?: string }>;
+  amr?: Array<string | { method?: string }>;
 };
 
 function decodeJwtPayload(token: string): JwtPayload | null {
@@ -20,6 +20,13 @@ function decodeJwtPayload(token: string): JwtPayload | null {
   } catch {
     return null;
   }
+}
+
+function hasPasswordAuthentication(amr: JwtPayload["amr"]) {
+  return Array.isArray(amr) && amr.some((entry) => {
+    if (typeof entry === "string") return entry === "password";
+    return entry?.method === "password";
+  });
 }
 
 export async function POST(request: Request) {
@@ -36,7 +43,7 @@ export async function POST(request: Request) {
   }
 
   const payload = decodeJwtPayload(accessToken);
-  if (!payload?.session_id || !payload.amr?.some((method) => method.method === "password")) {
+  if (!payload?.session_id || !hasPasswordAuthentication(payload.amr)) {
     return NextResponse.json({ error: "請先使用管理員密碼登入" }, { status: 401 });
   }
 
