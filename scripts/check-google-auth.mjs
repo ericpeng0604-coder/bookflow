@@ -8,6 +8,10 @@ const migration = readFileSync(
   new URL("../supabase/migrations/20260615000000_google_oauth_profile_support.sql", import.meta.url),
   "utf8",
 );
+const adminOtpRoute = readFileSync(
+  new URL("../app/api/auth/admin-otp/verify/route.ts", import.meta.url),
+  "utf8",
+);
 
 const checks = [
   ["Google OAuth provider is used", app.includes('provider: "google"')],
@@ -15,6 +19,8 @@ const checks = [
   ["Google login is exposed in the login modal", app.includes("使用 Google 帳號繼續")],
   ["Google button has focus styling", css.includes(".google-login-button:focus-visible")],
   ["admin OAuth sessions still require verification", app.includes("await ensureAdminOtp(user.email)")],
+  ["admin OTP backend accepts Google OAuth sessions", adminOtpRoute.includes('"oauth"')],
+  ["admin OTP backend still accepts password sessions", adminOtpRoute.includes('"password"')],
   [
     "admin OTP dedupe resets when the session ends",
     /if\s*\(!user\?\.email\)\s*\{\s*adminOtpRequestedRef\.current\s*=\s*null;/.test(app),

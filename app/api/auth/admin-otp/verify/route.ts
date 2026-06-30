@@ -22,10 +22,12 @@ function decodeJwtPayload(token: string): JwtPayload | null {
   }
 }
 
-function hasPasswordAuthentication(amr: JwtPayload["amr"]) {
+function hasTrustedAdminAuthentication(amr: JwtPayload["amr"]) {
+  const trustedMethods = new Set(["password", "oauth"]);
+
   return Array.isArray(amr) && amr.some((entry) => {
-    if (typeof entry === "string") return entry === "password";
-    return entry?.method === "password";
+    if (typeof entry === "string") return trustedMethods.has(entry);
+    return Boolean(entry?.method && trustedMethods.has(entry.method));
   });
 }
 
@@ -43,8 +45,8 @@ export async function POST(request: Request) {
   }
 
   const payload = decodeJwtPayload(accessToken);
-  if (!payload?.session_id || !hasPasswordAuthentication(payload.amr)) {
-    return NextResponse.json({ error: "請先使用管理員密碼登入" }, { status: 401 });
+  if (!payload?.session_id || !hasTrustedAdminAuthentication(payload.amr)) {
+    return NextResponse.json({ error: "請先登入管理員帳號" }, { status: 401 });
   }
 
   const authClient = createClient(url, anonKey, {

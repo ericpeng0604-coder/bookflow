@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260630-fix-admin-otp-password-claim-check",
-  "taskTitle": "fix admin OTP password claim check",
-  "baseCommit": "48eefce936e45fcbef36e8ea8e23b8bc2af57e94",
-  "updatedAt": "2026-06-30T19:18:07.312Z",
+  "taskId": "20260630-allow-google-admin-otp-verification",
+  "taskTitle": "allow Google admin OTP verification",
+  "baseCommit": "250a2dcb158d0eca94475f2ced0114405f3ad1f8",
+  "updatedAt": "2026-06-30T19:36:27.892Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260630-1918-20260630-fix-admin-otp-password-claim-ch.md"
+  "historyFile": ".ai/history/20260630-1936-20260630-allow-google-admin-otp-verifica.md"
 }
