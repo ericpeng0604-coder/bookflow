@@ -4478,9 +4478,17 @@ function BookFormModal({
     } catch (error) {
       if (requestId !== ocrRequestRef.current) return;
       setOcrMessage(error instanceof Error ? error.message : "OCR 辨識失敗，請改用手動填寫");
-    } finally {
+  } finally {
       if (requestId === ocrRequestRef.current) setOcrBusy(false);
     }
+  }
+
+  function preventImplicitSubmit(event: React.KeyboardEvent<HTMLFormElement>) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    const target = event.target;
+    if (target instanceof HTMLTextAreaElement || target instanceof HTMLButtonElement) return;
+    if (target instanceof HTMLInputElement && ["button", "submit", "file"].includes(target.type)) return;
+    event.preventDefault();
   }
 
   return (
@@ -4490,7 +4498,7 @@ function BookFormModal({
       subtitle="標示 * 的欄位為必填；文字草稿會自動保留在這台裝置"
       onClose={requestClose}
     >
-      <form onSubmit={onSubmit} className="form book-form">
+      <form onSubmit={onSubmit} onKeyDown={preventImplicitSubmit} className="form book-form">
         <fieldset disabled={saving} className="book-form-fields">
           <p className="listing-file-help full">
             <b>{isSecondhand ? "商品圖片" : "封面圖片"} *</b>

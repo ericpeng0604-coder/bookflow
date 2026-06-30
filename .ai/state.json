@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260630-make-listing-edition-optional-and-preser",
-  "taskTitle": "make listing edition optional and preserve desktop modal editing",
-  "baseCommit": "bf439bcfa37e0a6ef1348fd130ec6d40917b1204",
-  "updatedAt": "2026-06-30T13:51:36.249Z",
+  "taskId": "20260630-prevent-listing-price-enter-from-submitt",
+  "taskTitle": "prevent listing price Enter from submitting form",
+  "baseCommit": "e3df07a518093825b299be01ec925df0bacf5be8",
+  "updatedAt": "2026-06-30T14:27:13.046Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260630-1351-20260630-make-listing-edition-optional-a.md"
+  "historyFile": ".ai/history/20260630-1427-20260630-prevent-listing-price-enter-fro.md"
 }

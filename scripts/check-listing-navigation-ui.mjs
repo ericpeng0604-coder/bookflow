@@ -20,6 +20,12 @@ assert.ok(!header.includes('openListingForm("book")'), "header must not expose a
 assert.ok(!header.includes('openListingForm("secondhand")'), "header must not expose a separate secondhand listing entry");
 assert.ok(!market.includes("market-mode-switch"), "the catalog must not expose another market switch");
 assert.ok(!listingForm.includes("cover-upload"), "the large duplicate upload card must be removed");
+assert.ok(
+  listingForm.includes("function preventImplicitSubmit")
+    && listingForm.includes("event.nativeEvent.isComposing")
+    && listingForm.includes('onKeyDown={preventImplicitSubmit}'),
+  "single-line listing fields must not implicitly submit the form on Enter",
+);
 assert.equal(
   (listingForm.match(/type="file"/g) ?? []).length,
   1,
