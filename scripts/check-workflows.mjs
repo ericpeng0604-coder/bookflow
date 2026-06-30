@@ -38,7 +38,12 @@ assert.match(staging, /npm run staging:check/);
 assert.match(productionMigration, /environment:\s*production-database/);
 assert.match(productionMigration, /PRODUCTION_DATABASE_URL/);
 assert.match(productionMigration, /APPLY-PRODUCTION-MIGRATIONS/);
-assert.match(productionMonitor, /npm run release:smoke/);
+assert.match(productionMonitor, /node scripts\/release-smoke\.mjs/);
+assert.doesNotMatch(
+  productionMonitor,
+  /npm ci/,
+  "production smoke must stay dependency-free unless release-smoke imports packages",
+);
 assert.match(productionMonitor, /deployment_status/);
 assert.match(rollback, /select-rollback-target\.mjs origin\/main/);
 assert.match(rollback, /npm run check:all/);

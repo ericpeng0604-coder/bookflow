@@ -620,6 +620,24 @@ title text.
 object defensively, reserve enough output tokens, and disable unnecessary
 thinking for deterministic extraction requests.
 
+### LESSON-037: Production smoke should not install unused dependencies
+
+**Observed problem:** Small UI-only releases felt slow because the production
+deployment monitor installed the whole dependency tree before running a smoke
+script that only uses Node built-ins.
+
+**Cause:** The workflow called `npm ci` and `npm run release:smoke` even though
+`scripts/release-smoke.mjs` does not import project packages.
+
+**Detection:** Inspect workflow step timing. If dependency installation takes
+longer than the actual smoke probe and the script has no package imports, the
+install is release overhead rather than verification.
+
+**Prevention rule:** Keep production post-deploy smoke checks dependency-free
+when practical, and run them directly with Node. Add dependency installation
+only when the smoke script actually imports packages or build artifacts that
+require it.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

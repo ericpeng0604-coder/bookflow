@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260630-prevent-listing-price-enter-from-submitt",
-  "taskTitle": "prevent listing price Enter from submitting form",
-  "baseCommit": "e3df07a518093825b299be01ec925df0bacf5be8",
-  "updatedAt": "2026-06-30T14:27:13.046Z",
+  "taskId": "20260630-speed-up-production-smoke-workflow",
+  "taskTitle": "speed up production smoke workflow",
+  "baseCommit": "0f6f7e9c15edbb3964fc1f02803a6aa184f60dd4",
+  "updatedAt": "2026-06-30T14:35:15.632Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260630-1427-20260630-prevent-listing-price-enter-fro.md"
+  "historyFile": ".ai/history/20260630-1435-20260630-speed-up-production-smoke-workf.md"
 }
