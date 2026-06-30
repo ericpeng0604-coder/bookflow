@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：make listing edition optional and preserve desktop modal editing
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`bf439bcfa37e0a6ef1348fd130ec6d40917b1204`
+- 封存時間：2026-06-30T13:51:36.248Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

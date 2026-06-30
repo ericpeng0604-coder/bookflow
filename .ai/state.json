@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260622-remove-advanced-textbook-metadata-fields",
-  "taskTitle": "remove advanced textbook metadata fields from listing form",
-  "baseCommit": "b00deb91c4433e3144d396113428956b385f1c54",
-  "updatedAt": "2026-06-22T12:59:31.132Z",
+  "taskId": "20260630-make-listing-edition-optional-and-preser",
+  "taskTitle": "make listing edition optional and preserve desktop modal editing",
+  "baseCommit": "bf439bcfa37e0a6ef1348fd130ec6d40917b1204",
+  "updatedAt": "2026-06-30T13:51:36.249Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260622-1259-20260622-remove-advanced-textbook-metada.md"
+  "historyFile": ".ai/history/20260630-1351-20260630-make-listing-edition-optional-a.md"
 }
