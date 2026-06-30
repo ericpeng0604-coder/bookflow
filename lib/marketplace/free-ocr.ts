@@ -355,8 +355,8 @@ function mergeEditionParts(...parts: Array<string | undefined>) {
 
 function cleanVolumeCandidate(line?: string) {
   if (!line) return undefined;
-  const chinese = line.match(/(?:上|下|第一|第二)\s*冊/);
-  if (chinese) return chinese[0].replace(/\s+/g, "");
+  const chinese = line.match(/[\[【（(「『]?\s*(?:上|下|第一|第二)\s*[冊册]\s*[\]】）)」』]?/);
+  if (chinese) return chinese[0].replace(/[\s[\]【】（）()「」『』]/g, "").replace("册", "冊");
   const english = line.match(/(?:Volume|Vol\.?)\s*[12]\b/i);
   return english?.[0];
 }
@@ -414,7 +414,7 @@ export function extractBookDraftFromOcr(rawText: string): BookOcrDraft {
   const authorLine = lines.find((line) => /(作者|編著|主編|譯者|Author|Edited by|Written by)/i.test(line))
     ?? lines.find((line) => /(著|編|譯)/.test(line) && line.length <= 80);
   const editionLine = lines.find((line) => /(第\s*\d+\s*版|edition|版次)/i.test(line));
-  const volumeLine = lines.find((line) => /(?:^|[\s:：])(?:上|下|第一|第二)\s*冊(?:$|[\s:：])|(?:Volume|Vol\.?)\s*[12]\b/i.test(line));
+  const volumeLine = lines.find((line) => /(?:^|[\s:：\[{【（(「『])(?:上|下|第一|第二)\s*[冊册](?:$|[\s:：\]}】）)」』])|(?:Volume|Vol\.?)\s*[12]\b/i.test(line));
   const publisherLine = lines.find((line) => /(出版社|出版|書局|Press|Publishing|Publisher)/i.test(line));
   const titleCandidates = lines
     .filter((line) => line.length >= 3 && line.length <= 56 && hasUsefulText(line))

@@ -113,6 +113,7 @@ import type {
 const STORAGE_KEY = "bookflow-market-v1";
 const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
 const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
+const listingDepartmentStorageKey = (userId: string) => `bookflow-last-book-department-v1:${userId}`;
 const listingDraftStorageKey = (
   userId: string,
   listingType: ListingType,
@@ -3373,7 +3374,19 @@ export function MarketplaceApp() {
   );
 }
 
-function ModalShell({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
+function ModalShell({
+  title,
+  subtitle,
+  onClose,
+  closeOnBackdrop = true,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+  closeOnBackdrop?: boolean;
+  children: React.ReactNode;
+}) {
   const headingId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -3436,7 +3449,7 @@ function ModalShell({ title, subtitle, onClose, children }: { title: string; sub
   }, []);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={closeOnBackdrop ? onClose : undefined}>
       <div
         ref={dialogRef}
         className="modal"
@@ -4300,14 +4313,24 @@ function BookFormModal({
   const [ocrReferenceFile, setOcrReferenceFile] = useState<File | null>(null);
   const [ocrOriginalDraft, setOcrOriginalDraft] = useState<BookOcrDraft | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrMessage, setOcrMessage] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const ocrRequestRef = useRef(0);
+  const savedDepartment = (() => {
+    if (book || initialListingType !== "book") return "";
+    try {
+      const value = window.localStorage.getItem(listingDepartmentStorageKey(userId)) || "";
+      return departments.slice(1).includes(value) ? value : "";
+    } catch {
+      return "";
+    }
+  })();
   const baseDraft = {
     title: value.title,
     author: value.author,
     edition: value.edition,
-    department: value.department,
+    department: value.department || savedDepartment,
     course: value.course,
     teacher: value.teacher,
     condition: value.condition,
@@ -4374,6 +4397,7 @@ function BookFormModal({
     if (!file) return;
     ocrRequestRef.current += 1;
     setOcrBusy(false);
+    setOcrProgress(0);
     setImageFile(file);
     setOcrReferenceFile(files[1] || null);
     setPreview(URL.createObjectURL(file));
@@ -4388,6 +4412,13 @@ function BookFormModal({
   }
 
   function updateDraft(field: keyof typeof draft, nextValue: string) {
+    if (field === "department" && initialListingType === "book" && !book && departments.slice(1).includes(nextValue)) {
+      try {
+        window.localStorage.setItem(listingDepartmentStorageKey(userId), nextValue);
+      } catch {
+        // Remembering the last department is a convenience only.
+      }
+    }
     setDraft((previous) => ({ ...previous, [field]: nextValue }));
   }
 
@@ -4395,20 +4426,32 @@ function BookFormModal({
     if (!imageFile || isSecondhand) return;
     const requestId = ++ocrRequestRef.current;
     setOcrBusy(true);
+    setOcrProgress(4);
     setOcrMessage("正在準備封面圖片...");
     try {
       const { recognizeBookCover } = await import("@/lib/marketplace/free-ocr");
       const primaryResult = await recognizeBookCover(imageFile, (stage, progress) => {
         const percent = Math.max(1, Math.round((progress ?? 0) * 100));
-        if (stage === "preparing") setOcrMessage("正在縮小並強化封面，避免手機處理過多像素...");
-        if (stage === "english") setOcrMessage(`正在快速辨識封面文字 ${percent}%`);
-        if (stage === "chinese") setOcrMessage(`正在補強繁體中文辨識 ${percent}%`);
+        if (stage === "preparing") {
+          setOcrProgress(8);
+          setOcrMessage("正在縮小並強化封面，避免手機處理過多像素...");
+        }
+        if (stage === "english") {
+          setOcrProgress(Math.min(45, 10 + Math.round(percent * 0.35)));
+          setOcrMessage(`正在快速辨識封面文字 ${percent}%`);
+        }
+        if (stage === "chinese") {
+          setOcrProgress(Math.min(80, 45 + Math.round(percent * 0.35)));
+          setOcrMessage(`正在補強繁體中文辨識 ${percent}%`);
+        }
       });
       if (requestId !== ocrRequestRef.current) return;
+      setOcrProgress(84);
       const referenceResult = ocrReferenceFile
         ? await recognizeBookCover(ocrReferenceFile)
         : null;
       if (requestId !== ocrRequestRef.current) return;
+      setOcrProgress(88);
       const candidates = rankTaiwanTextbookCandidates([
         {
           source: "front_ocr",
@@ -4448,6 +4491,7 @@ function BookFormModal({
       let remainingAiUses: number | null = null;
       let aiFallbackError = "";
       if (needsAiFallback && supabase) {
+        setOcrProgress(90);
         setOcrMessage("本機辨識不足，正在使用 AI 補強封面資料...");
         try {
           const { recognizeBookCoverWithAi } = await import("@/lib/marketplace/book-ocr-ai");
@@ -4462,6 +4506,7 @@ function BookFormModal({
             usedAiFallback = true;
           }
           remainingAiUses = aiResult.remaining;
+          setOcrProgress(96);
         } catch (aiError) {
           aiFallbackError = aiError instanceof Error ? aiError.message : "AI 封面補強暫時無法使用";
         }
@@ -4473,6 +4518,7 @@ function BookFormModal({
         edition: previous.edition.trim() ? previous.edition : ocrDraft.edition || previous.edition,
       }));
       setOcrOriginalDraft(ocrDraft);
+      setOcrProgress(100);
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
         ? usedAiFallback
           ? `AI 已補強可見的封面資料；今天還可使用 ${remainingAiUses ?? 0} 次，送出前請再確認。`
@@ -4482,6 +4528,7 @@ function BookFormModal({
           : "辨識結果可信度不足，因此沒有覆寫欄位。請拍近一點、避免反光，或改用手動填寫。");
     } catch (error) {
       if (requestId !== ocrRequestRef.current) return;
+      setOcrProgress(0);
       setOcrMessage(error instanceof Error ? error.message : "OCR 辨識失敗，請改用手動填寫");
   } finally {
       if (requestId === ocrRequestRef.current) setOcrBusy(false);
@@ -4502,6 +4549,7 @@ function BookFormModal({
       title={book ? "編輯刊登" : isSecondhand ? "刊登二手物品" : "刊登一本課本"}
       subtitle="標示 * 的欄位為必填；文字草稿會自動保留在這台裝置"
       onClose={requestClose}
+      closeOnBackdrop={false}
     >
       <form onSubmit={onSubmit} onKeyDown={preventImplicitSubmit} className="form book-form">
         <fieldset disabled={saving} className="book-form-fields">
@@ -4546,6 +4594,12 @@ function BookFormModal({
                   <Sparkles size={16} />{ocrBusy ? "辨識中..." : "使用照片辨識"}
                 </button>
               </div>
+              {(ocrBusy || ocrProgress > 0) && (
+                <div className="ocr-progress" aria-live="polite">
+                  <progress value={ocrProgress} max={100} aria-label="照片辨識進度" />
+                  <span>{ocrBusy ? `辨識進度 ${ocrProgress}%` : "辨識完成"}</span>
+                </div>
+              )}
               <p>{ocrMessage || "辨識結果只會填入草稿，送出前請再確認。"}</p>
               <p className="ocr-privacy-note">本機辨識不足時，封面照片會短暫送至雲端 AI 補強；圖片不會由 BookFlow 另行儲存。</p>
             </div>
