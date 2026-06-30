@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：allow Google admin OTP verification
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`250a2dcb158d0eca94475f2ced0114405f3ad1f8`
+- 封存時間：2026-06-30T19:36:27.891Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

@@ -676,19 +676,21 @@ Markdown contains unreadable mojibake markers.
 ### LESSON-040: Auth claim parsers must accept documented variants
 
 **Observed problem:** A valid administrator OTP flow could be blocked with a
-"use the administrator password first" error before checking the submitted code.
+"use the administrator password first" error before checking the submitted
+code, including when the administrator used the supported Google OAuth login.
 
 **Cause:** The server-side JWT parser assumed the authentication method claim
-always used one object shape, so another valid password-authenticated claim
-shape was treated as missing password proof.
+always used one object shape and only modeled password login as the trusted
+primary step, so another valid password-authenticated claim shape or Google
+OAuth claim was treated as missing primary proof.
 
-**Detection:** When an auth gate rejects a freshly password-authenticated user,
-decode only non-secret claim structure in a local test fixture and compare the
-parser against every documented claim variant.
+**Detection:** When an auth gate rejects a freshly authenticated user, decode
+only non-secret claim structure in a local test fixture and compare the parser
+against every supported login method and documented claim variant.
 
 **Prevention rule:** Keep auth claim parsing strict about required security
-facts but tolerant of documented representation variants, and add a focused
-regression check for each accepted shape.
+facts but tolerant of supported login methods and documented representation
+variants, and add a focused regression check for each accepted shape.
 
 ## New Lesson Template
 
