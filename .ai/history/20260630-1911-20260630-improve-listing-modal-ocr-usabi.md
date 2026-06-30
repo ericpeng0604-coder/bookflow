@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：improve listing modal OCR usability
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`fa8b1ce017e0f19c47475ca0412b7d27fb444f69`
+- 封存時間：2026-06-30T19:11:00.054Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標

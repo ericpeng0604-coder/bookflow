@@ -73,6 +73,18 @@ function cleanEnum(value: unknown, allowed: readonly string[]) {
   return cleaned && allowed.includes(cleaned) ? cleaned : undefined;
 }
 
+function mergeEditionAndVolume(edition?: string, volume?: string) {
+  const parts = [volume, edition].filter(Boolean) as string[];
+  const seen = new Set<string>();
+  const unique = parts.filter((part) => {
+    const key = part.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.length > 0 ? unique.join(" / ").slice(0, FIELD_LIMITS.edition) : undefined;
+}
+
 export function normalizeAiBookCover(value: unknown) {
   if (!value || typeof value !== "object") {
     return { usable: false, confidence: 0, draft: {} as AiBookOcrDraft };
@@ -112,6 +124,7 @@ export function normalizeAiBookCover(value: unknown) {
   draftEntries.publisher = draftEntries.publisher
     ? canonicalPublisher(draftEntries.publisher) || draftEntries.publisher
     : undefined;
+  draftEntries.edition = mergeEditionAndVolume(draftEntries.edition, draftEntries.volume);
   const draft = Object.fromEntries(
     Object.entries(draftEntries).filter(([, field]) => Boolean(field)),
   ) as AiBookOcrDraft;
@@ -126,6 +139,7 @@ export function buildBookCoverPrompt(localOcrText: string) {
   return [
     "Read this textbook cover and extract only text that is visibly supported by the image.",
     "Return visible Taiwan textbook metadata when present: title, author, edition, publisher, education level, grade, semester, subject, volume, curriculum, book type, ISBN-13, and approval number.",
+    "If a cover visibly says [上冊], 【上冊】, (上冊), 上冊, 下冊, 第一冊, or 第二冊, return that marker in volume and include it in edition when edition is otherwise present.",
     "Use education_level values elementary, junior_high, senior_high, vocational_high, or university.",
     "Use semester values first or second. Use book_type values textbook, workbook, teacher_guide, reference, assessment, or other.",
     "Do not infer missing values from general knowledge, similar books, cover art, or the OCR hint.",

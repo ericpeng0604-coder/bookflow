@@ -26,6 +26,16 @@ const examples = [
     },
   },
   {
+    name: "普通物理學括號上冊",
+    ocr: "[上冊]\n普通物理學\nEssential University Physics, 4e\n原著 Richard Wolfson\nPearson 高立圖書",
+    expected: {
+      title: "普通物理學",
+      author: "Richard Wolfson",
+      edition: "上冊 / Essential University Physics, 4e",
+      publisher: "Pearson、高立圖書",
+    },
+  },
+  {
     name: "Live Escalate Trekking",
     ocr: "Live Escalate Trekking CEFR B1 3 Student's Book LiveABC",
     expected: {

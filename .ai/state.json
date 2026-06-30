@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260630-prevent-ai-handoff-mojibake",
-  "taskTitle": "prevent AI handoff mojibake",
-  "baseCommit": "0793a4efec479f6653879787d9205eb37195a247",
-  "updatedAt": "2026-06-30T18:39:32.667Z",
+  "taskId": "20260630-improve-listing-modal-ocr-usability",
+  "taskTitle": "improve listing modal OCR usability",
+  "baseCommit": "fa8b1ce017e0f19c47475ca0412b7d27fb444f69",
+  "updatedAt": "2026-06-30T19:11:00.055Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260630-1839-20260630-prevent-ai-handoff-mojibake.md"
+  "historyFile": ".ai/history/20260630-1911-20260630-improve-listing-modal-ocr-usabi.md"
 }

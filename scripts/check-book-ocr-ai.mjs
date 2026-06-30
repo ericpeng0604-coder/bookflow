@@ -30,6 +30,17 @@ assert.deepEqual(normalized.draft, {
   publisher: "Pearson",
 });
 
+const normalizedVolume = normalizeAiBookCover({
+  is_book_cover: true,
+  confidence: 90,
+  title: "普通物理學",
+  author: "Richard Wolfson",
+  edition: "Essential University Physics, 4e",
+  publisher: "Pearson",
+  volume: "上冊",
+});
+assert.equal(normalizedVolume.draft.edition, "上冊 / Essential University Physics, 4e");
+
 assert.equal(normalizeAiBookCover({
   is_book_cover: true,
   confidence: 20,
@@ -43,6 +54,7 @@ const prompt = buildBookCoverPrompt("ee7亂碼");
 assert.match(prompt, /Untrusted local OCR hint/);
 assert.match(prompt, /Do not infer missing values/);
 assert.match(prompt, /stylized Traditional Chinese title/);
+assert.match(prompt, /\[上冊\]/);
 
 const request = buildGeminiBookCoverRequest({
   model: BOOK_OCR_AI_DEFAULT_MODEL,

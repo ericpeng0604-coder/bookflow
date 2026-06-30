@@ -40,6 +40,27 @@ assert.ok(
     && modalShell.includes("onCloseRef.current()"),
   "modal close handlers must stay current without rerunning the focus trap",
 );
+assert.ok(
+  modalShell.includes("closeOnBackdrop = true")
+    && modalShell.includes("onClick={closeOnBackdrop ? onClose : undefined}"),
+  "modal backdrop close behavior must be configurable",
+);
+assert.ok(
+  listingForm.includes("closeOnBackdrop={false}"),
+  "the listing form must not close when text selection drags outside the modal",
+);
+assert.ok(
+  app.includes("listingDepartmentStorageKey")
+    && listingForm.includes("savedDepartment")
+    && listingForm.includes('field === "department"'),
+  "new textbook listings must remember the last selected department only",
+);
+assert.ok(
+  listingForm.includes("ocrProgress")
+    && listingForm.includes('className="ocr-progress"')
+    && css.includes(".ocr-progress progress"),
+  "book OCR must show a visible progress bar",
+);
 assert.doesNotMatch(
   modalShell,
   /previouslyFocused\?\.focus\(\);\s*\};\s*}, \[onClose\]\);/,
