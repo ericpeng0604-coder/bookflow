@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：fix admin OTP password claim check
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`48eefce936e45fcbef36e8ea8e23b8bc2af57e94`
+- 封存時間：2026-06-30T19:18:07.311Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
