@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：prevent AI handoff mojibake
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`0793a4efec479f6653879787d9205eb37195a247`
+- 封存時間：2026-06-30T18:39:32.667Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
