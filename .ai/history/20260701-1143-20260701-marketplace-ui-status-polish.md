@@ -3,7 +3,7 @@
 - Actor: codex
 - Branch: `codex/marketplace-ui-status-polish`
 - Base commit: `a4ad6f7c34702d4c21317d86b9548755d604bb01`
-- Status: in progress
+- Status: handoff
 
 ## Summary
 

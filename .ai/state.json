@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "project": "bookflow",
   "owner": "codex",
-  "status": "in_progress",
+  "status": "handoff",
   "taskId": "20260701-marketplace-ui-status-polish",
   "taskTitle": "marketplace OCR progress and status display polish",
   "baseCommit": "a4ad6f7c34702d4c21317d86b9548755d604bb01",
