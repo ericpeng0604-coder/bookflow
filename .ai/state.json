@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260630-allow-google-admin-otp-verification",
-  "taskTitle": "allow Google admin OTP verification",
-  "baseCommit": "250a2dcb158d0eca94475f2ced0114405f3ad1f8",
-  "updatedAt": "2026-06-30T19:36:27.892Z",
+  "owner": "codex",
+  "status": "handoff",
+  "taskId": "20260701-marketplace-ui-status-polish",
+  "taskTitle": "marketplace OCR progress and status display polish",
+  "baseCommit": "a4ad6f7c34702d4c21317d86b9548755d604bb01",
+  "updatedAt": "2026-07-01T03:43:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260630-1936-20260630-allow-google-admin-otp-verifica.md"
+  "historyFile": ".ai/history/20260701-1143-20260701-marketplace-ui-status-polish.md"
 }
