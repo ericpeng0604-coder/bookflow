@@ -323,6 +323,15 @@ function visibleBookField(value: string) {
   return trimmed && !trimmed.startsWith("不指定") ? trimmed : "";
 }
 
+function listingContextLabel(book: Book) {
+  if (book.listingType === "secondhand") return visibleBookField(book.itemCategory);
+  return [visibleBookField(book.department), visibleBookField(book.course)].filter(Boolean).join(" · ");
+}
+
+function cardContextLabel(book: Book) {
+  return listingContextLabel(book) || visibleBookField(book.subject) || visibleBookField(book.course);
+}
+
 function studentVerificationFlagLabels(flags: StudentVerificationFlags) {
   const labels = [flags.schoolMatched ? "校名疑似符合" : "未辨識到虎科校名"];
   if (flags.textTooShort) labels.push("可讀文字偏少");
@@ -551,7 +560,7 @@ export function MarketplaceApp() {
   }, []);
 
   const loadDashboardWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
-    const tabs = tab === "requests" || tab === "received"
+    const tabs = tab === "requests" || tab === "received" || tab === "chats"
       ? [tab]
       : [tab, "requests" as const];
     await Promise.all(tabs.map((targetTab) => loadUserWorkspace(user, targetTab)));
@@ -2666,8 +2675,8 @@ export function MarketplaceApp() {
                       <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
                     </div>
                     <div className="card-body">
-                      {(book.listingType === "secondhand" ? book.itemCategory : (visibleBookField(book.subject) || visibleBookField(book.course))) && (
-                        <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : (visibleBookField(book.subject) || visibleBookField(book.course))}</span>
+                      {cardContextLabel(book) && (
+                        <span className="course-tag">{cardContextLabel(book)}</span>
                       )}
                       <h3>{book.title}</h3>
                       <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
@@ -2991,16 +3000,32 @@ export function MarketplaceApp() {
               </div>
               <div className="conversation-panel">
                 {expandedConversationId && conversations.some((item) => item.id === expandedConversationId) ? (
-                  <TradeChatPanel
-                    key={expandedConversationId}
-                    conversation={conversations.find((item) => item.id === expandedConversationId)!}
-                    currentUserId={currentUser.id}
-                    profiles={store.profiles}
-                    onChanged={reloadAfterUserMutation}
-                    onRead={keepConversationRead}
-                    onBack={() => setExpandedConversationId(null)}
-                    onHide={() => void hideClosedConversation(expandedConversationId)}
-                  />
+                  (() => {
+                    const conversation = conversations.find((item) => item.id === expandedConversationId)!;
+                    const book = knownBooks.find((item) => item.id === conversation.bookId) || null;
+                    const conversationRequest = store.requests.find((request) =>
+                      request.bookId === conversation.bookId
+                      && request.buyerId === conversation.buyerId
+                      && ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status)
+                    ) || null;
+                    return (
+                      <TradeChatPanel
+                        key={expandedConversationId}
+                        conversation={conversation}
+                        book={book}
+                        request={conversationRequest}
+                        currentUser={currentUser}
+                        currentUserId={currentUser.id}
+                        profiles={store.profiles}
+                        onChanged={reloadAfterUserMutation}
+                        onRead={keepConversationRead}
+                        onBack={() => setExpandedConversationId(null)}
+                        onHide={() => void hideClosedConversation(expandedConversationId)}
+                        onOpenBook={openBook}
+                        onRespondToRequest={respondToRequest}
+                      />
+                    );
+                  })()
                 ) : (
                   <EmptyDashboard text="選擇一個聊天室開始聯絡" />
                 )}
@@ -3126,8 +3151,8 @@ export function MarketplaceApp() {
                     </button>
                   </div>
                   <div className="card-body">
-                    {(book.listingType === "secondhand" ? book.itemCategory : (book.subject || book.course)) && (
-                      <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : (book.subject || book.course)}</span>
+                    {cardContextLabel(book) && (
+                      <span className="course-tag">{cardContextLabel(book)}</span>
                     )}
                     <h3>{book.title}</h3>
                     <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
@@ -4861,26 +4886,38 @@ function OrderTimeline({ request }: { request: PurchaseRequest }) {
 /* eslint-disable @next/next/no-img-element */
 function TradeChatPanel({
   conversation,
+  book,
+  request,
+  currentUser,
   currentUserId,
   profiles,
   onChanged,
   onRead,
   onBack,
   onHide,
+  onOpenBook,
+  onRespondToRequest,
 }: {
   conversation: Conversation;
+  book: Book | null;
+  request: PurchaseRequest | null;
+  currentUser: Profile;
   currentUserId: string;
   profiles: Profile[];
   onChanged: () => void;
   onRead: (conversationId: string) => void;
   onBack: () => void;
   onHide: () => void;
+  onOpenBook: (bookId: string) => void;
+  onRespondToRequest: (requestId: string, status: "accepted" | "rejected") => void | Promise<void>;
 }) {
   const [messages, setMessages] = useState<TradeMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
+  const [safetyMenuOpen, setSafetyMenuOpen] = useState(false);
+  const [showQuickPhrases, setShowQuickPhrases] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
@@ -4890,6 +4927,13 @@ function TradeChatPanel({
   const actionDialog = useActionDialog();
   const bottomRef = useRef<HTMLDivElement>(null);
   const otherUserId = conversation.buyerId === currentUserId ? conversation.sellerId : conversation.buyerId;
+  const isSeller = conversation.sellerId === currentUserId;
+  const canRespondToRequest = Boolean(
+    isSeller
+    && request
+    && ["pending", "waitlisted"].includes(request.status)
+    && book?.status === "available",
+  );
 
   useEffect(() => {
     if (!supabase) return;
@@ -4899,12 +4943,15 @@ function TradeChatPanel({
     setLoading(true);
     setMessages([]);
     setImageUrls({});
+    setSafetyMenuOpen(false);
+    setShowQuickPhrases(true);
     setHasOlderMessages(false);
     setMessageCursor(null);
     void fetchTradeMessages(client, conversation.id)
       .then(async (page) => {
         if (!active) return;
         setMessages(page.messages);
+        setShowQuickPhrases(!page.messages.some((item) => item.senderId === currentUserId));
         setHasOlderMessages(page.hasMore);
         setMessageCursor(page.nextCursor);
         onRead(conversation.id);
@@ -4974,7 +5021,7 @@ function TradeChatPanel({
       active = false;
       void client.removeChannel(channel);
     };
-  }, [conversation.id, onRead]);
+  }, [conversation.id, currentUserId, onRead]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -5008,6 +5055,7 @@ function TradeChatPanel({
         setImageUrls((previous) => ({ ...previous, ...signed }));
       }
       setFiles([]);
+      setShowQuickPhrases(false);
       void dispatchBrowserPush(supabase);
     } catch (sendError) {
       if (uploadedPaths.length > 0) {
@@ -5122,18 +5170,74 @@ function TradeChatPanel({
     setError(reportError ? reportError.message : "檢舉已送出，管理員將進行審查");
   }
 
+  function applyQuickPhrase(phrase: string) {
+    setDraft(phrase);
+    setShowQuickPhrases(false);
+  }
+
+  async function respondFromChat(status: "accepted" | "rejected") {
+    if (!request) return;
+    setSafetyMenuOpen(false);
+    await onRespondToRequest(request.id, status);
+  }
+
+  const contextLabel = book ? listingContextLabel(book) : "";
+
   return (
     <div className="trade-chat">
       <div className="trade-chat-head">
         <button className="chat-mobile-back" type="button" onClick={onBack}><ArrowLeft size={17} />返回聊聊</button>
         <div className="trade-chat-person"><b>{senderName(otherUserId)}</b><small>每則最多 5 張圖片、每張 5MB；請勿傳送密碼、驗證碼或其他敏感資料。</small></div>
-        <div className="trade-chat-actions">
-          <button type="button" onClick={() => void reportChat()}><Flag size={14} />檢舉</button>
-          <button type="button" onClick={() => void blockUser()}><Ban size={14} />封鎖</button>
-          {conversation.status === "active" && <button type="button" onClick={() => void closeChat()}><X size={14} />結束</button>}
-          {conversation.status === "closed" && <button type="button" onClick={() => void hideChat()}><Trash2 size={14} />刪除</button>}
+        <div className="trade-chat-actions chat-safety-actions">
+          <button
+            className="chat-safety-toggle"
+            type="button"
+            aria-label="更多聊天室操作"
+            aria-expanded={safetyMenuOpen}
+            onClick={() => setSafetyMenuOpen((open) => !open)}
+          >
+            <Ellipsis size={18} />
+          </button>
+          {safetyMenuOpen && (
+            <div className="chat-safety-menu">
+              <button type="button" onClick={() => { setSafetyMenuOpen(false); void reportChat(); }}><Flag size={14} />檢舉聊天室</button>
+              <button type="button" onClick={() => { setSafetyMenuOpen(false); void blockUser(); }}><Ban size={14} />封鎖對方</button>
+              {conversation.status === "active" && (
+                <button type="button" onClick={() => { setSafetyMenuOpen(false); void closeChat(); }}><X size={14} />結束聊天室</button>
+              )}
+              {conversation.status === "closed" && (
+                <button type="button" onClick={() => { setSafetyMenuOpen(false); void hideChat(); }}><Trash2 size={14} />隱藏聊天室</button>
+              )}
+            </div>
+          )}
         </div>
       </div>
+      {book && (
+        <div className="chat-context-card">
+          <button className="chat-context-main" type="button" onClick={() => onOpenBook(book.id)}>
+            <img src={book.imageUrl} alt="" />
+            <span>
+              <small>正在詢問</small>
+              <b>{book.title}</b>
+              <em>{[contextLabel, money(book.price)].filter(Boolean).join(" · ")}</em>
+            </span>
+          </button>
+          {request ? (
+            <div className="chat-order-status">
+              <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
+              <p>{isSeller ? `${senderName(request.buyerId)} 已送出購買意願` : "你已送出購買意願"}</p>
+              {canRespondToRequest && (
+                <div>
+                  <button className="accept" type="button" disabled={currentUser.accountStatus === "suspended"} onClick={() => void respondFromChat("accepted")}><Check size={15} />接受</button>
+                  <button type="button" disabled={currentUser.accountStatus === "suspended"} onClick={() => void respondFromChat("rejected")}><X size={15} />婉拒</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button className="chat-context-link" type="button" onClick={() => onOpenBook(book.id)}>查看商品</button>
+          )}
+        </div>
+      )}
       <div className="trade-chat-log">
         {loading && <p className="trade-chat-empty">載入訊息中...</p>}
         {!loading && hasOlderMessages && (
@@ -5178,10 +5282,12 @@ function TradeChatPanel({
         ))}
         <div ref={bottomRef} />
       </div>
-      <div className="trade-chat-phrases">
-        <small>常用語句</small>
-        <div>{CHAT_PHRASES.map((phrase) => <button type="button" key={phrase} onClick={() => setDraft(phrase)}>{phrase}</button>)}</div>
-      </div>
+      {showQuickPhrases && (
+        <div className="trade-chat-phrases">
+          <small>常用語句</small>
+          <div>{CHAT_PHRASES.map((phrase) => <button type="button" key={phrase} onClick={() => applyQuickPhrase(phrase)}>{phrase}</button>)}</div>
+        </div>
+      )}
       {conversation.status === "active" ? (
         <form className="trade-chat-compose" onSubmit={(event) => void submitMessage(event)}>
           <label className="chat-image-picker" title="加入圖片">

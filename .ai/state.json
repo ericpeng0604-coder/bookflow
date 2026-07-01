@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "handoff",
-  "taskId": "20260701-release-workflow-low-token",
-  "taskTitle": "release workflow low-token hardening",
-  "baseCommit": "268755e4616dd531f7f5cf898f8d985db8bc33bd",
-  "updatedAt": "2026-07-01T04:47:00.000Z",
+  "owner": "none",
+  "status": "idle",
+  "taskId": "20260701-chat-listing-order-ux",
+  "taskTitle": "chat-listing-order-ux",
+  "baseCommit": "938aea320fe0353fecdda0aab761bb2f71a63a19",
+  "updatedAt": "2026-07-01T11:13:14.843Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260701-1247-20260701-release-workflow-low-token.md"
+  "historyFile": ".ai/history/20260701-1113-20260701-chat-listing-order-ux.md"
 }

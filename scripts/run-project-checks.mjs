@@ -24,6 +24,7 @@ const checks = [
   { file: "check-notification-delivery.mjs", stripTypes: true },
   { file: "check-trade-chat.mjs" },
   { file: "check-chat-visibility-and-feedback.mjs" },
+  { file: "check-chat-listing-order-ux.mjs" },
   { file: "check-home-accessibility.mjs" },
   { file: "check-site-quality-hardening.mjs", stripTypes: true },
   { file: "check-push-subscription-api.mjs" },
