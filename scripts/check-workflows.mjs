@@ -17,7 +17,15 @@ import { selectRollbackTarget } from "./rollback-target.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(root, path), "utf8");
+const assertNoMojibake = (label, text) => {
+  assert.doesNotMatch(
+    text,
+    /[\uFFFD\uE000-\uF8FF]|\u922D|\u6470|\u9708|\u6498|\u95AE|\u9788|\u747C|\u6840/,
+    `${label} contains mojibake or private-use replacement characters`,
+  );
+};
 
+const handoff = read(".github/workflows/check-ai-handoff.yml");
 const readiness = read(".github/workflows/release-readiness.yml");
 const staging = read(".github/workflows/staging-migration.yml");
 const productionMigration = read(".github/workflows/production-migration.yml");
@@ -26,6 +34,11 @@ const rollback = read(".github/workflows/rollback-production.yml");
 const guard = read(".github/workflows/protect-rollback-workflow.yml");
 const codeowners = read(".github/CODEOWNERS");
 
+assertNoMojibake("AI handoff workflow", handoff);
+assert.match(handoff, /name:\s*AI \u4ea4\u63a5\u5b8c\u6574\u6027/);
+assert.match(handoff, /name:\s*Validate pull request handoff/);
+assert.match(handoff, /name:\s*Validate local handoff state/);
+assert.match(handoff, /ai-collaboration\.mjs check-ci/);
 assert.match(readiness, /name:\s*Release Readiness/);
 assert.match(readiness, /npm ci/);
 assert.match(readiness, /npm run check:all/);

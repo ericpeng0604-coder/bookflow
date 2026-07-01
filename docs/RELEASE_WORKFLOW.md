@@ -59,6 +59,7 @@ workflow is approved. Application rollback does not reverse database changes.
 ## Commands
 
 ```text
+npm run release:plan
 npm run check:all
 npm run check:workflows
 RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> npm run release:smoke
@@ -66,6 +67,32 @@ RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> npm run release:
 
 `release:smoke` verifies the homepage, `/api/marketplace/count`, and
 `/api/health/release`.
+
+## Low-token Codex path
+
+When Codex is preparing or verifying a release, start with `npm run
+release:plan`. It prints a short summary of the current branch, changed areas,
+protected recovery-file risk, and the minimum gates required for the change.
+If `npm` is not available in the current shell, run the same helper directly
+with the active Node runtime:
+
+```text
+node scripts/release-plan.mjs
+```
+
+In Codex desktop on Windows, `node` and `npm` may not be on `PATH`. Use the
+bundled Node executable shown by the workspace dependency helper, then run the
+same script:
+
+```text
+<bundled-node.exe> scripts/release-plan.mjs
+```
+
+Use the plan to choose the next proof point before opening browser dashboards,
+large workflow logs, or repeated DOM snapshots. The low-token path reduces
+exploration; it does not remove required evidence. Before a PR or merge, still
+run the applicable local checks, workflow checks, staging migration, production
+migration, and `release:smoke` gates described above.
 
 ## Recovery changes
 

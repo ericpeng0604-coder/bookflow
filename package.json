@@ -41,6 +41,7 @@
     "check:project": "node scripts/run-project-checks.mjs",
     "check:all": "npm run typecheck && npm run lint && npm run check:project && npm run build",
     "verify": "node scripts/verify.mjs",
+    "release:plan": "node scripts/release-plan.mjs",
     "release:smoke": "node scripts/release-smoke.mjs",
     "staging:check": "node scripts/check-staging.mjs"
   },
