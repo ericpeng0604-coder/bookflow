@@ -318,6 +318,11 @@ function textbookMetadata(book: Book) {
   ].filter(Boolean);
 }
 
+function visibleBookField(value: string) {
+  const trimmed = value.trim();
+  return trimmed && !trimmed.startsWith("不指定") ? trimmed : "";
+}
+
 function studentVerificationFlagLabels(flags: StudentVerificationFlags) {
   const labels = [flags.schoolMatched ? "校名疑似符合" : "未辨識到虎科校名"];
   if (flags.textTooShort) labels.push("可讀文字偏少");
@@ -2313,11 +2318,13 @@ export function MarketplaceApp() {
       .map((book) => [book.id, book]),
   ).values()];
   const myRequests = currentUser ? store.requests.filter((request) => request.buyerId === currentUser.id) : [];
+  const activeMyRequestCount = myRequests.filter((request) => request.status !== "expired").length;
   const receivedRequests = currentUser
     ? store.requests.filter((request) =>
         (supabase ? myBooks : store.books).some((book) => book.id === request.bookId && book.sellerId === currentUser.id),
       )
     : [];
+  const activeReceivedRequestCount = receivedRequests.filter((request) => request.status !== "expired").length;
   const isModerator = currentUser?.accountStatus === "active"
     && (currentUser.role === "admin" || currentUser.role === "moderator");
   const pendingReports = reports.filter((report) => report.status === "pending");
@@ -2645,7 +2652,7 @@ export function MarketplaceApp() {
             <p className="result-line" aria-live="polite" aria-atomic="true">
               <b>{supabase ? marketplaceCount : filteredBooks.length}</b> 件{activeMarketLabel}正在等待新主人
             </p>
-            <div className="book-grid" role="list" aria-label={`${activeMarketLabel}列表`}>
+            <div className={`book-grid ${marketplaceLoading ? "is-refreshing" : ""}`} role="list" aria-label={`${activeMarketLabel}列表`} aria-busy={marketplaceLoading}>
               {filteredBooks.map((book) => (
                 <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id} role="listitem">
                   <button
@@ -2659,8 +2666,8 @@ export function MarketplaceApp() {
                       <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
                     </div>
                     <div className="card-body">
-                      {(book.listingType === "secondhand" ? book.itemCategory : (book.subject || book.course)) && (
-                        <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : (book.subject || book.course)}</span>
+                      {(book.listingType === "secondhand" ? book.itemCategory : (visibleBookField(book.subject) || visibleBookField(book.course))) && (
+                        <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : (visibleBookField(book.subject) || visibleBookField(book.course))}</span>
                       )}
                       <h3>{book.title}</h3>
                       <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
@@ -2683,6 +2690,9 @@ export function MarketplaceApp() {
                 </article>
               ))}
             </div>
+            {marketplaceLoading && filteredBooks.length > 0 && (
+              <p className="market-refresh-note" role="status">正在更新搜尋結果...</p>
+            )}
             {supabase && marketplaceHasMore && (
               <div className="load-more-wrap">
                 <button
@@ -2728,13 +2738,15 @@ export function MarketplaceApp() {
           <div className="detail-grid">
             <div className="detail-image">
               <Image src={selectedBook.imageUrl} alt={selectedBook.title} width={720} height={960} sizes="(max-width: 800px) 100vw, 42vw" priority />
-              <span className={`status ${selectedBook.status}`}>{statusLabels[selectedBook.status]}</span>
+              {selectedBook.lifecycleState === "active" && selectedBook.reviewStatus === "approved" && (
+                <span className={`status ${selectedBook.status}`}>{statusLabels[selectedBook.status]}</span>
+              )}
             </div>
             <div className="detail-content">
               {selectedBook.listingType === "secondhand" ? (
                 <span className="course-tag">{selectedBook.itemCategory}</span>
-              ) : (selectedBook.department || selectedBook.course) && (
-                <span className="course-tag">{[selectedBook.department, selectedBook.course].filter(Boolean).join(" · ")}</span>
+              ) : (visibleBookField(selectedBook.department) || visibleBookField(selectedBook.course)) && (
+                <span className="course-tag">{[visibleBookField(selectedBook.department), visibleBookField(selectedBook.course)].filter(Boolean).join(" · ")}</span>
               )}
               <h1>{selectedBook.title}</h1>
               {selectedBook.listingType === "book" && <p className="detail-author">{[selectedBook.author, selectedBook.edition, selectedBook.publisher].filter(Boolean).join(" · ")}</p>}
@@ -2746,7 +2758,7 @@ export function MarketplaceApp() {
               <strong className="detail-price">{money(selectedBook.price)}</strong>
               <div className="detail-facts">
                 <div><small>{selectedBook.listingType === "secondhand" ? "物況" : "書況"}</small><b>{selectedBook.condition}</b></div>
-                {selectedBook.listingType === "book" && selectedBook.teacher && <div><small>授課老師</small><b>{selectedBook.teacher}</b></div>}
+                {selectedBook.listingType === "book" && visibleBookField(selectedBook.teacher) && <div><small>授課老師</small><b>{visibleBookField(selectedBook.teacher)}</b></div>}
                 {selectedBook.listingType === "book" && selectedBook.isbn13 && <div><small>ISBN-13</small><b>{selectedBook.isbn13}</b></div>}
                 {selectedBook.listingType === "book" && selectedBook.approvalNumber && <div><small>審定字號</small><b>{selectedBook.approvalNumber}</b></div>}
                 {selectedBook.listingType === "secondhand" && <div><small>分類</small><b>{selectedBook.itemCategory}</b></div>}
@@ -2873,8 +2885,8 @@ export function MarketplaceApp() {
             <button className={dashboardTab === "chats" ? "active" : ""} onClick={() => setDashboardTab("chats")}>
               聊聊 <span>{conversations.reduce((sum, item) => sum + item.unreadCount, 0)}</span>
             </button>
-            <button className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 <span>{myRequests.length}</span></button>
-            <button className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 <span>{receivedRequests.length}</span></button>
+            <button className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 {activeMyRequestCount > 0 && <span>{activeMyRequestCount}</span>}</button>
+            <button className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
             <button className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
           </div>
 
@@ -2904,15 +2916,16 @@ export function MarketplaceApp() {
                     : <div className="listing-image-placeholder"><BookOpen size={24} /></div>}
                   <div className="listing-main">
                     <div className="listing-badges">
-                      <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
-                      {book.lifecycleState !== "active" && (
+                      {book.lifecycleState === "active" && book.reviewStatus === "approved" ? (
+                        <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
+                      ) : book.lifecycleState !== "active" ? (
                         <span className={`lifecycle-badge ${book.lifecycleState}`}>
                           {book.lifecycleState === "archived" ? "暫時封存" : "已下架"}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     <h3>{book.title}</h3>
-                    <p>{book.course ? `${book.course} · ` : ""}{money(book.price)}</p>
+                    <p>{visibleBookField(book.course) ? `${visibleBookField(book.course)} · ` : ""}{money(book.price)}</p>
                     {book.lifecycleState === "archived" && (
                       <small className="archive-note">
                         {book.archivedAt ? `${dateLabel(book.archivedAt)}封存 · ` : ""}
