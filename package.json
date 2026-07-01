@@ -33,6 +33,7 @@
     "check:favorites": "node --experimental-strip-types scripts/check-favorites.mjs",
     "check:notification-delivery": "node --experimental-strip-types scripts/check-notification-delivery.mjs",
     "check:trade-chat": "node scripts/check-trade-chat.mjs",
+    "check:chat-listing-order-ux": "node scripts/check-chat-listing-order-ux.mjs",
     "check:home-accessibility": "node scripts/check-home-accessibility.mjs",
     "check:site-hardening": "node --experimental-strip-types scripts/check-site-quality-hardening.mjs",
     "check:push-subscription-api": "node scripts/check-push-subscription-api.mjs",

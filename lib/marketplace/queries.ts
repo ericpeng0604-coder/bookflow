@@ -289,14 +289,17 @@ export async function loadWorkspaceTabData(
   }
 
   if (tab === "chats") {
-    const conversations = await fetchConversations(client);
+    const [conversations, requests] = await Promise.all([
+      fetchConversations(client),
+      fetchUserRequests(client),
+    ]);
     const profileIds = conversations.flatMap((item) => [item.buyerId, item.sellerId]);
     const bookIds = [...new Set(conversations.map((item) => item.bookId))];
     const [partyProfiles, requestBooks] = await Promise.all([
       fetchProfilesByIds(client, [...new Set(profileIds)]),
       fetchBooksByIds(client, bookIds),
     ]);
-    return { conversations, partyProfiles, requestBooks };
+    return { conversations, requests, partyProfiles, requestBooks };
   }
 
   if (tab === "favorites") {
