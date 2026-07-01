@@ -692,6 +692,23 @@ against every supported login method and documented claim variant.
 facts but tolerant of supported login methods and documented representation
 variants, and add a focused regression check for each accepted shape.
 
+### LESSON-041: Workflow check names must be encoding-safe
+
+**Observed problem:** The AI handoff workflow name, job name, and step names
+were mojibake, while release documentation referenced the readable required
+status name.
+
+**Cause:** The workflow text was not included in workflow structure checks for
+readable status names or encoding corruption.
+
+**Detection:** Inspect required GitHub status names and run workflow checks that
+fail on replacement characters, private-use characters, or known mojibake
+signals in status-bearing workflow files.
+
+**Prevention rule:** Keep required workflow and job names stable and readable,
+and make `check:workflows` assert the exact status-bearing names before changing
+branch protection or release documentation.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
