@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "in_progress",
+  "owner": "none",
+  "status": "idle",
   "taskId": "20260701-chat-listing-order-ux",
   "taskTitle": "chat-listing-order-ux",
   "baseCommit": "938aea320fe0353fecdda0aab761bb2f71a63a19",
-  "updatedAt": "2026-07-01T11:08:48.393Z",
+  "updatedAt": "2026-07-01T11:13:14.843Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": null
+  "historyFile": ".ai/history/20260701-1113-20260701-chat-listing-order-ux.md"
 }
