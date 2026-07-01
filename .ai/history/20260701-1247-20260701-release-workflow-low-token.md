@@ -1,3 +1,13 @@
+# AI 交接歷史
+
+- 任務：release workflow low-token hardening
+- 執行者：codex
+- 狀態：交接
+- 基準 Commit：`268755e4616dd531f7f5cf898f8d985db8bc33bd`
+- 更新時間：`2026-07-01T04:47:00.000Z`
+
+---
+
 # BookFlow AI Handoff
 
 ## 目前目標

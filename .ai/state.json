@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260701-marketplace-ui-status-polish",
-  "taskTitle": "marketplace OCR progress and status display polish",
-  "baseCommit": "a4ad6f7c34702d4c21317d86b9548755d604bb01",
-  "updatedAt": "2026-07-01T03:43:00.000Z",
+  "taskId": "20260701-release-workflow-low-token",
+  "taskTitle": "release workflow low-token hardening",
+  "baseCommit": "268755e4616dd531f7f5cf898f8d985db8bc33bd",
+  "updatedAt": "2026-07-01T04:47:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260701-1143-20260701-marketplace-ui-status-polish.md"
+  "historyFile": ".ai/history/20260701-1247-20260701-release-workflow-low-token.md"
 }
