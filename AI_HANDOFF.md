@@ -2,76 +2,75 @@
 
 ## 目前目標
 
-發布首頁美術測試版到正式網站。目標是保留現有網站功能與資料流，只更新首頁視覺：高質感校園二手書平台 hero、乾淨書本情境圖、英文 serif 主標、搜尋列與商品區視覺節奏。
+Deploy the homepage review update from PR #57: reduce the hero typography by roughly 10-20% and restore the latest-listings area closer to the previous textbook-card layout.
 
 ## 重要背景與決策
 
-- 發布分支：`codex/homepage-visual-polish`，從最新 `origin/main` 建立。
-- 正式 hero 圖使用 `public/bookflow-hero-clean.png`。
-- `public/bookflow-hero-reference.png`、`public/bookflow-hero-scene.png`、`public/bookflow-hero-still-life.png` 是中間素材，不應納入正式發布。
-- 本次沒有修改 `supabase/migrations/`，不需要資料庫 migration。
-- 本次沒有修改 rollback/recovery 受保護檔案，所以不需要 `Rollback-Workflow-Approved: true` commit trailer。
-- PowerShell 可能顯示中文亂碼；已用瀏覽器和 UTF-8 檢查確認首頁文字正常。
+- Branch: `codex/homepage-review-tweaks`.
+- PR: #57, `[codex] Tune homepage typography and listing layout`.
+- The original branch `codex/homepage-visual-polish` had already been squash-merged as PR #56, so this release was reapplied on a clean branch from latest `origin/main`.
+- The scoped product change is `app/globals.css`.
+- The untracked `public/bookflow-hero-reference.png`, `public/bookflow-hero-scene.png`, and `public/bookflow-hero-still-life.png` files were intentionally left out of this release.
+- No database migrations, GitHub workflow changes, or protected recovery file changes are included.
+- Do not add the rollback approval trailer because this is not a recovery-system change.
 
 ## 已完成
 
-- 首頁 hero 改為 `Good Books, Next Chapter.`，中文副標保留為簡潔版本。
-- Hero 背景圖改用乾淨書本、植物、杯子情境圖，並以左側霧面遮罩讓圖片藏在背景後面。
-- Hero 主標收斂到桌機上限約 80px，降低壓迫感。
-- 搜尋列、三個特色文案、商品篩選列和商品區距離完成視覺精修。
-- 未登入桌機帳號入口維持明確 `登入／註冊` 文字按鈕；手機仍保留漢堡選單。
-- 首頁 accessibility/static checks 已配合目前結構更新。
-
-## 修改範圍
-
-- `components/marketplace-app.tsx`
-- `app/globals.css`
-- `public/bookflow-hero-clean.png`
-- `next.config.ts`
-- `scripts/check-home-accessibility.mjs`
-- `scripts/check-listing-navigation-ui.mjs`
-- `scripts/check-chat-listing-order-ux.mjs`
-- `scripts/check-chat-switching.mjs`
-- `AI_WORK_MANUAL.md`
-- `AI_HANDOFF.md`
-- `.ai/state.json`
-- `.ai/history/`
-
-## 驗證結果
-
-- bundled Node `scripts/run-project-checks.mjs`: passed, 24/24 checks.
-- bundled Node `tsc --noEmit`: passed.
-- bundled Node `eslint .`: passed.
-- bundled Node `next build`: passed.
-- `git diff --check`: passed.
-- `scripts/check-home-accessibility.mjs`: passed, 20/20 checks.
-- Browser local desktop screenshot: `C:/Users/ericp/AppData/Local/Temp/bookflow-fusion-shots/home-refined-approved-desktop.png`.
-- Browser local mobile screenshot: `C:/Users/ericp/AppData/Local/Temp/bookflow-fusion-shots/home-refined-approved-mobile.png`.
-- Protected recovery files diff is empty.
+- Reduced the homepage hero title max from 80px to 68px and reduced related hero intro/search/trust text.
+- Restored the latest-listings market width to 1240px.
+- Restored the three-column filter row proportions.
+- Restored taller textbook card images and visible author/metadata text.
+- Restored card price styling toward the previous textbook-card layout.
+- Opened PR #57.
+- Fixed the missing AI handoff update after GitHub reported that code changed without synchronized handoff files.
 
 ## 剩餘工作
 
-- Commit the scoped release changes on `codex/homepage-visual-polish`.
-- Push the branch and open a PR to `main`.
-- Wait for GitHub checks to pass, then merge.
-- Verify production with `/api/health/release`.
-- Run release smoke against `https://bookflow-green.vercel.app` with the merged SHA.
-- Take a final production homepage screenshot to confirm the new visual is live.
+1. Push this handoff update to PR #57.
+2. Wait for all GitHub checks to pass.
+3. Merge PR #57 into `main`.
+4. Wait for Vercel production deployment.
+5. Verify `/api/health/release` reports the merged SHA.
+6. Run production release smoke against `https://bookflow-green.vercel.app`.
+7. Perform a final production homepage visual check.
+
+## 修改範圍
+
+- `app/globals.css`
+- `AI_HANDOFF.md`
+- `.ai/state.json`
+- `.ai/history/20260702-0848-20260702-homepage-review-typography-and-.md`
+
+## 驗證結果
+
+- `scripts/run-project-checks.mjs`: passed, 24/24.
+- `tsc --noEmit`: passed.
+- `eslint .`: passed.
+- `next build`: passed.
+- `git diff --check origin/main...HEAD`: passed.
+- Local browser style check confirmed:
+  - hero title computed max was 68px;
+  - hero input and button text were 15px;
+  - latest-listings market width was 1240px;
+  - listing card images were 215px tall;
+  - listing card author/metadata text was visible again.
+- GitHub PR #57 currently has Vercel preview, Quality and build, Workflow syntax, CodeRabbit, and staging detection passing; AI handoff is being fixed by this update.
 
 ## 風險或阻礙
 
-- Production is not updated until this branch is committed, pushed, merged into `main`, and Vercel deploys the merged SHA.
-- Visual verification must be repeated on `https://bookflow-green.vercel.app` after deployment because local screenshots are not production proof.
+- Production is not confirmed until the merged SHA is deployed to `https://bookflow-green.vercel.app`.
+- The release is UI-only, so no staging or production database migration is expected.
+- There are unrelated untracked hero draft images in `public/`; keep them out of this release unless the user explicitly asks to include them.
 
 ## 下一個 AI 的操作
 
-1. Commit the scoped release changes on `codex/homepage-visual-polish`.
-2. Push the branch and open a PR to `main`.
-3. Wait for GitHub checks to pass, then merge.
-4. Verify production with `/api/health/release`.
-5. Run release smoke against `https://bookflow-green.vercel.app` with the merged SHA.
-6. Take a final production homepage screenshot to confirm the new visual is live.
+1. Run `scripts/ai-collaboration.mjs check`.
+2. Commit and push the handoff update to `codex/homepage-review-tweaks`.
+3. Watch PR #57 checks.
+4. Merge after checks pass.
+5. Run production health and smoke verification with the merged SHA.
+6. Confirm the production homepage visual result.
 
 ## 最後基準 Commit
 
-`ab30bd0e158c2b0ab2a0c813c435c8ef29c06cf6`
+`eb25c6c159b65e6e458bb01c84582195d4288458`
