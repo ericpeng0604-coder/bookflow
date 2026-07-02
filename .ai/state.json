@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260702-ocr-progress-copy-release",
-  "taskTitle": "OCR progress copy release",
-  "baseCommit": "6fb65f66fd10d51e6d6b7305c4390e46e18de82c",
-  "updatedAt": "2026-07-02T15:22:38.710Z",
+  "taskId": "20260702-release-preflight-speedup",
+  "taskTitle": "release preflight speedup",
+  "baseCommit": "c41c00b5c5926ea15379d79b33dcb2ea261d71a0",
+  "updatedAt": "2026-07-02T15:49:08.642Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260702-1522-20260702-ocr-progress-copy-release.md"
+  "historyFile": ".ai/history/20260702-1549-20260702-release-preflight-speedup.md"
 }

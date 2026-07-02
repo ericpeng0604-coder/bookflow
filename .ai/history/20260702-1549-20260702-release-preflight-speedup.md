@@ -1,3 +1,12 @@
+# AI 交接歷史
+
+- 任務：release preflight speedup
+- 執行者：codex
+- 狀態：完成
+- 基準 Commit：`c41c00b5c5926ea15379d79b33dcb2ea261d71a0`
+- 封存時間：2026-07-02T15:49:08.642Z
+
+---
 # BookFlow AI Handoff
 
 ## 目前目標
