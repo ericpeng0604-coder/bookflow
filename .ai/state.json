@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "handoff",
-  "taskId": "20260702-image-search-optimization-release",
-  "taskTitle": "site-local image search optimization release",
-  "baseCommit": "84adb1aee447db4414db7fa3ba44361106d3903e",
-  "updatedAt": "2026-07-02T14:45:00.000Z",
+  "owner": "none",
+  "status": "idle",
+  "taskId": "20260702-ocr-progress-copy-release",
+  "taskTitle": "OCR progress copy release",
+  "baseCommit": "6fb65f66fd10d51e6d6b7305c4390e46e18de82c",
+  "updatedAt": "2026-07-02T15:22:38.710Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260702-2245-image-search-optimization-release.md"
+  "historyFile": ".ai/history/20260702-1522-20260702-ocr-progress-copy-release.md"
 }
