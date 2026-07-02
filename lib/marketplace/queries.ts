@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MarketplaceFilters } from "@/lib/marketplace/filters";
+import { rankImageSearchResults, type ImageSearchPlan, type ImageSearchResult } from "@/lib/marketplace/image-search";
 import {
   mapAdminProfile,
   mapBook,
@@ -63,6 +64,34 @@ export async function fetchMarketplacePage(
     hasMore,
     nextCursor: lastBook ? { createdAt: lastBook.createdAt, id: lastBook.id } : null,
   };
+}
+
+export async function fetchImageSearchCandidates(
+  client: SupabaseClient,
+  filters: MarketplaceFilters,
+  plan: ImageSearchPlan,
+): Promise<ImageSearchResult[]> {
+  const booksById = new Map<string, Book>();
+  const searchFilters: MarketplaceFilters = {
+    ...filters,
+    listingType: "book",
+    itemCategory: null,
+    query: "",
+  };
+
+  for (const query of plan.candidateQueries) {
+    const { data: rows, error } = await client.rpc(
+      "list_books_page",
+      marketplaceRpcParams({ ...searchFilters, query }, MARKETPLACE_PAGE_SIZE, null),
+    );
+    if (error) throw error;
+    for (const row of rows ?? []) {
+      const book = mapBook(row as Record<string, unknown>);
+      booksById.set(book.id, book);
+    }
+  }
+
+  return rankImageSearchResults([...booksById.values()], plan).slice(0, MARKETPLACE_PAGE_SIZE);
 }
 
 export async function fetchBookById(client: SupabaseClient, bookId: string) {

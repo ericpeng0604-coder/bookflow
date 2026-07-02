@@ -20,6 +20,7 @@
     "check:listing-ui": "node scripts/check-listing-navigation-ui.mjs",
     "check:mobile-ocr": "node scripts/check-mobile-book-ocr.mjs",
     "check:book-ocr-ai": "node --experimental-strip-types scripts/check-book-ocr-ai.mjs",
+    "check:image-search": "node --experimental-strip-types scripts/check-image-search.mjs",
     "check:taiwan-textbooks": "node --experimental-strip-types scripts/check-taiwan-textbooks.mjs",
     "benchmark:taiwan-textbooks": "node --experimental-strip-types scripts/benchmark-taiwan-textbooks.mjs",
     "check:lifecycle": "node scripts/check-listing-lifecycle.mjs",
