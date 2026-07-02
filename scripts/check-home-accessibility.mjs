@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 const homeCss = readFileSync(new URL("../app/home-a11y.css", import.meta.url), "utf8");
+const globalCss = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
 
 const homeBlock = app.slice(app.indexOf('view === "home"'), app.indexOf('view === "book"'));
@@ -21,6 +22,7 @@ const checks = [
   ["filter price label", homeBlock.includes('htmlFor="home-filter-price"')],
   ["unfinished advanced filter removed", !homeBlock.includes("進階篩選（即將推出）")],
   ["book cards keyboard buttons", homeBlock.includes('className="book-card-main"') && !homeBlock.includes('onClick={() => openBook(book.id)}>\n                  <div className="card-image"')],
+  ["home card labels reserve alignment space", homeBlock.includes('className={`course-tag ${cardContextLabel(book) ? "" : "is-empty"}`}') && globalCss.includes(".home-page .course-tag.is-empty")],
   ["favorite button stays separate", homeBlock.includes('aria-pressed={favoriteIds.has(book.id)}')],
   ["book list semantics", homeBlock.includes("<ul") && homeBlock.includes("<li")],
   ["empty state live region", homeBlock.includes('className="empty"') && homeBlock.includes("aria-live")],
@@ -28,7 +30,7 @@ const checks = [
   ["current site hero visual", homeBlock.includes('className="hero-art hero-reference-art"')],
   ["focus styles for home cards", homeCss.includes(".home-page .book-card-main:focus-visible")],
   ["contrast tweak for muted home text", homeCss.includes(".home-page .result-line")],
-  ["visually hidden utility", homeCss.includes(".home-page .visually-hidden")],
+  ["visually hidden utility", homeCss.includes(".visually-hidden") && homeCss.includes("clip: rect(0 0 0 0)")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);

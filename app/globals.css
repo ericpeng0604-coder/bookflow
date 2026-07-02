@@ -22,6 +22,7 @@ button { color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(29, 106, 87, .25); outline-offset: 2px; }
 .skip-link { position: fixed; z-index: 100; top: 8px; left: 8px; min-height: 44px; padding: 11px 14px; border-radius: 8px; background: var(--green); color: white; font-weight: 700; transform: translateY(-150%); }
 .skip-link:focus { transform: translateY(0); }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; white-space: nowrap !important; border: 0 !important; }
 
 .policy-page { max-width: 820px; min-height: 100vh; margin: auto; padding: 64px 24px 96px; line-height: 1.8; }
 .policy-page h1 { margin: 28px 0 4px; font-size: clamp(34px, 6vw, 52px); }
@@ -114,6 +115,9 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .hero-search input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 11px 0; color: var(--ink); }
 .hero-search button, .primary, .sell-cta { border: 0; border-radius: 9px; background: var(--green); color: white; padding: 13px 21px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .hero-search button:hover, .primary:hover, .sell-cta:hover { background: var(--green-dark); transform: translateY(-1px); }
+.hero-search .image-search-trigger { background: #eef7f3; color: var(--green); border: 1px solid #cfe2da; white-space: nowrap; }
+.hero-search .image-search-trigger:hover { background: #dceee7; }
+.hero-search .image-search-trigger:disabled { opacity: .6; cursor: not-allowed; transform: none; }
 .hero-trust { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 19px; color: var(--muted); font-size: 12px; }
 .hero-trust span { display: flex; align-items: center; gap: 5px; }
 .hero-art { min-height: 410px; position: relative; z-index: 2; display: grid; place-items: center; }
@@ -160,6 +164,22 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .filters { background: #f8faf7; border: 1px solid var(--line); padding: 12px; border-radius: 13px; display: grid; grid-template-columns: 1fr 240px 190px; gap: 10px; }
 .filters label { background: white; border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; gap: 9px; padding: 0 12px; color: var(--muted); }
 .filters input, .filters select { width: 100%; min-height: 44px; border: 0; outline: 0; background: transparent; padding: 10px 0; color: var(--ink); appearance: none; }
+.image-search-filter-button { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--green); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.image-search-filter-button:hover { border-color: #bdd4ca; background: #f0f8f4; }
+.image-search-filter-button:disabled { opacity: .6; cursor: not-allowed; }
+.image-search-status { margin: 14px 0 4px; padding: 12px; border: 1px solid #cfe2da; border-radius: 10px; background: #f4faf7; display: flex; align-items: center; gap: 12px; }
+.image-search-preview { width: 58px; height: 72px; border-radius: 7px; overflow: hidden; background: var(--cream); flex: 0 0 auto; }
+.image-search-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.image-search-status > div:last-child { min-width: 0; display: grid; gap: 4px; }
+.image-search-status b { color: var(--green); font-size: 13px; }
+.image-search-status p { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.45; }
+.image-search-status small { color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.image-search-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 9px; margin-top: 4px; }
+.image-search-progress progress { width: 100%; height: 8px; border: 0; border-radius: 999px; overflow: hidden; background: #dce9e3; accent-color: var(--green); }
+.image-search-progress progress::-webkit-progress-bar { background: #dce9e3; border-radius: 999px; }
+.image-search-progress progress::-webkit-progress-value { background: var(--green); border-radius: 999px; }
+.image-search-progress progress::-moz-progress-bar { background: var(--green); }
+.image-search-progress span { color: var(--green); font-size: 11px; font-weight: 800; }
 .filter-icon { border: 1px solid var(--line); background: white; border-radius: 8px; width: 44px; cursor: pointer; }
 .dollar { font-weight: 800; color: var(--green); }
 .result-line { color: var(--muted); font-size: 13px; margin: 20px 2px; }
@@ -2790,13 +2810,14 @@ footer,
   border: 1px solid var(--line);
   border-radius: 13px;
   display: grid;
-  grid-template-columns: 1fr 240px 190px;
+  grid-template-columns: minmax(260px, 1fr) 132px 220px 180px;
   gap: 10px;
   background: #f8faf7;
   box-shadow: none;
 }
 
-.home-page .filters label {
+.home-page .filters label,
+.home-page .image-search-filter-button {
   min-height: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2818,6 +2839,19 @@ footer,
   min-height: 44px;
   color: var(--ink);
   font-size: 14px;
+}
+
+.home-page .image-search-filter-button {
+  color: var(--green);
+  justify-content: center;
+}
+
+.theme-secondhand .home-page .image-search-filter-button {
+  display: none;
+}
+
+.theme-secondhand .home-page .filters {
+  grid-template-columns: minmax(260px, 1fr) 240px 190px;
 }
 
 .home-page .result-line {
@@ -2854,9 +2888,14 @@ footer,
 
 .home-page .card-body {
   padding: 17px;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
 }
 
 .home-page .course-tag {
+  align-self: flex-start;
+  min-height: 27px;
   padding: 4px 8px;
   border: 0;
   border-radius: 4px;
@@ -2866,8 +2905,12 @@ footer,
   font-weight: 700;
 }
 
+.home-page .course-tag.is-empty {
+  visibility: hidden;
+}
+
 .home-page .card-body h3 {
-  min-height: auto;
+  min-height: 28px;
   margin: 12px 0 5px;
   font-family: "Noto Sans TC", sans-serif;
   font-size: 17px;
@@ -2880,21 +2923,26 @@ footer,
 
 .home-page .card-body > p {
   display: block;
+  min-height: 37px;
   margin: 0 0 15px;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.55;
 }
 
 .home-page .textbook-meta {
   display: block;
+  min-height: 40px;
 }
 
 .home-page .card-meta {
   display: flex;
+  min-height: 37px;
+  align-items: flex-end;
 }
 
 .home-page .card-footer {
-  margin-top: 12px;
+  margin-top: auto;
 }
 
 .home-page .card-footer strong {
