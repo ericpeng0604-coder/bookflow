@@ -716,6 +716,27 @@ signals in status-bearing workflow files.
 and make `check:workflows` assert the exact status-bearing names before changing
 branch protection or release documentation.
 
+### LESSON-042: Release preflight catches stale branches and missing handoff
+
+**Observed problem:** A small UI copy deployment took longer because a new
+commit was first pushed to a branch whose earlier PR had already been
+squash-merged, then GitHub checks failed because the handoff files were not
+updated with the substantive code change.
+
+**Cause:** Local release triage identified the changed areas but did not verify
+that the branch contained only unapplied commits relative to `origin/main`, nor
+that AI handoff requirements would pass before opening the PR.
+
+**Detection:** Before opening or merging a release PR, compare the branch with
+`origin/main` using `git cherry` semantics and run the AI handoff check against
+the PR range.
+
+**Prevention rule:** Run `npm run release:preflight` after the release commit
+and handoff update are ready. If it reports already-applied commits mixed with
+new commits, create a clean branch from `origin/main` and cherry-pick only the
+new release commit. If it reports missing handoff files, update
+`AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/` before pushing.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

@@ -60,6 +60,7 @@ workflow is approved. Application rollback does not reverse database changes.
 
 ```text
 npm run release:plan
+npm run release:preflight
 npm run check:all
 npm run check:workflows
 RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> npm run release:smoke
@@ -68,16 +69,25 @@ RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> npm run release:
 `release:smoke` verifies the homepage, `/api/marketplace/count`, and
 `/api/health/release`.
 
+`release:preflight` runs after the release commit and handoff update are ready
+but before opening or merging the PR. It fails fast when a branch mixes commits
+already applied to `main` with new commits, which can happen after a squash
+merge, and when substantive code changes are missing the required
+`AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/` updates.
+
 ## Low-token Codex path
 
 When Codex is preparing or verifying a release, start with `npm run
 release:plan`. It prints a short summary of the current branch, changed areas,
 protected recovery-file risk, and the minimum gates required for the change.
+Before opening or merging the PR, run `npm run release:preflight` so stale
+branch and handoff problems are caught locally instead of after GitHub checks.
 If `npm` is not available in the current shell, run the same helper directly
 with the active Node runtime:
 
 ```text
 node scripts/release-plan.mjs
+node scripts/release-preflight.mjs
 ```
 
 In Codex desktop on Windows, `node` and `npm` may not be on `PATH`. Use the
@@ -86,6 +96,7 @@ same script:
 
 ```text
 <bundled-node.exe> scripts/release-plan.mjs
+<bundled-node.exe> scripts/release-preflight.mjs
 ```
 
 Use the plan to choose the next proof point before opening browser dashboards,
