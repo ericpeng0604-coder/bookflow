@@ -312,22 +312,29 @@ processes and `.next` state, then compare with one clean detached-worktree run.
 passing check. Verify release candidates in a clean worktree whenever the
 active checkout is serving Next or has shared `.next` output.
 
-### LESSON-019: Cross-feature static checks must tolerate formatting changes
+### LESSON-019: Cross-feature static checks must tolerate equivalent implementations
 
 **Observed problem:** Rebasing a feature onto a newer authentication change
 caused a valid OTP reset path to fail its regression check after nearby cleanup
-statements changed indentation.
+statements changed indentation. A later React cleanup intentionally replaced
+chat state resets inside an effect with keyed component remounting, but the
+chat-switching regression check still required the old `setMessages([])` and
+`setImageUrls({})` implementation.
 
-**Cause:** The check matched an exact multi-line source string, including fixed
-whitespace, instead of the required control flow and assignment.
+**Cause:** The check matched an exact multi-line source string or one specific
+implementation, including fixed whitespace, instead of the required behavior
+contract and safety invariants.
 
 **Detection:** When a static check fails after a clean rebase, inspect the
-target behavior before changing production code and compare the assertion with
-the integrated source.
+target behavior before changing production code. Compare the assertion with the
+integrated source and ask whether an equivalent implementation still preserves
+the same user-visible guarantee.
 
 **Prevention rule:** For cross-feature source checks, match stable syntax or
-behavioral structure with whitespace-tolerant patterns, and rerun the complete
-project suite after every rebase.
+behavioral structure with whitespace-tolerant patterns. Prefer checking the
+contract, such as keyed state isolation plus stale async invalidation, over
+requiring a particular state-reset statement. Rerun the complete project suite
+after every rebase or check update.
 
 ### LESSON-020: PostgREST RPC probes must match the deployed signature
 

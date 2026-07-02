@@ -42,7 +42,9 @@ assert.ok(
 );
 assert.ok(
   modalShell.includes("closeOnBackdrop = true")
-    && modalShell.includes("onClick={closeOnBackdrop ? onClose : undefined}"),
+    && modalShell.includes("{closeOnBackdrop &&")
+    && modalShell.includes('className="modal-backdrop-dismiss"')
+    && modalShell.includes("onClick={onClose}"),
   "modal backdrop close behavior must be configurable",
 );
 assert.ok(
