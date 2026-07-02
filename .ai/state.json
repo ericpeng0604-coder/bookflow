@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260702-home-card-alignment-release",
-  "taskTitle": "homepage card alignment release",
-  "baseCommit": "2aff270826e59a8d4dc382e64f435dda2eac6939",
-  "updatedAt": "2026-07-02T09:25:00.000Z",
+  "taskId": "20260702-image-search-optimization-release",
+  "taskTitle": "site-local image search optimization release",
+  "baseCommit": "84adb1aee447db4414db7fa3ba44361106d3903e",
+  "updatedAt": "2026-07-02T14:45:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260702-1725-home-card-alignment-release.md"
+  "historyFile": ".ai/history/20260702-2245-image-search-optimization-release.md"
 }

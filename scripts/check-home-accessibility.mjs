@@ -30,7 +30,7 @@ const checks = [
   ["current site hero visual", homeBlock.includes('className="hero-art hero-reference-art"')],
   ["focus styles for home cards", homeCss.includes(".home-page .book-card-main:focus-visible")],
   ["contrast tweak for muted home text", homeCss.includes(".home-page .result-line")],
-  ["visually hidden utility", homeCss.includes(".home-page .visually-hidden")],
+  ["visually hidden utility", homeCss.includes(".visually-hidden") && homeCss.includes("clip: rect(0 0 0 0)")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);

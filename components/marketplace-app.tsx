@@ -71,6 +71,7 @@ import {
 import {
   fetchBookById,
   fetchFavoriteIds,
+  fetchImageSearchCandidates,
   fetchMarketplacePage,
   fetchProfilesByIds,
   fetchUnreadNotificationCount,
@@ -84,6 +85,7 @@ import {
   LISTING_FIELD_LIMITS,
   normalizeAndValidateListingFields,
 } from "@/lib/marketplace/listing-validation";
+import { buildImageSearchPlan, rankImageSearchResults } from "@/lib/marketplace/image-search";
 import {
   TAIWAN_TEXTBOOK_CATALOG_VERSION,
   normalizeTaiwanTextbookQuery,
@@ -113,6 +115,8 @@ import type {
 
 const STORAGE_KEY = "bookflow-market-v1";
 const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
+const IMAGE_SEARCH_MAX_FILE_BYTES = 5 * 1024 * 1024;
+const IMAGE_SEARCH_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
 const listingDepartmentStorageKey = (userId: string) => `bookflow-last-book-department-v1:${userId}`;
 const listingDraftStorageKey = (
@@ -412,6 +416,13 @@ export function MarketplaceApp() {
   const [marketplaceHasMore, setMarketplaceHasMore] = useState(false);
   const [marketplaceCursor, setMarketplaceCursor] = useState<{ createdAt: string; id: string } | null>(null);
   const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [imageSearchBusy, setImageSearchBusy] = useState(false);
+  const [imageSearchProgress, setImageSearchProgress] = useState(0);
+  const [imageSearchMessage, setImageSearchMessage] = useState("");
+  const [imageSearchPreview, setImageSearchPreview] = useState("");
+  const [imageSearchQuery, setImageSearchQuery] = useState("");
+  const [imageSearchActive, setImageSearchActive] = useState(false);
+  const [imageSearchResultCount, setImageSearchResultCount] = useState<number | null>(null);
   const [myBooks, setMyBooks] = useState<Book[]>([]);
   const [requestBooks, setRequestBooks] = useState<Book[]>([]);
   const [detailBook, setDetailBook] = useState<Book | null>(null);
@@ -432,6 +443,8 @@ export function MarketplaceApp() {
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const bookSavingRef = useRef(false);
   const adminOtpRequestedRef = useRef<string | null>(null);
+  const imageSearchInputRef = useRef<HTMLInputElement>(null);
+  const imageSearchRequestRef = useRef(0);
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
   const debouncedQuery = useDebouncedValue(query, 300);
@@ -457,6 +470,10 @@ export function MarketplaceApp() {
     [listingType, itemCategory, department, maxPrice, debouncedQuery],
   );
 
+  useEffect(() => () => {
+    if (imageSearchPreview.startsWith("blob:")) URL.revokeObjectURL(imageSearchPreview);
+  }, [imageSearchPreview]);
+
   async function recoverAdminVerification(message: string, user: Profile | null) {
     const permissionExpired = message.includes("Verified admin permission required")
       || message.includes("Moderator permission required");
@@ -479,6 +496,7 @@ export function MarketplaceApp() {
     if (!supabase) return;
     const client = supabase;
     const append = options?.append ?? false;
+    if (imageSearchActive && !append) return;
     await runGuarded("marketplace", async (signal) => {
       setMarketplaceLoading(true);
       try {
@@ -499,9 +517,10 @@ export function MarketplaceApp() {
         if (!signal.aborted) setMarketplaceLoading(false);
       }
     });
-  }, [marketplaceCursor, marketplaceFilters]);
+  }, [imageSearchActive, marketplaceCursor, marketplaceFilters]);
 
   const loadMarketplaceCount = useCallback(async () => {
+    if (imageSearchActive) return;
     const params = new URLSearchParams();
     params.set("listingType", marketplaceFilters.listingType);
     if (marketplaceFilters.itemCategory) params.set("itemCategory", marketplaceFilters.itemCategory);
@@ -516,7 +535,7 @@ export function MarketplaceApp() {
     } catch {
       setMarketplaceCount((previous) => Math.max(previous, marketplaceBooks.length));
     }
-  }, [marketplaceBooks.length, marketplaceFilters]);
+  }, [imageSearchActive, marketplaceBooks.length, marketplaceFilters]);
 
   const loadUserWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
     if (!supabase) return;
@@ -683,7 +702,7 @@ export function MarketplaceApp() {
   }, []);
 
   useEffect(() => {
-    if (!ready || !supabase) return;
+    if (!ready || !supabase || imageSearchActive) return;
     setMarketplaceCursor(null);
     setMarketplaceCount(0);
     void Promise.all([loadMarketplaceBooks(), loadMarketplaceCount()]);
@@ -695,6 +714,7 @@ export function MarketplaceApp() {
     marketplaceFilters.department,
     marketplaceFilters.maxPrice,
     marketplaceFilters.query,
+    imageSearchActive,
   ]);
 
   useEffect(() => {
@@ -1018,6 +1038,7 @@ export function MarketplaceApp() {
   }
 
   const filteredBooks = useMemo(() => {
+    if (imageSearchActive) return marketplaceBooks;
     if (supabase) return marketplaceBooks;
     const normalized = (listingType === "book"
       ? normalizeTaiwanTextbookQuery(query)
@@ -1058,7 +1079,7 @@ export function MarketplaceApp() {
               .includes(token)),
       )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [department, itemCategory, listingType, maxPrice, query, store.books, marketplaceBooks]);
+  }, [department, imageSearchActive, itemCategory, listingType, maxPrice, query, store.books, marketplaceBooks]);
 
   const selectedBook = detailBook
     ?? filteredBooks.find((book) => book.id === selectedId)
@@ -1121,6 +1142,9 @@ export function MarketplaceApp() {
     setSelectedId(null);
     setDetailBook(null);
     setQuery("");
+    setImageSearchActive(false);
+    setImageSearchResultCount(null);
+    setImageSearchQuery("");
     if (nextType === "book") {
       setItemCategory(ALL_ITEM_CATEGORIES);
     } else {
@@ -2357,10 +2381,186 @@ export function MarketplaceApp() {
     setMaxPrice(NO_MAX_PRICE);
     setDepartment(departments[0]);
     setItemCategory(ALL_ITEM_CATEGORIES);
+    setImageSearchQuery("");
+    setImageSearchActive(false);
+    setImageSearchResultCount(null);
+    setImageSearchMessage("");
+    setImageSearchProgress(0);
+  }
+
+  function openImageSearchPicker() {
+    imageSearchInputRef.current?.click();
+  }
+
+  function validateImageSearchFile(file: File) {
+    if (!IMAGE_SEARCH_ALLOWED_TYPES.has(file.type) || file.size > IMAGE_SEARCH_MAX_FILE_BYTES) {
+      return "請上傳 5MB 以內的 JPG、PNG 或 WebP 書封照片";
+    }
+    return "";
+  }
+
+  async function runImageSearch(file: File) {
+    const fileError = validateImageSearchFile(file);
+    if (fileError) {
+      setImageSearchMessage(fileError);
+      setImageSearchProgress(0);
+      return;
+    }
+
+    const requestId = ++imageSearchRequestRef.current;
+    const previousPreview = imageSearchPreview;
+    const nextPreview = URL.createObjectURL(file);
+    setImageSearchPreview(nextPreview);
+    if (previousPreview.startsWith("blob:")) URL.revokeObjectURL(previousPreview);
+    setImageSearchBusy(true);
+    setImageSearchProgress(4);
+    setImageSearchActive(false);
+    setImageSearchResultCount(null);
+    setImageSearchMessage("正在辨識書封，完成後只會搜尋 BookFlow 站內刊登。");
+    setImageSearchQuery("");
+
+    try {
+      const { recognizeBookCover } = await import("@/lib/marketplace/free-ocr");
+      const primaryResult = await recognizeBookCover(file, (stage, progress) => {
+        if (requestId !== imageSearchRequestRef.current) return;
+        const percent = Math.max(1, Math.round((progress ?? 0) * 100));
+        if (stage === "preparing") {
+          setImageSearchProgress(8);
+          setImageSearchMessage("正在準備照片...");
+        }
+        if (stage === "english") {
+          setImageSearchProgress(Math.min(55, 12 + Math.round(percent * 0.42)));
+          setImageSearchMessage(`正在讀取封面文字 ${percent}%`);
+        }
+        if (stage === "chinese") {
+          setImageSearchProgress(Math.min(84, 55 + Math.round(percent * 0.28)));
+          setImageSearchMessage(`正在補強繁體中文辨識 ${percent}%`);
+        }
+      });
+      if (requestId !== imageSearchRequestRef.current) return;
+
+      const localPlan = buildImageSearchPlan(primaryResult.draft);
+      const needsAiFallback = !localPlan.displayQuery || primaryResult.needsAiFallback;
+      let finalPlan = needsAiFallback ? null : localPlan;
+      let usedAiFallback = false;
+      let aiFallbackError = "";
+      let remainingAiUses: number | null = null;
+
+      if (needsAiFallback && supabase && currentUser) {
+        setImageSearchProgress(88);
+        setImageSearchMessage("本機辨識不足，正在用 AI 補強書封資訊...");
+        try {
+          const { recognizeBookCoverWithAi } = await import("@/lib/marketplace/book-ocr-ai");
+          const aiResult = await recognizeBookCoverWithAi(supabase, file, primaryResult.text);
+          if (requestId !== imageSearchRequestRef.current) return;
+          const aiPlan = buildImageSearchPlan(aiResult.draft);
+          if (aiPlan.displayQuery) {
+            finalPlan = aiPlan;
+            usedAiFallback = true;
+          }
+          remainingAiUses = aiResult.remaining;
+        } catch (error) {
+          aiFallbackError = error instanceof Error ? error.message : "AI 補強暫時無法使用";
+        }
+      }
+
+      if (requestId !== imageSearchRequestRef.current) return;
+      if (!finalPlan?.displayQuery || finalPlan.candidateQueries.length === 0) {
+        setImageSearchProgress(0);
+        setImageSearchMessage(
+          needsAiFallback && !currentUser
+            ? "這張照片的本機辨識結果不足；登入後可使用 AI 補強，現有列表已保留。"
+            : `辨識結果不足，沒有更新站內搜尋。${aiFallbackError ? ` ${aiFallbackError}` : "請換一張更清楚的封面照片。"}`,
+        );
+        return;
+      }
+
+      setImageSearchProgress(94);
+      setImageSearchMessage(`照片辨識為：${finalPlan.displayQuery}。正在比對站內刊登...`);
+      setImageSearchActive(true);
+      setListingType("book");
+      setItemCategory(ALL_ITEM_CATEGORIES);
+      setDepartment(departments[0]);
+      setMaxPrice(NO_MAX_PRICE);
+
+      let rankedBooks: Book[] = [];
+      if (supabase) {
+        const ranked = await fetchImageSearchCandidates(supabase, {
+          ...marketplaceFilters,
+          listingType: "book",
+          itemCategory: null,
+          department: null,
+          maxPrice: null,
+        }, finalPlan);
+        if (requestId !== imageSearchRequestRef.current) return;
+        rankedBooks = ranked.map((result) => result.book);
+        setMarketplaceBooks(rankedBooks);
+        setMarketplaceCount(rankedBooks.length);
+        setMarketplaceHasMore(false);
+        setMarketplaceCursor(null);
+      } else {
+        rankedBooks = rankImageSearchResults(
+          store.books.filter((book) =>
+            book.reviewStatus === "approved"
+            && book.moderationVisibility === "visible"
+            && book.lifecycleState === "active"
+            && book.status !== "sold"
+            && (book.listingType || "book") === "book",
+          ),
+          finalPlan,
+        ).map((result) => result.book);
+        setMarketplaceBooks(rankedBooks);
+        setMarketplaceCount(rankedBooks.length);
+        setMarketplaceHasMore(false);
+        setMarketplaceCursor(null);
+      }
+
+      setQuery(finalPlan.displayQuery);
+      setImageSearchQuery(finalPlan.displayQuery);
+      setImageSearchActive(true);
+      setImageSearchResultCount(rankedBooks.length);
+      setImageSearchProgress(100);
+      setImageSearchMessage(
+        `照片辨識為：${finalPlan.displayQuery}。站內找到 ${rankedBooks.length} 筆相近結果，已依相似度排序。${usedAiFallback ? ` AI 補強剩餘 ${remainingAiUses ?? 0} 次。` : ""}`,
+      );
+      document.getElementById("market")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      if (requestId !== imageSearchRequestRef.current) return;
+      setImageSearchProgress(0);
+      setImageSearchMessage(error instanceof Error ? error.message : "照片搜尋暫時無法使用，請稍後再試。");
+    } finally {
+      if (requestId === imageSearchRequestRef.current) setImageSearchBusy(false);
+    }
+  }
+
+  function updateMarketplaceQuery(nextQuery: string) {
+    setQuery(nextQuery);
+    if (imageSearchActive || imageSearchQuery) {
+      setImageSearchActive(false);
+      setImageSearchResultCount(null);
+      setImageSearchQuery("");
+      setImageSearchProgress(0);
+      setImageSearchMessage("已切換為一般文字搜尋，可修改字串或重新上傳照片。");
+    }
+  }
+
+  function handleImageSearchFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    void runImageSearch(file);
   }
 
   return (
     <main className={isSecondhandMode ? "theme-secondhand" : undefined}>
+      <input
+        ref={imageSearchInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={handleImageSearchFile}
+        aria-label="上傳書封照片搜尋站內課本"
+      />
       <header className="site-header">
         <button type="button" className="brand" onClick={() => { setView("home"); setMobileMenuOpen(false); }} aria-label="虎科書流首頁">
           <span className="brand-mark"><BookOpen size={23} /></span>
@@ -2570,10 +2770,20 @@ export function MarketplaceApp() {
                   <input
                     id="hero-search-input"
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => updateMarketplaceQuery(event.target.value)}
                     placeholder="搜尋書名、課程或老師..."
                   />
                 </label>
+                <button
+                  type="button"
+                  className="image-search-trigger"
+                  disabled={imageSearchBusy}
+                  aria-busy={imageSearchBusy}
+                  onClick={openImageSearchPicker}
+                >
+                  <ImagePlus size={18} aria-hidden="true" />
+                  {imageSearchBusy ? "辨識中" : "用照片找書"}
+                </button>
                 <button type="submit">開始找書</button>
               </form>
               <div className="hero-trust hero-assurance" aria-label="平台特色">
@@ -2604,11 +2814,23 @@ export function MarketplaceApp() {
                 <input
                   id="home-filter-query"
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => updateMarketplaceQuery(event.target.value)}
                   placeholder={isSecondhandMode ? "搜尋二手物品..." : "搜尋課本..."}
                   aria-label={isSecondhandMode ? "搜尋二手物品" : "搜尋課本"}
                 />
               </label>
+              {!isSecondhandMode && (
+                <button
+                  type="button"
+                  className="image-search-filter-button"
+                  disabled={imageSearchBusy}
+                  aria-busy={imageSearchBusy}
+                  onClick={openImageSearchPicker}
+                >
+                  <ImagePlus size={17} aria-hidden="true" />
+                  {imageSearchBusy ? "辨識中" : "照片搜書"}
+                </button>
+              )}
               {listingType === "book" ? (
                 <label htmlFor="home-filter-department">
                   <span className="visually-hidden">科系</span>
@@ -2652,6 +2874,33 @@ export function MarketplaceApp() {
                 <ChevronDown size={16} aria-hidden="true" />
               </label>
             </form>
+            {(imageSearchPreview || imageSearchMessage) && (
+              <section className="image-search-status" aria-live="polite">
+                {imageSearchPreview && (
+                  <div className="image-search-preview">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imageSearchPreview} alt="用來搜尋站內課本的書封照片" />
+                  </div>
+                )}
+                <div>
+                  <b>站內以圖搜書</b>
+                  <p>{imageSearchMessage || "正在準備站內搜尋..."}</p>
+                  {imageSearchQuery && <small>照片辨識為：{imageSearchQuery}</small>}
+                  {imageSearchActive && imageSearchResultCount !== null && (
+                    <small>站內找到 {imageSearchResultCount} 筆相近結果；可改用一般文字搜尋。</small>
+                  )}
+                  {(imageSearchBusy || imageSearchProgress > 0) && (
+                    <div className="image-search-progress">
+                      <progress value={imageSearchProgress} max={100} aria-label="站內圖搜辨識進度" />
+                      <span>{imageSearchBusy ? `${imageSearchProgress}%` : "完成"}</span>
+                    </div>
+                  )}
+                  {imageSearchQuery && !marketplaceLoading && filteredBooks.length === 0 && (
+                    <small>目前沒有找到站內相近課本，可以改短搜尋字串再試。</small>
+                  )}
+                </div>
+              </section>
+            )}
             <p className="result-line" aria-live="polite" aria-atomic="true">
               找到 <b>{supabase ? marketplaceCount : filteredBooks.length}</b> 筆{activeMarketLabel}
             </p>

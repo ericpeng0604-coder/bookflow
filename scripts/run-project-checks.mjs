@@ -10,6 +10,7 @@ const checks = [
   { file: "check-free-ocr-book-covers.mjs", stripTypes: true },
   { file: "check-mobile-book-ocr.mjs" },
   { file: "check-book-ocr-ai.mjs", stripTypes: true },
+  { file: "check-image-search.mjs", stripTypes: true },
   { file: "check-taiwan-textbooks.mjs", stripTypes: true },
   { file: "benchmark-taiwan-textbooks.mjs", stripTypes: true },
   { file: "check-listing-navigation-ui.mjs" },
