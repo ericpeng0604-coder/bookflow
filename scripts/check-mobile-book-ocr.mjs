@@ -20,7 +20,8 @@ assert.match(ocr, /recognitionCache = new WeakMap/, "repeated clicks for the sam
 assert.match(ocr, /isReliableBookOcrResult/, "OCR output must pass a reliability gate before filling fields");
 assert.match(app, /warmBookOcr\(\)/, "selecting a cover should warm OCR before the user taps recognize");
 assert.match(app, /ocrRequestRef/, "reselecting a photo must invalidate an older OCR response");
-assert.match(app, /可信度不足，因此沒有覆寫欄位/, "low-confidence OCR must explain that fields were preserved");
-assert.match(app, /正在補強繁體中文辨識/, "the UI must expose the slower fallback stage");
+assert.match(app, /沒有覆寫你的欄位/, "low-confidence OCR must explain that fields were preserved");
+assert.match(app, /正在提高辨識準確度/, "the UI must expose the accuracy-improvement stage");
+assert.doesNotMatch(app, /辨識結果不夠明確，正在用 AI 再確認一次/, "rejected OCR progress copy must not be shown");
 
 console.log("Mobile book OCR performance and reliability checks passed.");

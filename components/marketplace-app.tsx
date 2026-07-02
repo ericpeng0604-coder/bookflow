@@ -2416,7 +2416,7 @@ export function MarketplaceApp() {
     setImageSearchProgress(4);
     setImageSearchActive(false);
     setImageSearchResultCount(null);
-    setImageSearchMessage("正在辨識書封，完成後只會搜尋 BookFlow 站內刊登。");
+    setImageSearchMessage("正在讀取照片中的課本資訊...");
     setImageSearchQuery("");
 
     try {
@@ -2430,11 +2430,11 @@ export function MarketplaceApp() {
         }
         if (stage === "english") {
           setImageSearchProgress(Math.min(55, 12 + Math.round(percent * 0.42)));
-          setImageSearchMessage(`正在讀取封面文字 ${percent}%`);
+          setImageSearchMessage("正在找出可能的書名...");
         }
         if (stage === "chinese") {
           setImageSearchProgress(Math.min(84, 55 + Math.round(percent * 0.28)));
-          setImageSearchMessage(`正在補強繁體中文辨識 ${percent}%`);
+          setImageSearchMessage("正在找出可能的書名...");
         }
       });
       if (requestId !== imageSearchRequestRef.current) return;
@@ -2442,13 +2442,11 @@ export function MarketplaceApp() {
       const localPlan = buildImageSearchPlan(primaryResult.draft);
       const needsAiFallback = !localPlan.displayQuery || primaryResult.needsAiFallback;
       let finalPlan = needsAiFallback ? null : localPlan;
-      let usedAiFallback = false;
       let aiFallbackError = "";
-      let remainingAiUses: number | null = null;
 
       if (needsAiFallback && supabase && currentUser) {
         setImageSearchProgress(88);
-        setImageSearchMessage("本機辨識不足，正在用 AI 補強書封資訊...");
+        setImageSearchMessage("正在提高辨識準確度...");
         try {
           const { recognizeBookCoverWithAi } = await import("@/lib/marketplace/book-ocr-ai");
           const aiResult = await recognizeBookCoverWithAi(supabase, file, primaryResult.text);
@@ -2456,11 +2454,9 @@ export function MarketplaceApp() {
           const aiPlan = buildImageSearchPlan(aiResult.draft);
           if (aiPlan.displayQuery) {
             finalPlan = aiPlan;
-            usedAiFallback = true;
           }
-          remainingAiUses = aiResult.remaining;
         } catch (error) {
-          aiFallbackError = error instanceof Error ? error.message : "AI 補強暫時無法使用";
+          aiFallbackError = error instanceof Error ? error.message : "暫時無法提高辨識準確度";
         }
       }
 
@@ -2469,14 +2465,14 @@ export function MarketplaceApp() {
         setImageSearchProgress(0);
         setImageSearchMessage(
           needsAiFallback && !currentUser
-            ? "這張照片的本機辨識結果不足；登入後可使用 AI 補強，現有列表已保留。"
-            : `辨識結果不足，沒有更新站內搜尋。${aiFallbackError ? ` ${aiFallbackError}` : "請換一張更清楚的封面照片。"}`,
+            ? "這張照片暫時無法辨識。可以登入後再試一次，或改用文字搜尋。"
+            : `這張照片暫時無法辨識。可以換一張更清楚的封面，或改用文字搜尋。${aiFallbackError ? ` ${aiFallbackError}` : ""}`,
         );
         return;
       }
 
       setImageSearchProgress(94);
-      setImageSearchMessage(`照片辨識為：${finalPlan.displayQuery}。正在比對站內刊登...`);
+      setImageSearchMessage("正在比對站內刊登...");
       setImageSearchActive(true);
       setListingType("book");
       setItemCategory(ALL_ITEM_CATEGORIES);
@@ -2521,7 +2517,7 @@ export function MarketplaceApp() {
       setImageSearchResultCount(rankedBooks.length);
       setImageSearchProgress(100);
       setImageSearchMessage(
-        `照片辨識為：${finalPlan.displayQuery}。站內找到 ${rankedBooks.length} 筆相近結果，已依相似度排序。${usedAiFallback ? ` AI 補強剩餘 ${remainingAiUses ?? 0} 次。` : ""}`,
+        `找到 ${rankedBooks.length} 筆相近結果，已依相似度排序。`,
       );
       document.getElementById("market")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
@@ -4721,22 +4717,22 @@ function BookFormModal({
     const requestId = ++ocrRequestRef.current;
     setOcrBusy(true);
     setOcrProgress(4);
-    setOcrMessage("正在準備封面圖片...");
+    setOcrMessage("正在準備照片...");
     try {
       const { recognizeBookCover } = await import("@/lib/marketplace/free-ocr");
       const primaryResult = await recognizeBookCover(imageFile, (stage, progress) => {
         const percent = Math.max(1, Math.round((progress ?? 0) * 100));
         if (stage === "preparing") {
           setOcrProgress(8);
-          setOcrMessage("正在縮小並強化封面，避免手機處理過多像素...");
+          setOcrMessage("正在準備照片...");
         }
         if (stage === "english") {
           setOcrProgress(Math.min(45, 10 + Math.round(percent * 0.35)));
-          setOcrMessage(`正在快速辨識封面文字 ${percent}%`);
+          setOcrMessage("正在讀取封面上的書名與作者...");
         }
         if (stage === "chinese") {
           setOcrProgress(Math.min(80, 45 + Math.round(percent * 0.35)));
-          setOcrMessage(`正在補強繁體中文辨識 ${percent}%`);
+          setOcrMessage("正在整理可填入的欄位...");
         }
       });
       if (requestId !== ocrRequestRef.current) return;
@@ -4781,12 +4777,10 @@ function BookFormModal({
             author: mergedLocalDraft.author,
             edition: mergedLocalDraft.edition,
           };
-      let usedAiFallback = false;
-      let remainingAiUses: number | null = null;
       let aiFallbackError = "";
       if (needsAiFallback && supabase) {
         setOcrProgress(90);
-        setOcrMessage("本機辨識不足，正在使用 AI 補強封面資料...");
+        setOcrMessage("正在提高辨識準確度...");
         try {
           const { recognizeBookCoverWithAi } = await import("@/lib/marketplace/book-ocr-ai");
           const aiResult = await recognizeBookCoverWithAi(supabase, imageFile, localText);
@@ -4797,12 +4791,10 @@ function BookFormModal({
               author: aiResult.draft.author,
               edition: aiResult.draft.edition,
             };
-            usedAiFallback = true;
           }
-          remainingAiUses = aiResult.remaining;
           setOcrProgress(96);
         } catch (aiError) {
-          aiFallbackError = aiError instanceof Error ? aiError.message : "AI 封面補強暫時無法使用";
+          aiFallbackError = aiError instanceof Error ? aiError.message : "暫時無法提高辨識準確度";
         }
       }
       setDraft((previous) => ({
@@ -4814,16 +4806,14 @@ function BookFormModal({
       setOcrOriginalDraft(ocrDraft);
       setOcrProgress(100);
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
-        ? usedAiFallback
-          ? `AI 已補強可見的封面資料；今天還可使用 ${remainingAiUses ?? 0} 次，送出前請再確認。`
-          : `已填入可信的書名、作者或版本資訊${primaryResult.usedChineseFallback || referenceResult?.usedChineseFallback ? "（已使用中文補強）" : ""}；送出前請再確認。${aiFallbackError ? ` AI 補強未完成：${aiFallbackError}` : ""}`
+        ? `已填入可辨識的欄位，送出前請再確認。${aiFallbackError ? ` ${aiFallbackError}` : ""}`
         : aiFallbackError
-          ? `辨識結果不足，且 ${aiFallbackError}。請拍近一點或改用手動填寫。`
-          : "辨識結果可信度不足，因此沒有覆寫欄位。請拍近一點、避免反光，或改用手動填寫。");
+          ? `這張照片暫時無法辨識，沒有覆寫你的欄位。你可以換一張清楚的封面，或手動填寫。 ${aiFallbackError}`
+          : "這張照片暫時無法辨識，沒有覆寫你的欄位。你可以換一張清楚的封面，或手動填寫。");
     } catch (error) {
       if (requestId !== ocrRequestRef.current) return;
       setOcrProgress(0);
-      setOcrMessage(error instanceof Error ? error.message : "OCR 辨識失敗，請改用手動填寫");
+      setOcrMessage(error instanceof Error ? error.message : "這張照片暫時無法辨識，請改用手動填寫。");
   } finally {
       if (requestId === ocrRequestRef.current) setOcrBusy(false);
     }
@@ -4891,11 +4881,11 @@ function BookFormModal({
               {(ocrBusy || ocrProgress > 0) && (
                 <div className="ocr-progress" aria-live="polite">
                   <progress value={ocrProgress} max={100} aria-label="照片辨識進度" />
-                  <span>{ocrBusy ? `辨識進度 ${ocrProgress}%` : "辨識完成"}</span>
+                  <span>{ocrBusy ? `${ocrProgress}%` : "辨識完成"}</span>
                 </div>
               )}
               <p>{ocrMessage || "辨識結果只會填入草稿，送出前請再確認。"}</p>
-              <p className="ocr-privacy-note">本機辨識不足時，封面照片會短暫送至雲端 AI 補強；圖片不會由 BookFlow 另行儲存。</p>
+              <p className="ocr-privacy-note">本機辨識不足時，照片可能會短暫用於提高辨識準確度；BookFlow 不會另外保存這次辨識圖片。</p>
             </div>
           )}
 
