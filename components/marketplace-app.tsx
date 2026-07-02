@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { FormEvent, type MouseEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-data";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
@@ -201,7 +202,7 @@ const statusLabels: Record<BookStatus, string> = {
 };
 
 const requestLabels: Record<RequestStatus, string> = {
-  pending: "等待賣家處理",
+  pending: "等待賣家確認",
   waitlisted: "候補中",
   reserved: "賣家已選定",
   awaiting_confirmation: "等待買家確認",
@@ -386,7 +387,6 @@ export function MarketplaceApp() {
   const [view, setView] = useState<View>("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [heroQuery, setHeroQuery] = useState("");
   const [listingType, setListingType] = useState<ListingType>("book");
   const [itemCategory, setItemCategory] = useState(ALL_ITEM_CATEGORIES);
   const [department, setDepartment] = useState(departments[0]);
@@ -1067,6 +1067,13 @@ export function MarketplaceApp() {
     ?? store.books.find((book) => book.id === selectedId)
     ?? null;
   const currentUser = store.currentUser;
+  const selectedBookActiveRequest = currentUser && selectedBook
+    ? store.requests.find((request) =>
+      request.bookId === selectedBook.id
+      && request.buyerId === currentUser.id
+      && ["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status)
+    )
+    : null;
   const profile = (id: string) => store.profiles.find((item) => item.id === id);
 
   useEffect(() => {
@@ -1109,18 +1116,11 @@ export function MarketplaceApp() {
     window.history.pushState({}, "", `/?${params.toString()}`);
   }
 
-  function submitHeroSearch() {
-    setQuery(heroQuery);
-    setHeroQuery("");
-    document.getElementById("market")?.scrollIntoView({ behavior: "smooth" });
-  }
-
   function switchListingType(nextType: ListingType) {
     setListingType(nextType);
     setSelectedId(null);
     setDetailBook(null);
     setQuery("");
-    setHeroQuery("");
     if (nextType === "book") {
       setItemCategory(ALL_ITEM_CATEGORIES);
     } else {
@@ -2354,7 +2354,6 @@ export function MarketplaceApp() {
 
   function clearMarketplaceFilters() {
     setQuery("");
-    setHeroQuery("");
     setMaxPrice(NO_MAX_PRICE);
     setDepartment(departments[0]);
     setItemCategory(ALL_ITEM_CATEGORIES);
@@ -2363,22 +2362,22 @@ export function MarketplaceApp() {
   return (
     <main className={isSecondhandMode ? "theme-secondhand" : undefined}>
       <header className="site-header">
-        <button className="brand" onClick={() => { setView("home"); setMobileMenuOpen(false); }} aria-label="回首頁">
+        <button type="button" className="brand" onClick={() => { setView("home"); setMobileMenuOpen(false); }} aria-label="虎科書流首頁">
           <span className="brand-mark"><BookOpen size={23} /></span>
           <span><b>虎科書流</b><small>HUST BOOKFLOW</small></span>
         </button>
         <nav>
-          <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isSecondhandMode ? "逛二手物品" : "找課本"}</button>
-          <button onClick={() => requireActive(() => openListingForm(listingType))}>我要刊登</button>
-          <button onClick={() => requireLogin(openDashboard)}>我的交易</button>
-          {isModerator && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>審核後台</button>}
+          <button type="button" className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
+          <button type="button" onClick={() => requireActive(() => openListingForm(listingType))}>我要刊登</button>
+          <button type="button" onClick={() => requireLogin(openDashboard)}>我的交易</button>
+          {isModerator && <button type="button" className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>管理</button>}
         </nav>
         <div className="header-actions">
           {currentUser ? (
             <>
-              {isModerator && <button className="icon-button admin-shortcut" title="審核後台" onClick={() => setView("admin")}><UserCog size={18} /></button>}
+              {isModerator && <button type="button" className="icon-button admin-shortcut" title="管理" onClick={() => setView("admin")}><UserCog size={18} /></button>}
               <div className="notification-wrap">
-                <button
+                <button type="button"
                   className="icon-button notification-button"
                   title="通知"
                   aria-label={`通知，${unreadNotifications} 則未讀`}
@@ -2391,22 +2390,22 @@ export function MarketplaceApp() {
                   <div className="notification-panel">
                     <div className="notification-head">
                       <div><b>通知</b><span>{unreadNotifications} 則未讀</span></div>
-                      {unreadNotifications > 0 && <button onClick={() => void markAllNotificationsRead()}><CheckCheck size={15} />全部已讀</button>}
+                      {unreadNotifications > 0 && <button type="button" onClick={() => void markAllNotificationsRead()}><CheckCheck size={15} />全部已讀</button>}
                     </div>
                     <div className="push-setting">
                       <div>
                         <b>瀏覽器推播</b>
                         <small>
-                          {pushState === "enabled" && "已開啟重要交易與聊聊通知"}
-                          {pushState === "disabled" && "目前關閉，站內通知仍會保留"}
-                          {pushState === "denied" && "已被瀏覽器封鎖，請到網址列旁的權限設定開啟"}
-                          {pushState === "unsupported" && "這個瀏覽器不支援推播"}
+                          {pushState === "enabled" && "已開啟交易與刊登更新通知。"}
+                          {pushState === "disabled" && "開啟後可收到新的交易活動。"}
+                          {pushState === "denied" && "瀏覽器目前封鎖通知權限。"}
+                          {pushState === "unsupported" && "此瀏覽器不支援推播。"}
                         </small>
                       </div>
                       {pushState === "enabled" ? (
-                        <button disabled={pushSaving} onClick={() => void disablePushNotifications()}>關閉</button>
+                        <button type="button" disabled={pushSaving} onClick={() => void disablePushNotifications()}>關閉</button>
                       ) : (
-                        <button
+                        <button type="button"
                           disabled={pushSaving || pushState === "denied" || pushState === "unsupported"}
                           onClick={() => void enablePushNotifications()}
                         >
@@ -2416,8 +2415,8 @@ export function MarketplaceApp() {
                     </div>
                     <div className="notification-list">
                       {notifications.map((notification) => (
-                        <button
-                          className={`notification-item ${notification.readAt ? "" : "unread"}`}
+                        <button type="button"
+                          className={"notification-item " + (notification.readAt ? "" : "unread")}
                           key={notification.id}
                           onClick={() => openNotification(notification)}
                         >
@@ -2430,14 +2429,14 @@ export function MarketplaceApp() {
                   </div>
                 )}
               </div>
-              <button className="user-chip desktop-account-action" onClick={openDashboard}><UserRound size={17} />{currentUser.name}</button>
-              <button className="icon-button desktop-account-action" title="登出" onClick={() => void logout()}><LogOut size={18} /></button>
+              <button type="button" className="user-chip desktop-account-action" onClick={openDashboard}><UserRound size={17} />{currentUser.name}</button>
+              <button type="button" className="icon-button desktop-account-action" title="登出" onClick={() => void logout()}><LogOut size={18} /></button>
             </>
           ) : (
-            <button className="login-button desktop-account-action" onClick={() => setModal("login")}><UserRound size={17} />登入 / 註冊</button>
+            <button type="button" className="login-button desktop-account-action" onClick={() => setModal("login")}><UserRound size={17} /><span>登入／註冊</span></button>
           )}
-          <button
-            className={`mobile-menu ${mobileMenuOpen ? "active" : ""}`}
+          <button type="button"
+            className={"mobile-menu " + (mobileMenuOpen ? "active" : "")}
             aria-label={mobileMenuOpen ? "關閉選單" : "開啟選單"}
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-navigation"
@@ -2450,9 +2449,15 @@ export function MarketplaceApp() {
           </button>
         </div>
         {mobileMenuOpen && (
-          <div className="mobile-nav-backdrop" onClick={() => setMobileMenuOpen(false)}>
-            <div id="mobile-navigation" className="mobile-nav" onClick={(event) => event.stopPropagation()}>
-              <button
+          <div className="mobile-nav-backdrop">
+            <button
+              type="button"
+              className="mobile-nav-dismiss"
+              aria-label="關閉選單"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <div id="mobile-navigation" className="mobile-nav">
+              <button type="button"
                 onClick={() => {
                   switchListingType(isSecondhandMode ? "book" : "secondhand");
                   setView("home");
@@ -2462,7 +2467,7 @@ export function MarketplaceApp() {
                 {isSecondhandMode ? <BookOpen size={18} /> : <Sparkles size={18} />}
                 {isSecondhandMode ? "回課本市場" : "逛二手物品"}
               </button>
-              <button
+              <button type="button"
                 className={view === "home" ? "active" : ""}
                 onClick={() => {
                   setView("home");
@@ -2471,7 +2476,7 @@ export function MarketplaceApp() {
               >
                 {isSecondhandMode ? "逛二手物品" : "找課本"}
               </button>
-              <button
+              <button type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   requireActive(() => openListingForm(listingType));
@@ -2479,7 +2484,7 @@ export function MarketplaceApp() {
               >
                 我要刊登
               </button>
-              <button
+              <button type="button"
                 className={view === "dashboard" ? "active" : ""}
                 onClick={() => {
                   setMobileMenuOpen(false);
@@ -2489,7 +2494,7 @@ export function MarketplaceApp() {
                 我的交易
               </button>
               {isModerator && (
-                <button
+                <button type="button"
                   className={view === "admin" ? "active" : ""}
                   onClick={() => { setView("admin"); setMobileMenuOpen(false); }}
                 >
@@ -2499,15 +2504,15 @@ export function MarketplaceApp() {
               <div className="mobile-nav-separator" />
               {currentUser ? (
                 <>
-                  <button onClick={() => { openDashboard(); setMobileMenuOpen(false); }}>
+                  <button type="button" onClick={() => { openDashboard(); setMobileMenuOpen(false); }}>
                     <UserRound size={18} />會員中心
                   </button>
-                  <button onClick={() => void logout()}>
+                  <button type="button" onClick={() => void logout()}>
                     <LogOut size={18} />登出
                   </button>
                 </>
               ) : (
-                <button onClick={() => { setModal("login"); setMobileMenuOpen(false); }}>
+                <button type="button" onClick={() => { setModal("login"); setMobileMenuOpen(false); }}>
                   <UserRound size={18} />登入 / 註冊
                 </button>
               )}
@@ -2517,9 +2522,9 @@ export function MarketplaceApp() {
       </header>
 
       {!online && (
-        <div className="offline-banner" role="status" aria-live="polite">
+        <output className="offline-banner" aria-live="polite">
           目前為離線模式。你仍可查看已載入內容與草稿；刊登、交易、聊天與辨識會在恢復網路後才能送出。
-        </div>
+        </output>
       )}
 
       {currentUser && showPushPrompt && (
@@ -2541,55 +2546,47 @@ export function MarketplaceApp() {
       {view === "home" && (
         <div className="home-page">
           {currentUser?.accountStatus === "suspended" && (
-            <div className="suspension-banner" role="status">
+            <section className="suspension-banner" aria-live="polite">
               <Ban size={18} aria-hidden="true" />
               <div><b>帳號目前為唯讀模式</b><span>{currentUser.suspensionReason || "請聯絡管理員了解停權原因。"}</span></div>
-            </div>
+            </section>
           )}
           <section className="hero" aria-labelledby="home-hero-title">
-            <div className="hero-glow one" aria-hidden="true" />
-            <div className="hero-glow two" aria-hidden="true" />
-            <div className="hero-copy">
-              <span className="eyebrow"><Sparkles size={15} aria-hidden="true" /> {isSecondhandMode ? "HUST SECONDHAND STORE" : "學長姐的書，學弟妹的下一站"}</span>
-              <h1 id="home-hero-title">
-                {isSecondhandMode ? "校園裡的二手選物，" : "讓知識繼續流動，"}<br />
-                <em>{isSecondhandMode ? "把日常換成新靈感。" : "一本書也不浪費。"}</em>
-              </h1>
-              <p>{isSecondhandMode ? "從 3C、宿舍小物到日常配件，用更像商店的方式逛校園二手好物。" : "在校園裡找到你需要的課本，省下一筆，也讓學長姐的筆記繼續發揮價值。"}</p>
-              <div className="hero-search" role="search" aria-label={isSecondhandMode ? "搜尋二手物品" : "搜尋課本"}>
-                <label className="visually-hidden" htmlFor="hero-search-input">{isSecondhandMode ? "搜尋商品、分類或描述" : "搜尋書名、課程或老師"}</label>
-                <Search size={21} aria-hidden="true" />
-                <input
-                  id="hero-search-input"
-                  value={heroQuery}
-                  onChange={(event) => setHeroQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") submitHeroSearch();
-                  }}
-                  placeholder={isSecondhandMode ? "搜尋商品、分類或描述..." : "搜尋書名、課程或老師..."}
-                />
-                <button type="button" onClick={submitHeroSearch}>{isSecondhandMode ? "開始逛" : "開始找書"}</button>
+            <div className="hero-art hero-reference-art" aria-hidden="true" />
+            <div className="hero-copy hero-search-panel">
+              <div className="hero-message">
+                <h1 id="home-hero-title">Good Books,<br />Next Chapter.</h1>
+                <p>在虎科找到需要的書，也讓用過的書繼續被需要。</p>
               </div>
-              <div className="hero-trust" aria-label="平台特色">
-                <span><ShieldCheck size={16} aria-hidden="true" /> 校園面交更安心</span>
-                <span><MessageCircle size={16} aria-hidden="true" /> 接受後依賣家設定分享聯絡方式</span>
-                <span><GraduationCap size={16} aria-hidden="true" /> {isSecondhandMode ? "依分類快速探索好物" : "依課程快速找到課本"}</span>
-              </div>
-            </div>
-            <div className="hero-art" aria-hidden="true">
-              <div className="book-stack">
-                <div className="floating-note note-one">{isSecondhandMode ? "耳機 / 桌燈" : "資料結構"}<br /><b>{isSecondhandMode ? "今日精選" : "省下 $380"}</b></div>
-                <div className="book book-a"><span>DATA<br />STRUCTURES</span></div>
-                <div className="book book-b"><span>{isSecondhandMode ? "SECONDHAND" : "MANAGEMENT"}</span></div>
-                <div className="book book-c"><span>{isSecondhandMode ? "DROP 02" : "ENGLISH GRAMMAR"}</span></div>
-                <div className="floating-note note-two"><Check size={16} /> {isSecondhandMode ? "風格好物" : "校內面交"}</div>
+              <form
+                className="hero-search"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  document.getElementById("market")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                <label htmlFor="hero-search-input">
+                  <Search size={22} aria-hidden="true" />
+                  <input
+                    id="hero-search-input"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="搜尋書名、課程或老師..."
+                  />
+                </label>
+                <button type="submit">開始找書</button>
+              </form>
+              <div className="hero-trust hero-assurance" aria-label="平台特色">
+                <span><ShieldCheck size={17} aria-hidden="true" />校園面交更安心</span>
+                <span><MessageCircle size={17} aria-hidden="true" />接受後依賣家設定分享聯絡方式</span>
+                <span><GraduationCap size={17} aria-hidden="true" />依課程快速找到課本</span>
               </div>
             </div>
           </section>
 
           <section className="market" id="market" aria-labelledby="home-market-title">
             <div className="section-heading">
-              <div><span className="section-kicker">{isSecondhandMode ? "SECONDHAND DROP" : "LATEST LISTINGS"}</span><h2 id="home-market-title">{isSecondhandMode ? "校園二手選物" : "最近上架的課本"}</h2></div>
+              <div><span className="section-kicker">LATEST LISTINGS</span><h2 id="home-market-title">最近上架的課本</h2></div>
               <button
                 type="button"
                 className="sell-cta"
@@ -2602,48 +2599,45 @@ export function MarketplaceApp() {
             </div>
             <form className="filters" aria-label={isSecondhandMode ? "篩選二手物品" : "篩選課本"} onSubmit={(event) => event.preventDefault()}>
               <label className="filter-search" htmlFor="home-filter-query">
-                <span className="visually-hidden">{isSecondhandMode ? "搜尋二手物品" : "搜尋課本"}</span>
-                <Search size={18} aria-hidden="true" />
+                <span className="visually-hidden">搜尋</span>
+                <Search size={20} aria-hidden="true" />
                 <input
                   id="home-filter-query"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder={isSecondhandMode ? "搜尋商品、分類或描述..." : "搜尋課本..."}
+                  placeholder={isSecondhandMode ? "搜尋二手物品..." : "搜尋課本..."}
                   aria-label={isSecondhandMode ? "搜尋二手物品" : "搜尋課本"}
                 />
               </label>
               {listingType === "book" ? (
                 <label htmlFor="home-filter-department">
                   <span className="visually-hidden">科系</span>
-                  <GraduationCap size={18} aria-hidden="true" />
                   <select
                     id="home-filter-department"
                     value={department}
                     onChange={(event) => setDepartment(event.target.value)}
                     aria-label="科系"
                   >
-                    {departments.map((item) => <option key={item}>{item}</option>)}
+                    {departments.map((item, index) => <option key={item} value={item}>{index === 0 ? "全部科系" : item}</option>)}
                   </select>
                   <ChevronDown size={16} aria-hidden="true" />
                 </label>
               ) : (
                 <label htmlFor="home-filter-category">
-                  <span className="visually-hidden">二手分類</span>
-                  <Sparkles size={18} aria-hidden="true" />
+                  <span className="visually-hidden">分類</span>
                   <select
                     id="home-filter-category"
                     value={itemCategory}
                     onChange={(event) => setItemCategory(event.target.value)}
-                    aria-label="二手分類"
+                    aria-label="分類"
                   >
-                    {SECONDHAND_CATEGORIES.map((item) => <option key={item}>{item}</option>)}
+                    {SECONDHAND_CATEGORIES.map((item, index) => <option key={item} value={item}>{index === 0 ? "全部分類" : item}</option>)}
                   </select>
                   <ChevronDown size={16} aria-hidden="true" />
                 </label>
               )}
-              <label htmlFor="home-filter-price">
+              <label className="price-filter" htmlFor="home-filter-price">
                 <span className="visually-hidden">最高價格</span>
-                <span className="dollar" aria-hidden="true">$</span>
                 <select
                   id="home-filter-price"
                   value={maxPrice}
@@ -2651,19 +2645,19 @@ export function MarketplaceApp() {
                   aria-label="最高價格"
                 >
                   <option value="">不限價格</option>
-                  <option value="300">$300 以下</option>
-                  <option value="500">$500 以下</option>
-                  <option value="800">$800 以下</option>
+                  <option value="300">NT$300 以下</option>
+                  <option value="500">NT$500 以下</option>
+                  <option value="800">NT$800 以下</option>
                 </select>
                 <ChevronDown size={16} aria-hidden="true" />
               </label>
             </form>
             <p className="result-line" aria-live="polite" aria-atomic="true">
-              <b>{supabase ? marketplaceCount : filteredBooks.length}</b> 件{activeMarketLabel}正在等待新主人
+              找到 <b>{supabase ? marketplaceCount : filteredBooks.length}</b> 筆{activeMarketLabel}
             </p>
-            <div className={`book-grid ${marketplaceLoading ? "is-refreshing" : ""}`} role="list" aria-label={`${activeMarketLabel}列表`} aria-busy={marketplaceLoading}>
+            <ul className={`book-grid ${marketplaceLoading ? "is-refreshing" : ""}`} aria-label={`${activeMarketLabel}列表`} aria-busy={marketplaceLoading}>
               {filteredBooks.map((book) => (
-                <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id} role="listitem">
+                <li className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id}>
                   <button
                     type="button"
                     className="book-card-main"
@@ -2696,11 +2690,11 @@ export function MarketplaceApp() {
                   >
                     <Heart size={18} fill={favoriteIds.has(book.id) ? "currentColor" : "none"} aria-hidden="true" />
                   </button>
-                </article>
+                </li>
               ))}
-            </div>
+            </ul>
             {marketplaceLoading && filteredBooks.length > 0 && (
-              <p className="market-refresh-note" role="status">正在更新搜尋結果...</p>
+              <output className="market-refresh-note">正在更新搜尋結果...</output>
             )}
             {supabase && marketplaceHasMore && (
               <div className="load-more-wrap">
@@ -2716,7 +2710,7 @@ export function MarketplaceApp() {
               </div>
             )}
             {filteredBooks.length === 0 && !marketplaceLoading && (
-              <div className="empty" role="status" aria-live="polite">
+              <section className="empty" aria-live="polite">
                 <BookOpen size={40} aria-hidden="true" />
                 <h3>{hasMarketplaceFilters ? `找不到符合條件的${activeMarketLabel}` : `目前還沒有${activeMarketLabel}`}</h3>
                 <p>{hasMarketplaceFilters ? "清除篩選後看看其他刊登。" : `成為第一位刊登${activeMarketLabel}的人，讓校園交換開始流動。`}</p>
@@ -2729,13 +2723,13 @@ export function MarketplaceApp() {
                 >
                   {hasMarketplaceFilters ? "清除篩選" : `刊登${activeMarketLabel}`}
                 </button>
-              </div>
+              </section>
             )}
             {marketplaceLoading && filteredBooks.length === 0 && (
-              <div className="empty" role="status" aria-live="polite" aria-busy="true">
+              <section className="empty" aria-live="polite" aria-busy="true">
                 <BookOpen size={40} aria-hidden="true" />
                 <h3>載入中...</h3>
-              </div>
+              </section>
             )}
           </section>
         </div>
@@ -2743,7 +2737,7 @@ export function MarketplaceApp() {
 
       {view === "book" && selectedBook && (
         <section className="detail-page">
-          <button className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
+          <button type="button" className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
           <div className="detail-grid">
             <div className="detail-image">
               <Image src={selectedBook.imageUrl} alt={selectedBook.title} width={720} height={960} sizes="(max-width: 800px) 100vw, 42vw" priority />
@@ -2780,22 +2774,25 @@ export function MarketplaceApp() {
               </div>
               <div className="detail-action-row">
                 {currentUser?.id === selectedBook.sellerId ? (
-                  <button className="primary wide" disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(selectedBook); setModal("bookForm"); }}><Pencil size={18} />編輯我的刊登</button>
+                  <button type="button" className="primary wide" disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(selectedBook); setModal("bookForm"); }}><Pencil size={18} />編輯我的刊登</button>
                 ) : (
                   <div className="detail-primary-actions">
-                    <button
+                    <button type="button"
                       className="chat-toggle wide"
                       disabled={selectedBook.status === "sold" || currentUser?.accountStatus === "suspended"}
                       onClick={() => requireActive(() => void startConversation(selectedBook.id))}
                     >
                       <MessageCircle size={18} />聊聊
                     </button>
-                    <button
+                    <button type="button"
                       className="primary wide"
-                      disabled={selectedBook.status !== "available" || currentUser?.accountStatus === "suspended"}
-                      onClick={() => requireActive(() => setModal("request"))}
+                      disabled={Boolean(selectedBookActiveRequest) || selectedBook.status !== "available" || currentUser?.accountStatus === "suspended"}
+                      onClick={() => {
+                        if (selectedBookActiveRequest) return;
+                        requireActive(() => setModal("request"));
+                      }}
                     >
-                      <Check size={18} />{selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
+                      <Check size={18} />{selectedBookActiveRequest ? requestLabels[selectedBookActiveRequest.status] : selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
                     </button>
                   </div>
                 )}
@@ -2827,14 +2824,14 @@ export function MarketplaceApp() {
       )}
       {view === "book" && !selectedBook && (
         <section className="detail-page">
-          <button className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
-          <div className="empty" role="status" aria-live="polite">
+          <button type="button" className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
+          <section className="empty" aria-live="polite">
             <BookOpen size={42} aria-hidden="true" />
             <h1>{bookDetailLoading ? "正在載入刊登..." : "找不到這筆刊登"}</h1>
             {!bookDetailLoading && bookDetailMissing && (
               <p>這筆刊登可能已下架、尚未通過審核，或連結已失效。</p>
             )}
-          </div>
+          </section>
         </section>
       )}
 
@@ -2843,8 +2840,8 @@ export function MarketplaceApp() {
           <div className="dashboard-head">
             <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
             <div className="dashboard-head-actions">
-              <button className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => setModal("profile"))}><UserRound size={18} />個人資料</button>
-              <button className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm(listingType))}><Plus size={18} />{isSecondhandMode ? "刊登二手物品" : "刊登課本"}</button>
+              <button type="button" className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => setModal("profile"))}><UserRound size={18} />個人資料</button>
+              <button type="button" className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm(listingType))}><Plus size={18} />{isSecondhandMode ? "刊登二手物品" : "刊登課本"}</button>
             </div>
           </div>
           {currentUser.accountStatus === "suspended" && (
@@ -2861,7 +2858,7 @@ export function MarketplaceApp() {
                   每 30 天確認一次；最後確認後滿 120 天仍未處理，才會暫時封存。
                 </span>
               </div>
-              <button className="primary" disabled={lifecycleSaving} onClick={() => void confirmAllListings()}>
+              <button type="button" className="primary" disabled={lifecycleSaving} onClick={() => void confirmAllListings()}>
                 <CheckCheck size={17} />全部仍在販售
               </button>
             </div>
@@ -2873,13 +2870,13 @@ export function MarketplaceApp() {
                 <span>勾選後選擇恢復販售或正式下架；系統不會自動讓舊書重新公開。</span>
               </div>
               <div className="archived-review-actions">
-                <button
+                <button type="button"
                   disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
                   onClick={() => void reviewArchivedListings("keep")}
                 >
                   <RotateCcw size={16} />恢復勾選項目
                 </button>
-                <button
+                <button type="button"
                   className="danger"
                   disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
                   onClick={() => void reviewArchivedListings("withdraw")}
@@ -2890,13 +2887,13 @@ export function MarketplaceApp() {
             </div>
           )}
           <div className="dashboard-tabs">
-            <button className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
-            <button className={dashboardTab === "chats" ? "active" : ""} onClick={() => setDashboardTab("chats")}>
+            <button type="button" className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
+            <button type="button" className={dashboardTab === "chats" ? "active" : ""} onClick={() => setDashboardTab("chats")}>
               聊聊 <span>{conversations.reduce((sum, item) => sum + item.unreadCount, 0)}</span>
             </button>
-            <button className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 {activeMyRequestCount > 0 && <span>{activeMyRequestCount}</span>}</button>
-            <button className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
-            <button className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
+            <button type="button" className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 {activeMyRequestCount > 0 && <span>{activeMyRequestCount}</span>}</button>
+            <button type="button" className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
+            <button type="button" className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
           </div>
 
           {dashboardTab === "listings" && (
@@ -2945,13 +2942,13 @@ export function MarketplaceApp() {
                   <div className="row-actions">
                     {book.lifecycleState === "active" && (
                       <>
-                        <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
-                        <button disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("contactSettings"); }}><MessageCircle size={16} />聯絡方式</button>
-                        <button disabled={currentUser.accountStatus === "suspended"} className="danger" onClick={() => void deleteBook(book.id)}><Trash2 size={16} />下架</button>
+                        <button type="button" disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("bookForm"); }}><Pencil size={16} />編輯</button>
+                        <button type="button" disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(book); setModal("contactSettings"); }}><MessageCircle size={16} />聯絡方式</button>
+                        <button type="button" disabled={currentUser.accountStatus === "suspended"} className="danger" onClick={() => void deleteBook(book.id)}><Trash2 size={16} />下架</button>
                       </>
                     )}
                     {book.lifecycleState === "withdrawn" && (
-                      <button disabled={lifecycleSaving || currentUser.accountStatus === "suspended"} onClick={() => void restoreWithdrawnListing(book.id)}>
+                      <button type="button" disabled={lifecycleSaving || currentUser.accountStatus === "suspended"} onClick={() => void restoreWithdrawnListing(book.id)}>
                         <RotateCcw size={16} />恢復販售
                       </button>
                     )}
@@ -3058,10 +3055,10 @@ export function MarketplaceApp() {
                     </div>
                     <div className="request-actions">
                       {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
-                        <button onClick={() => void cancelRequest(request.id)}><X size={16} />取消訂單</button>
+                        <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消訂單</button>
                       )}
                       {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
-                        <button onClick={() => {
+                        <button type="button" onClick={() => {
                           setEditingRequest(request);
                           setSelectedId(request.bookId);
                           setDetailBook(null);
@@ -3069,10 +3066,10 @@ export function MarketplaceApp() {
                         }}><Pencil size={16} />編輯</button>
                       )}
                       {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
-                        <button onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />聊聊</button>
+                        <button type="button" onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />聊聊</button>
                       )}
                       {request.status === "awaiting_confirmation" && (
-                        <button className="accept" onClick={() => void buyerConfirmTrade(request.id)}><CheckCheck size={16} />確認收到</button>
+                        <button type="button" className="accept" onClick={() => void buyerConfirmTrade(request.id)}><CheckCheck size={16} />確認收到</button>
                       )}
                     </div>
                     <small>{timeAgo(request.createdAt)}</small>
@@ -3102,23 +3099,23 @@ export function MarketplaceApp() {
                     </div>
                     <div className="request-actions">
                       {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
-                        <button onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />聊聊</button>
+                        <button type="button" onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />聊聊</button>
                       )}
                       {["pending", "waitlisted"].includes(request.status) && book.status === "available" && (
-                        <button className="accept" onClick={() => void respondToRequest(request.id, "accepted")}><Check size={16} />選定買家</button>
+                        <button type="button" className="accept" onClick={() => void respondToRequest(request.id, "accepted")}><Check size={16} />選定買家</button>
                       )}
                       {["pending", "waitlisted"].includes(request.status) && (
-                        <button onClick={() => void respondToRequest(request.id, "rejected")}><X size={16} />婉拒</button>
+                        <button type="button" onClick={() => void respondToRequest(request.id, "rejected")}><X size={16} />婉拒</button>
                       )}
                       {request.status === "reserved" && (
                         <>
-                          <button className="accept" onClick={() => void sellerConfirmHandoff(request.id)}><CheckCheck size={16} />已完成面交</button>
-                          <button onClick={() => void cancelRequest(request.id)}><X size={16} />取消保留</button>
+                          <button type="button" className="accept" onClick={() => void sellerConfirmHandoff(request.id)}><CheckCheck size={16} />已完成面交</button>
+                          <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消保留</button>
                         </>
                       )}
                     </div>
                     {buyer && request.status === "pending" && (
-                      <button
+                      <button type="button"
                         className="request-report-button"
                         title="檢舉這位買家"
                         aria-label="檢舉這位買家"
@@ -3137,30 +3134,37 @@ export function MarketplaceApp() {
           {dashboardTab === "favorites" && (
             <div className="book-grid favorites-grid">
               {favoriteBooks.map((book) => (
-                <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id} onClick={() => openBook(book.id)}>
-                  <div className="card-image">
-                    <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
-                    <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
-                    <button
-                      className="heart active"
-                      aria-label="取消收藏"
-                      aria-pressed="true"
-                      onClick={(event) => toggleFavorite(book.id, event)}
-                    >
-                      <Heart size={18} fill="currentColor" />
-                    </button>
-                  </div>
-                  <div className="card-body">
-                    {cardContextLabel(book) && (
-                      <span className="course-tag">{cardContextLabel(book)}</span>
-                    )}
-                    <h3>{book.title}</h3>
-                    <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
-                    {book.listingType === "book" && textbookMetadata(book).length > 0 && (
-                      <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
-                    )}
-                    <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
-                  </div>
+                <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id}>
+                  <button
+                    type="button"
+                    className="book-card-main"
+                    onClick={() => openBook(book.id)}
+                    aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
+                  >
+                    <div className="card-image">
+                      <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
+                      <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
+                    </div>
+                    <div className="card-body">
+                      {cardContextLabel(book) && (
+                        <span className="course-tag">{cardContextLabel(book)}</span>
+                      )}
+                      <h3>{book.title}</h3>
+                      <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
+                      {book.listingType === "book" && textbookMetadata(book).length > 0 && (
+                        <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
+                      )}
+                      <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
+                    </div>
+                  </button>
+                  <button type="button"
+                    className="heart active"
+                    aria-label="取消收藏"
+                    aria-pressed="true"
+                    onClick={(event) => toggleFavorite(book.id, event)}
+                  >
+                    <Heart size={18} fill="currentColor" />
+                  </button>
                 </article>
               ))}
               {favoriteBooks.length === 0 && <EmptyDashboard text="你還沒有收藏任何課本" />}
@@ -3191,7 +3195,7 @@ export function MarketplaceApp() {
                 <h3>{item.userName}</h3>
                 <p>{item.message}</p>
                 <div className="report-actions">
-                  <button onClick={() => void resolveFeedback(item.id)}><Check size={16} />標記完成</button>
+                  <button type="button" onClick={() => void resolveFeedback(item.id)}><Check size={16} />標記完成</button>
                 </div>
               </article>
             ))}
@@ -3222,10 +3226,10 @@ export function MarketplaceApp() {
                 <p><b>{reportReasonLabels[report.reason]}</b>{report.details ? `：${report.details}` : ""}</p>
                 <small>檢舉人：{report.reporterName}</small>
                 <div className="report-actions">
-                  <button onClick={() => void resolveReport(report.id, "dismiss")}><X size={16} />駁回</button>
-                  <button onClick={() => void resolveReport(report.id, "resolve")}><Check size={16} />僅記錄並結案</button>
-                  {report.targetType === "book" && <button className="warn" onClick={() => void resolveReport(report.id, "hide_book")}><EyeOff size={16} />隱藏商品</button>}
-                  {currentUser.role === "admin" && <button className="danger" onClick={() => void resolveReport(report.id, "suspend_user")}><Ban size={16} />停權會員</button>}
+                  <button type="button" onClick={() => void resolveReport(report.id, "dismiss")}><X size={16} />駁回</button>
+                  <button type="button" onClick={() => void resolveReport(report.id, "resolve")}><Check size={16} />僅記錄並結案</button>
+                  {report.targetType === "book" && <button type="button" className="warn" onClick={() => void resolveReport(report.id, "hide_book")}><EyeOff size={16} />隱藏商品</button>}
+                  {currentUser.role === "admin" && <button type="button" className="danger" onClick={() => void resolveReport(report.id, "suspend_user")}><Ban size={16} />停權會員</button>}
                 </div>
               </article>
             ))}
@@ -3256,8 +3260,8 @@ export function MarketplaceApp() {
                     </dl>
                     <div className="moderation-description">{book.description}</div>
                     <div className="moderation-actions">
-                      <button className="accept" onClick={() => void reviewBook(book.id, "approved")}><Check size={17} />通過上架</button>
-                      <button className="reject" onClick={() => void reviewBook(book.id, "rejected")}><X size={17} />拒絕</button>
+                      <button type="button" className="accept" onClick={() => void reviewBook(book.id, "approved")}><Check size={17} />通過上架</button>
+                      <button type="button" className="reject" onClick={() => void reviewBook(book.id, "rejected")}><X size={17} />拒絕</button>
                     </div>
                   </div>
                 </article>
@@ -3274,7 +3278,7 @@ export function MarketplaceApp() {
                   <div className="permission-row" key={book.id}>
                     <span className="avatar"><EyeOff size={17} /></span>
                     <div><b>{book.title}</b><small>賣家：{profile(book.sellerId)?.name || "使用者"}</small></div>
-                    <button className="restore-button" onClick={() => void restoreBook(book.id)}><RotateCcw size={15} />恢復顯示</button>
+                    <button type="button" className="restore-button" onClick={() => void restoreBook(book.id)}><RotateCcw size={15} />恢復顯示</button>
                   </div>
                 ))}
               </div>
@@ -3300,8 +3304,8 @@ export function MarketplaceApp() {
                     </select>
                     {user.id !== currentUser.id && user.role !== "admin" && (
                       user.accountStatus === "suspended"
-                        ? <button className="restore-button" onClick={() => void changeAccountStatus(user.id, "active")}><RotateCcw size={15} />解除停權</button>
-                        : <button className="suspend-button" onClick={() => void changeAccountStatus(user.id, "suspended")}><Ban size={15} />停權</button>
+                        ? <button type="button" className="restore-button" onClick={() => void changeAccountStatus(user.id, "active")}><RotateCcw size={15} />解除停權</button>
+                        : <button type="button" className="suspend-button" onClick={() => void changeAccountStatus(user.id, "suspended")}><Ban size={15} />停權</button>
                     )}
                   </div>
                 ))}
@@ -3318,9 +3322,9 @@ export function MarketplaceApp() {
         <div className="footer-meta">
           <span>{isSecondhandMode ? "虎科校園二手交流平台" : "虎科校園課本交流平台"} · 2026</span>
           <nav aria-label="網站政策">
-            <a href="/privacy">隱私權</a>
-            <a href="/terms">使用條款</a>
-            <a href="/safety">交易安全</a>
+            <Link href="/privacy">隱私權</Link>
+            <Link href="/terms">使用條款</Link>
+            <Link href="/safety">交易安全</Link>
           </nav>
         </div>
       </footer>
@@ -3487,7 +3491,15 @@ function ModalShell({
   }, []);
 
   return (
-    <div className="modal-backdrop" onClick={closeOnBackdrop ? onClose : undefined}>
+    <div className="modal-backdrop">
+      {closeOnBackdrop && (
+        <button
+          type="button"
+          className="modal-backdrop-dismiss"
+          aria-label="關閉視窗"
+          onClick={onClose}
+        />
+      )}
       <div
         ref={dialogRef}
         className="modal"
@@ -3495,7 +3507,6 @@ function ModalShell({
         aria-modal="true"
         aria-labelledby={headingId}
         tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
       >
         <button className="modal-close" type="button" onClick={onClose} aria-label="關閉視窗"><X aria-hidden="true" /></button>
         <div className="modal-heading">
@@ -3533,7 +3544,6 @@ function ActionDialog({
           <label>
             {request.inputLabel}
             <textarea
-              autoFocus
               rows={4}
               value={value}
               minLength={request.minLength || undefined}
@@ -3597,7 +3607,6 @@ function AdminOtpModal({
           <label>
             管理員驗證碼
             <input
-              autoFocus
               className="otp-input"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -3674,8 +3683,8 @@ function StudentVerificationCard({
         </div>
         <textarea className="ocr-text" readOnly value={verification.ocrText || "OCR 未讀到可用文字，請直接人工檢查圖片。"} aria-label="學生證 OCR 文字" />
         <div className="report-actions">
-          <button className="accept" onClick={() => void onReview(verification.id, "approved")}><Check size={16} />通過學生證</button>
-          <button className="reject" onClick={() => void onReview(verification.id, "rejected")}><X size={16} />拒絕</button>
+          <button type="button" className="accept" onClick={() => void onReview(verification.id, "approved")}><Check size={16} />通過學生證</button>
+          <button type="button" className="reject" onClick={() => void onReview(verification.id, "rejected")}><X size={16} />拒絕</button>
         </div>
       </div>
     </article>
@@ -3831,7 +3840,7 @@ function ProfileModal({
           <span>免費 OCR 只會幫管理員標記線索，最後仍由人工通過或拒絕。</span>
         </div>
         <label className="student-id-upload">
-          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectStudentIdImage(event)} />
+          <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="選擇學生證圖片" onChange={(event) => void selectStudentIdImage(event)} />
           <ImagePlus size={20} />
           <span>{studentIdFile ? studentIdFile.name : "選擇學生證圖片"}</span>
         </label>
@@ -4076,7 +4085,6 @@ function LoginModal({
               <label>
                 Email
                 <input
-                  autoFocus
                   type="email"
                   inputMode="email"
                   autoComplete="email"
@@ -4114,7 +4122,6 @@ function LoginModal({
               <label>
                 姓名
                 <input
-                  autoFocus
                   type="text"
                   autoComplete="name"
                   minLength={1}
@@ -4182,7 +4189,6 @@ function LoginModal({
               <label>
                 驗證碼
                 <input
-                  autoFocus
                   className="otp-input"
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -4216,7 +4222,6 @@ function LoginModal({
               <label>
                 Email
                 <input
-                  autoFocus
                   type="email"
                   inputMode="email"
                   autoComplete="email"
@@ -4295,7 +4300,6 @@ function ResetPasswordModal({
           <label>
             新密碼
             <input
-              autoFocus
               type="password"
               autoComplete="new-password"
               minLength={8}
@@ -4926,6 +4930,7 @@ function TradeChatPanel({
   const [error, setError] = useState("");
   const actionDialog = useActionDialog();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
   const otherUserId = conversation.buyerId === currentUserId ? conversation.sellerId : conversation.buyerId;
   const isSeller = conversation.sellerId === currentUserId;
   const canRespondToRequest = Boolean(
@@ -4939,14 +4944,6 @@ function TradeChatPanel({
     if (!supabase) return;
     const client = supabase;
     let active = true;
-    setError("");
-    setLoading(true);
-    setMessages([]);
-    setImageUrls({});
-    setSafetyMenuOpen(false);
-    setShowQuickPhrases(true);
-    setHasOlderMessages(false);
-    setMessageCursor(null);
     void fetchTradeMessages(client, conversation.id)
       .then(async (page) => {
         if (!active) return;
@@ -5038,7 +5035,8 @@ function TradeChatPanel({
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase || (!draft.trim() && files.length === 0)) return;
+    if (!supabase || sendingRef.current || (!draft.trim() && files.length === 0)) return;
+    sendingRef.current = true;
     const body = draft.trim();
     setDraft("");
     setError("");
@@ -5064,6 +5062,7 @@ function TradeChatPanel({
       setDraft(body);
       setError(sendError instanceof Error ? sendError.message : "訊息傳送失敗");
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
@@ -5172,7 +5171,6 @@ function TradeChatPanel({
 
   function applyQuickPhrase(phrase: string) {
     setDraft(phrase);
-    setShowQuickPhrases(false);
   }
 
   async function respondFromChat(status: "accepted" | "rejected") {
@@ -5292,9 +5290,9 @@ function TradeChatPanel({
         <form className="trade-chat-compose" onSubmit={(event) => void submitMessage(event)}>
           <label className="chat-image-picker" title="加入圖片">
             <ImagePlus size={18} />
-            <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 5))} />
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple aria-label="加入聊天圖片" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 5))} />
           </label>
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="輸入訊息..." maxLength={500} />
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="輸入訊息..." maxLength={500} aria-label="輸入聊天訊息" />
           <button type="submit" disabled={(!draft.trim() && files.length === 0) || sending}>{sending ? "傳送中" : "送出"}</button>
           {files.length > 0 && <small className="selected-images">已選擇 {files.length} 張圖片</small>}
         </form>
@@ -5304,7 +5302,15 @@ function TradeChatPanel({
           <button type="button" className="chat-image-lightbox-close" onClick={() => setEnlargedImageUrl(null)} aria-label="關閉圖片">
             <X size={24} />
           </button>
-          <img src={enlargedImageUrl} alt="放大的聊聊圖片" onMouseDown={(event) => event.stopPropagation()} />
+          <button
+            type="button"
+            className="chat-image-lightbox-image"
+            aria-label="放大的聊聊圖片"
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <img src={enlargedImageUrl} alt="" />
+          </button>
         </div>
       )}
       {actionDialog.dialog && (

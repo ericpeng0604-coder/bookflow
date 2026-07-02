@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260701-chat-listing-order-ux",
-  "taskTitle": "chat-listing-order-ux",
-  "baseCommit": "938aea320fe0353fecdda0aab761bb2f71a63a19",
-  "updatedAt": "2026-07-01T11:13:14.843Z",
+  "taskId": "20260702-20260702-homepage-visual-polish-homepage",
+  "taskTitle": "20260702-homepage-visual-polish homepage visual polish production release",
+  "baseCommit": "ab30bd0e158c2b0ab2a0c813c435c8ef29c06cf6",
+  "updatedAt": "2026-07-02T07:38:54.693Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260701-1113-20260701-chat-listing-order-ux.md"
+  "historyFile": ".ai/history/20260702-0738-20260702-20260702-homepage-visual-polish.md"
 }

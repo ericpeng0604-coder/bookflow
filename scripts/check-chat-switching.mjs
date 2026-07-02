@@ -10,8 +10,8 @@ assert.match(
 );
 assert.match(
   app,
-  /let active = true;[\s\S]*setMessages\(\[\]\);[\s\S]*setImageUrls\(\{\}\);/,
-  "switching conversations must clear the previous conversation content",
+  /const \[messages, setMessages\] = useState<TradeMessage\[\]>\(\[\]\);[\s\S]*const \[imageUrls, setImageUrls\] = useState<Record<string, string>>\(\{\}\);/,
+  "newly mounted chat panels must start with empty conversation content",
 );
 assert.match(
   app,
