@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260702-homepage-review-typography-and-listing-l",
-  "taskTitle": "homepage review typography and listing layout release",
-  "baseCommit": "eb25c6c159b65e6e458bb01c84582195d4288458",
-  "updatedAt": "2026-07-02T08:48:20.149Z",
+  "owner": "codex",
+  "status": "handoff",
+  "taskId": "20260702-home-card-alignment-release",
+  "taskTitle": "homepage card alignment release",
+  "baseCommit": "2aff270826e59a8d4dc382e64f435dda2eac6939",
+  "updatedAt": "2026-07-02T09:25:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260702-0848-20260702-homepage-review-typography-and-.md"
+  "historyFile": ".ai/history/20260702-1725-home-card-alignment-release.md"
 }
