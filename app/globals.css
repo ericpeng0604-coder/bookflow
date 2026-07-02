@@ -1965,7 +1965,7 @@ footer,
   max-width: 610px;
   margin: 0 0 14px;
   font-family: "Playfair Display", Georgia, "Times New Roman", "Noto Sans TC", serif;
-  font-size: clamp(54px, 5.25vw, 80px);
+  font-size: clamp(46px, 4.45vw, 68px);
   font-weight: 800;
   line-height: 1.01;
   letter-spacing: 0;
@@ -2083,7 +2083,7 @@ footer,
   }
 
   .home-page .hero .hero-message h1 {
-    font-size: clamp(39px, 12vw, 46px);
+    font-size: clamp(33px, 10vw, 39px);
     line-height: 1.04;
   }
 
@@ -2124,7 +2124,7 @@ footer,
   max-width: 610px;
   margin: 0 0 14px;
   font-family: "Playfair Display", Georgia, "Times New Roman", "Noto Sans TC", serif;
-  font-size: clamp(54px, 5.25vw, 80px);
+  font-size: clamp(46px, 4.45vw, 68px);
   font-weight: 800;
   line-height: 1.01;
   letter-spacing: 0;
@@ -2296,7 +2296,7 @@ footer,
 }
 
 .home-page .hero .hero-message h1 {
-  font-size: clamp(54px, 5.25vw, 80px);
+  font-size: clamp(46px, 4.45vw, 68px);
 }
 
 .home-page .hero .hero-message p,
@@ -2309,8 +2309,8 @@ footer,
 }
 
 .home-page .hero-search button {
-  min-height: 48px;
-  padding: 0 24px;
+  min-height: 46px;
+  padding: 0 22px;
   border-radius: 9px;
 }
 
@@ -2347,6 +2347,7 @@ footer,
 
 .home-page .hero .hero-copy.hero-search-panel .hero-message p {
   color: #52665f;
+  font-size: 14px;
 }
 
 /* Homepage micro-adjustments requested after visual review. */
@@ -2374,7 +2375,7 @@ footer,
 }
 
 .home-page .hero .hero-message h1 {
-  font-size: clamp(54px, 5.25vw, 80px);
+  font-size: clamp(46px, 4.45vw, 68px);
 }
 
 .home-page .hero .hero-message p,
@@ -2478,7 +2479,7 @@ footer,
   margin: 0;
   color: #0f3c2e;
   font-family: "Playfair Display", "Noto Sans TC", serif;
-  font-size: clamp(54px, 5.25vw, 80px);
+  font-size: clamp(46px, 4.45vw, 68px);
   font-weight: 800;
   line-height: 1.01;
   letter-spacing: 0;
@@ -2684,22 +2685,22 @@ footer,
 
 .home-page .hero-search input {
   width: 100%;
-  min-height: 54px;
+  min-height: 46px;
   border: 0;
   outline: 0;
   background: transparent;
   color: #173d35;
-  font-size: 19px;
+  font-size: 15px;
 }
 
 .home-page .hero-search button {
-  min-height: 56px;
-  padding: 0 30px;
+  min-height: 46px;
+  padding: 0 22px;
   border: 0;
   border-radius: 9px;
   background: #1e7964;
   color: #fff;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 900;
   cursor: pointer;
 }
@@ -2710,7 +2711,7 @@ footer,
   flex-wrap: wrap;
   gap: 18px 28px;
   color: #6b7d76;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -2734,11 +2735,11 @@ footer,
 }
 
 .home-page .market {
-  width: min(1380px, calc(100% - 48px));
-  max-width: 1380px;
+  width: 100%;
+  max-width: 1240px;
   min-height: 0;
-  margin: 56px auto 86px;
-  padding: 0;
+  margin: auto;
+  padding: 74px 28px 90px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -2761,9 +2762,9 @@ footer,
 }
 
 .home-page .section-heading h2 {
-  margin: 10px 0 0;
+  margin: 7px 0 0;
   color: #123d34;
-  font-size: clamp(30px, 3vw, 42px);
+  font-size: 30px;
   line-height: 1.15;
 }
 
@@ -2784,68 +2785,128 @@ footer,
 
 .home-page .filters,
 .theme-secondhand .home-page .filters {
-  margin-bottom: 20px;
-  padding: 10px;
-  border: 1px solid rgba(221, 225, 216, .82);
+  margin-bottom: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
   border-radius: 13px;
   display: grid;
-  grid-template-columns: minmax(420px, 3fr) minmax(180px, 1fr) minmax(180px, 1fr);
-  gap: 12px;
-  background: rgba(255, 255, 255, .62);
+  grid-template-columns: 1fr 240px 190px;
+  gap: 10px;
+  background: #f8faf7;
   box-shadow: none;
 }
 
 .home-page .filters label {
-  min-height: 50px;
-  border: 1px solid rgba(221, 225, 216, .82);
-  border-radius: 9px;
-  background: #fff;
+  min-height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--muted);
 }
 
 .home-page .filters label:nth-of-type(2) {
-  background: #fff;
-  color: #123d34;
+  background: white;
+  color: var(--ink);
 }
 
 .home-page .filters label:nth-of-type(2) select {
-  color: #123d34;
+  color: var(--ink);
 }
 
 .home-page .filters input,
 .home-page .filters select {
-  min-height: 48px;
-  color: #123d34;
-  font-size: 16px;
-}
-
-.home-page .result-line {
-  margin: 0 0 18px;
-  color: #63766f;
+  min-height: 44px;
+  color: var(--ink);
   font-size: 14px;
 }
 
+.home-page .result-line {
+  margin: 20px 2px;
+  color: #63766f;
+  font-size: 13px;
+}
+
 .home-page .book-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 22px;
+  min-height: 540px;
+}
+
+.home-page .book-card,
+.home-page .secondhand-card {
+  border-color: var(--line);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.home-page .book-card:hover,
+.home-page .secondhand-card:hover {
+  transform: translateY(-5px);
+  border-color: #bfd2ca;
+  box-shadow: var(--shadow);
 }
 
 .home-page .card-image,
 .home-page .secondhand-card .card-image {
-  height: 188px;
+  height: 215px;
+  background: var(--cream);
+}
+
+.home-page .card-body {
+  padding: 17px;
+}
+
+.home-page .course-tag {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: #edf6f2;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .home-page .card-body h3 {
-  min-height: 54px;
+  min-height: auto;
+  margin: 12px 0 5px;
   font-family: "Noto Sans TC", sans-serif;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 900;
+  line-height: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-page .card-body > p {
+  display: block;
+  margin: 0 0 15px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.home-page .textbook-meta {
+  display: block;
+}
+
+.home-page .card-meta {
+  display: flex;
+}
+
+.home-page .card-footer {
+  margin-top: 12px;
 }
 
 .home-page .card-footer strong {
-  color: #2b3f38;
+  color: var(--orange);
   font-family: "Noto Sans TC", sans-serif;
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 900;
+}
+
+.home-page .card-footer small {
+  color: #96a19d;
+  font-size: 10px;
 }
 
 @media (max-width: 1080px) {
@@ -2895,8 +2956,9 @@ footer,
   }
 
   .home-page .market {
-    width: calc(100% - 24px);
-    margin-top: 42px;
+    width: 100%;
+    margin: auto;
+    padding: 55px 17px;
   }
 
   .home-page .section-heading {
@@ -2906,6 +2968,11 @@ footer,
 
   .home-page .book-grid {
     grid-template-columns: 1fr;
+  }
+
+  .home-page .card-image,
+  .home-page .secondhand-card .card-image {
+    height: 260px;
   }
 }
 
