@@ -2669,9 +2669,12 @@ export function MarketplaceApp() {
                       <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
                     </div>
                     <div className="card-body">
-                      {cardContextLabel(book) && (
-                        <span className="course-tag">{cardContextLabel(book)}</span>
-                      )}
+                      <span
+                        className={`course-tag ${cardContextLabel(book) ? "" : "is-empty"}`}
+                        aria-hidden={cardContextLabel(book) ? undefined : true}
+                      >
+                        {cardContextLabel(book) || "\u00a0"}
+                      </span>
                       <h3>{book.title}</h3>
                       <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
                       {book.listingType === "book" && textbookMetadata(book).length > 0 && (

@@ -2854,9 +2854,14 @@ footer,
 
 .home-page .card-body {
   padding: 17px;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
 }
 
 .home-page .course-tag {
+  align-self: flex-start;
+  min-height: 27px;
   padding: 4px 8px;
   border: 0;
   border-radius: 4px;
@@ -2866,8 +2871,12 @@ footer,
   font-weight: 700;
 }
 
+.home-page .course-tag.is-empty {
+  visibility: hidden;
+}
+
 .home-page .card-body h3 {
-  min-height: auto;
+  min-height: 28px;
   margin: 12px 0 5px;
   font-family: "Noto Sans TC", sans-serif;
   font-size: 17px;
@@ -2880,21 +2889,26 @@ footer,
 
 .home-page .card-body > p {
   display: block;
+  min-height: 37px;
   margin: 0 0 15px;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.55;
 }
 
 .home-page .textbook-meta {
   display: block;
+  min-height: 40px;
 }
 
 .home-page .card-meta {
   display: flex;
+  min-height: 37px;
+  align-items: flex-end;
 }
 
 .home-page .card-footer {
-  margin-top: 12px;
+  margin-top: auto;
 }
 
 .home-page .card-footer strong {
