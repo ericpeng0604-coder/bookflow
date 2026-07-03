@@ -6,6 +6,7 @@ const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 const homeCss = readFileSync(new URL("../app/home-a11y.css", import.meta.url), "utf8");
 const globalCss = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
+const navigation = readFileSync(new URL("../components/marketplace/navigation-state.ts", import.meta.url), "utf8");
 
 const homeBlock = app.slice(app.indexOf('{view === "home" && ('), app.indexOf('{view === "book" && selectedBook'));
 
@@ -30,7 +31,8 @@ const checks = [
   ["book list semantics", homeBlock.includes("<ul") && homeBlock.includes("<li")],
   ["empty state live region", homeBlock.includes('className="empty"') && homeBlock.includes("aria-live")],
   ["load more busy state", homeBlock.includes("aria-busy={marketplaceLoading}")],
-  ["current view survives browser refresh", app.includes('params.set("view", "dashboard")') && app.includes('params.set("tab", dashboardTab)') && app.includes('params.set("conversation", expandedConversationId)')],
+  ["current view survives browser refresh", navigation.includes('params.set("view", "dashboard")') && navigation.includes('params.set("tab", dashboardTab)') && navigation.includes('params.set("conversation", expandedConversationId)')],
+  ["route restore avoids stale URL overwrite", navigation.includes("skipNextUrlWriteRef.current = true") && navigation.includes("skipNextUrlWriteRef.current = false")],
   ["current site hero visual", homeBlock.includes('className="hero-art hero-reference-art"')],
   ["focus styles for home cards", homeCss.includes(".home-page .book-card-main:focus-visible")],
   ["contrast tweak for muted home text", homeCss.includes(".home-page .result-line")],

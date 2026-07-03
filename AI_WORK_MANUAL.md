@@ -53,11 +53,13 @@ filters, and displayed text.
 **Cause:** Text encoding was not inspected after generating or rewriting files.
 
 **Detection:** Review every added or modified text file, search for replacement
-characters or suspicious byte-decoding patterns, and run type checks/builds.
+characters or suspicious byte-decoding patterns, inspect diffs after any
+scripted rewrite that touches Chinese text, and run type checks/builds.
 
 **Prevention rule:** Preserve the repository's encoding, use UTF-8 for files
-containing Chinese text, inspect rendered strings, and fix all corruption before
-reporting completion.
+containing Chinese text, do not rewrite mixed Chinese/TypeScript files with
+PowerShell `Get-Content`/`Set-Content` default encoding, inspect rendered
+strings, and fix all corruption before reporting completion.
 
 ### LESSON-003: A load-test script is not a capacity result
 

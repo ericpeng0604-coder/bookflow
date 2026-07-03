@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260704-mobile-marketplace-chat-ux",
-  "taskTitle": "mobile marketplace and chat UX release",
-  "baseCommit": "9e8b1eb702e9c3734502b79b71d4ad48f2c15974",
-  "updatedAt": "2026-07-04T00:00:00+08:00",
+  "taskId": "20260704-marketplace-state-refactor",
+  "taskTitle": "marketplace navigation state refactor",
+  "baseCommit": "3c68d05adb0f7151ea2befdf19175e17b456297a",
+  "updatedAt": "2026-07-04T01:32:54+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260704-mobile-marketplace-chat-ux.md"
+  "historyFile": ".ai/history/20260704-marketplace-state-refactor.md"
 }

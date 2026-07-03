@@ -38,6 +38,10 @@ import { FormEvent, type MouseEvent, useCallback, useEffect, useId, useMemo, use
 import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-data";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import {
+  type DashboardTab,
+  useMarketplaceNavigation,
+} from "@/components/marketplace/navigation-state";
+import {
   BOOK_IMAGE_CACHE_CONTROL,
   compressBookImage,
   extractStoragePath,
@@ -129,8 +133,6 @@ const listingDraftStorageKey = (
   bookId?: string,
 ) => `bookflow-listing-draft-v1:${userId}:${bookId || `new-${listingType}`}`;
 
-type View = "home" | "book" | "dashboard" | "admin";
-type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites";
 type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | "feedback" | null;
 
 type Store = {
@@ -400,8 +402,6 @@ export function MarketplaceApp() {
   const [ready, setReady] = useState(false);
   const [online, setOnline] = useState(true);
   const actionDialog = useActionDialog();
-  const [view, setView] = useState<View>("home");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [listingType, setListingType] = useState<ListingType>("book");
   const [itemCategory, setItemCategory] = useState(ALL_ITEM_CATEGORIES);
@@ -409,7 +409,6 @@ export function MarketplaceApp() {
   const [maxPrice, setMaxPrice] = useState(NO_MAX_PRICE);
   const [modal, setModal] = useState<Modal>(null);
   const [listingFormType, setListingFormType] = useState<ListingType>("book");
-  const [dashboardTab, setDashboardTab] = useState<DashboardTab>("listings");
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [editingRequest, setEditingRequest] = useState<PurchaseRequest | null>(null);
   const [toast, setToast] = useState("");
@@ -443,7 +442,6 @@ export function MarketplaceApp() {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => new Set());
   const [favoriteBookCache, setFavoriteBookCache] = useState<Book[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [pendingReviews, setPendingReviews] = useState<Book[]>([]);
   const [hiddenBooks, setHiddenBooks] = useState<Book[]>([]);
@@ -461,6 +459,29 @@ export function MarketplaceApp() {
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
   const debouncedQuery = useDebouncedValue(query, 300);
+  const currentUser = store.currentUser;
+  const {
+    dashboardTab,
+    expandedConversationId,
+    openBookRoute,
+    openDashboard: showDashboard,
+    returnToMarketRoute,
+    selectedId,
+    setDashboardTab,
+    setExpandedConversationId,
+    setSelectedId,
+    setView,
+    view,
+  } = useMarketplaceNavigation({
+    ready,
+    listingType,
+    currentUser,
+    conversations,
+    lastChatStorageKey,
+    onListingTypeChange: setListingType,
+    onBookRouteChange: clearBookDetailRouteState,
+    onConversationRoute: openConversation,
+  });
 
   const ensureAdminOtp = useCallback(async (email: string, force = false) => {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
@@ -695,11 +716,16 @@ export function MarketplaceApp() {
   }, [loadMarketplaceBooks, loadModerationPanel, store.currentUser]);
 
   const openDashboard = useCallback(() => {
-    setView("dashboard");
+    showDashboard();
     if (view === "dashboard" && store.currentUser) {
       void loadDashboardWorkspace(store.currentUser, dashboardTab);
     }
-  }, [dashboardTab, loadDashboardWorkspace, store.currentUser, view]);
+  }, [dashboardTab, loadDashboardWorkspace, showDashboard, store.currentUser, view]);
+
+  const openDashboardTab = useCallback((tab: DashboardTab) => {
+    showDashboard();
+    setDashboardTab(tab);
+  }, [setDashboardTab, showDashboard]);
 
   useEffect(() => {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -869,89 +895,6 @@ export function MarketplaceApp() {
   }, [store.currentUser]);
 
   useEffect(() => {
-    if (!ready) return;
-    const params = new URLSearchParams(window.location.search);
-    const targetView = params.get("view");
-    const targetTab = params.get("tab");
-    const targetConversation = params.get("conversation");
-    const targetBook = params.get("book");
-    const targetMarket = params.get("market");
-    if (targetMarket === "secondhand" || targetMarket === "book") {
-      setListingType(targetMarket);
-    }
-    if (targetView === "dashboard" && store.currentUser) {
-      setView("dashboard");
-      if (["listings", "chats", "requests", "received", "favorites"].includes(targetTab || "")) {
-        setDashboardTab(targetTab as DashboardTab);
-      }
-      if (targetConversation) {
-        setExpandedConversationId(targetConversation);
-        setConversations((previous) => previous.map((conversation) =>
-          conversation.id === targetConversation ? { ...conversation, unreadCount: 0 } : conversation,
-        ));
-        if (supabase) {
-          void markConversationRead(supabase, targetConversation).catch(() => {
-            setToast("無法更新聊聊已讀狀態，請重新整理後再試");
-          });
-        }
-      }
-    } else if (targetView === "book" && targetBook) {
-      setSelectedId(targetBook);
-      setView("book");
-    }
-  }, [ready, store.currentUser]);
-
-  useEffect(() => {
-    if (!ready) return;
-    const restorePublicNavigation = () => {
-      const params = new URLSearchParams(window.location.search);
-      const targetMarket = params.get("market");
-      if (targetMarket === "book" || targetMarket === "secondhand") {
-        setListingType(targetMarket);
-      }
-      const targetBook = params.get("book");
-      if (params.get("view") === "book" && targetBook) {
-        setSelectedId(targetBook);
-        setDetailBook(null);
-        setView("book");
-      } else if (params.get("view") === "dashboard" && store.currentUser) {
-        const targetTab = params.get("tab");
-        setView("dashboard");
-        if (["listings", "chats", "requests", "received", "favorites"].includes(targetTab || "")) {
-          setDashboardTab(targetTab as DashboardTab);
-        }
-        setExpandedConversationId(params.get("conversation"));
-      } else if (params.get("view") !== "dashboard") {
-        setSelectedId(null);
-        setDetailBook(null);
-        setView("home");
-      }
-    };
-    window.addEventListener("popstate", restorePublicNavigation);
-    return () => window.removeEventListener("popstate", restorePublicNavigation);
-  }, [ready, store.currentUser]);
-
-  useEffect(() => {
-    if (!ready) return;
-    const params = new URLSearchParams();
-    params.set("market", listingType);
-    if (view === "book" && selectedId) {
-      params.set("view", "book");
-      params.set("book", selectedId);
-    } else if (view === "dashboard" && store.currentUser) {
-      params.set("view", "dashboard");
-      params.set("tab", dashboardTab);
-      if (dashboardTab === "chats" && expandedConversationId) {
-        params.set("conversation", expandedConversationId);
-      }
-    }
-    const nextUrl = `/?${params.toString()}`;
-    if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
-      window.history.replaceState({}, "", nextUrl);
-    }
-  }, [dashboardTab, expandedConversationId, listingType, ready, selectedId, store.currentUser, view]);
-
-  useEffect(() => {
     if (!supabase || view !== "admin" || !store.currentUser) return;
     if (!["admin", "moderator"].includes(store.currentUser.role)) return;
     void loadModerationPanel(store.currentUser);
@@ -971,13 +914,6 @@ export function MarketplaceApp() {
     document.addEventListener("visibilitychange", refreshDashboardWhenVisible);
     return () => document.removeEventListener("visibilitychange", refreshDashboardWhenVisible);
   }, [dashboardTab, loadDashboardWorkspace, store.currentUser, view]);
-
-  useEffect(() => {
-    if (view !== "dashboard" || dashboardTab !== "chats" || expandedConversationId || !store.currentUser) return;
-    const lastChatId = window.localStorage.getItem(lastChatStorageKey(store.currentUser.id));
-    if (!lastChatId || !conversations.some((conversation) => conversation.id === lastChatId)) return;
-    setExpandedConversationId(lastChatId);
-  }, [conversations, dashboardTab, expandedConversationId, store.currentUser, view]);
 
   useEffect(() => {
     if (!supabase || !selectedId || view !== "book") return;
@@ -1138,7 +1074,6 @@ export function MarketplaceApp() {
     ?? requestBooks.find((book) => book.id === selectedId)
     ?? store.books.find((book) => book.id === selectedId)
     ?? null;
-  const currentUser = store.currentUser;
   const selectedBookActiveRequest = currentUser && selectedBook
     ? store.requests.find((request) =>
       request.bookId === selectedBook.id
@@ -1161,37 +1096,27 @@ export function MarketplaceApp() {
       .catch(() => undefined);
   }, [selectedBook, view, store.profiles]);
 
+  function clearBookDetailRouteState() {
+    setDetailBook(null);
+    setBookDetailMissing(false);
+    setDetailMenuOpen(false);
+  }
+
   function openBook(id: string) {
     const target = filteredBooks.find((book) => book.id === id)
       ?? myBooks.find((book) => book.id === id)
       ?? requestBooks.find((book) => book.id === id);
-    setSelectedId(id);
-    setDetailBook(null);
-    setBookDetailMissing(false);
-    setDetailMenuOpen(false);
-    setView("book");
-    const params = new URLSearchParams();
-    params.set("view", "book");
-    params.set("book", id);
-    params.set("market", target?.listingType || listingType);
-    window.history.pushState({}, "", `/?${params.toString()}`);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    openBookRoute(id, target?.listingType || listingType);
   }
 
   function returnToMarket() {
-    setView("home");
-    setSelectedId(null);
-    setDetailBook(null);
-    setBookDetailMissing(false);
-    const params = new URLSearchParams();
-    params.set("market", listingType);
-    window.history.pushState({}, "", `/?${params.toString()}`);
+    returnToMarketRoute();
   }
 
   function switchListingType(nextType: ListingType) {
     setListingType(nextType);
     setSelectedId(null);
-    setDetailBook(null);
+    clearBookDetailRouteState();
     setQuery("");
     setImageSearchActive(false);
     setImageSearchResultCount(null);
@@ -1200,11 +1125,6 @@ export function MarketplaceApp() {
       setItemCategory(ALL_ITEM_CATEGORIES);
     } else {
       setDepartment(departments[0]);
-    }
-    if (view === "home") {
-      const params = new URLSearchParams();
-      params.set("market", nextType);
-      window.history.replaceState({}, "", `/?${params.toString()}`);
     }
   }
 
@@ -1628,8 +1548,7 @@ export function MarketplaceApp() {
         );
         setEditingBook(null);
         setModal(null);
-        setView("dashboard");
-        setDashboardTab("listings");
+        openDashboardTab("listings");
         setToast(editingBook
           ? "修改已送回審核"
           : "刊登已送出。這次上架也已確認你目前公開的課本仍在販售，30 天後會再提醒。");
@@ -1663,8 +1582,7 @@ export function MarketplaceApp() {
       );
       setEditingBook(null);
       setModal(null);
-      setView("dashboard");
-      setDashboardTab("listings");
+      openDashboardTab("listings");
       setToast(editingBook ? "刊登內容已更新" : "書籍刊登成功");
     } finally {
       bookSavingRef.current = false;
@@ -1889,8 +1807,7 @@ export function MarketplaceApp() {
       return;
     }
     await loadUserWorkspace(currentUser, "chats");
-    setView("dashboard");
-    setDashboardTab("chats");
+    openDashboardTab("chats");
     void openConversation(String(data));
   }
 
@@ -1904,8 +1821,7 @@ export function MarketplaceApp() {
       return;
     }
     await loadUserWorkspace(currentUser, "chats");
-    setView("dashboard");
-    setDashboardTab("chats");
+    openDashboardTab("chats");
     void openConversation(String(data));
   }
 
@@ -2329,43 +2245,35 @@ export function MarketplaceApp() {
     setDetailMenuOpen(false);
 
     if (notification.type === "request_created") {
-      setView("dashboard");
-      setDashboardTab("received");
+      openDashboardTab("received");
       return;
     }
     if (notification.type === "request_accepted" || notification.type === "request_rejected") {
-      setView("dashboard");
-      setDashboardTab("requests");
+      openDashboardTab("requests");
       return;
     }
     if (notification.type === "book_approved" || notification.type === "book_rejected" || notification.type === "book_hidden") {
-      setView("dashboard");
-      setDashboardTab("listings");
+      openDashboardTab("listings");
       return;
     }
     if (notification.type === "listing_lifecycle") {
-      setView("dashboard");
-      setDashboardTab("listings");
+      openDashboardTab("listings");
       return;
     }
     if (notification.type === "trade_completed") {
-      setView("dashboard");
-      setDashboardTab("listings");
+      openDashboardTab("listings");
       return;
     }
     if (notification.type === "trade_message") {
-      setView("dashboard");
-      setDashboardTab("chats");
+      openDashboardTab("chats");
       if (notification.conversationId) void openConversation(notification.conversationId);
       return;
     }
     if (notification.bookId) {
-      setSelectedId(notification.bookId);
-      setDetailBook(null);
-      setView("book");
+      openBookRoute(notification.bookId, listingType);
       return;
     }
-    setView("dashboard");
+    showDashboard();
   }
 
   async function toggleFavorite(bookId: string, event?: MouseEvent) {
