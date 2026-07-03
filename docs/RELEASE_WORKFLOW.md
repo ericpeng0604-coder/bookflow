@@ -61,6 +61,7 @@ workflow is approved. Application rollback does not reverse database changes.
 ```text
 npm run release:plan
 npm run release:doctor
+npm run dev:doctor
 npm run release:pr-status -- <pr> --wait
 npm run release:preflight
 npm run check:all
@@ -84,6 +85,12 @@ the active or bundled Node runtime for repo scripts and an npm-created
 `node_modules` for full local typecheck, lint, and build. Do not switch this
 npm-lock project to pnpm, add `packageManager`, or rewrite lockfiles merely to
 make local release checks run.
+
+`dev:doctor` adds checkout-specific cleanup diagnostics for local preview work:
+it reports Node/Next processes for the current checkout and the `.next` cache
+state. If repeated local previews or stale cache state are making verification
+slow, run `npm run dev:clean` before starting a fresh preview. This command is
+manual so normal `npm run dev` does not unexpectedly stop another process.
 
 `release:pr-status` prints GitHub required checks plus the BookFlow release
 gates: AI handoff, Release Readiness, Quality and build, Workflow syntax,
