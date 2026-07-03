@@ -2,69 +2,81 @@
 
 ## 目前目標
 
-部署站內以圖搜圖的後續修正：圖片搜尋完成後直接顯示排序後的書籍結果，不再把辨識出的文字寫進一般 marketplace 搜尋欄。
+Harden the BookFlow release workflow so future deployments use a fixed low-token path: readable handoff sections, explicit local release environment diagnostics, stale-branch preflight checks, and remote production proof through `/api/health/release` plus `release-smoke`.
 
 ## 重要背景與決策
 
-- Branch: `codex/image-search-no-query`.
-- Base: latest `origin/main` at `3452e3aed33c74d24a8f7e40c34056b959a578dc`.
-- 這次 runtime 變更只限於 marketplace image-search UI state。
-- 辨識文字仍保留在 dedicated image-search state，讓使用者知道系統用什麼內容比對。
+- Branch: `codex/release-flow-hardening`.
+- Base commit: `6a24bfa90ddd06a67729137fa30125194c32fa70`.
+- This is release tooling and documentation only; no product runtime behavior is changed.
 - No database migration is included.
 - No GitHub workflow or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
-- 原 active checkout 有 unrelated local edits 與舊 release branch，因此本次 release 使用最新 `origin/main` 的乾淨 worktree。
+- Keep the existing npm/package-lock workflow; do not introduce pnpm as a local workaround.
 
 ## 已完成
 
-- Removed `setQuery(finalPlan.displayQuery)` from the image-search success path.
-- Kept `setImageSearchQuery(finalPlan.displayQuery)` so recognized text remains in the image-search status area.
-- Added a regression assertion that rejects reintroducing `setQuery(finalPlan.displayQuery)`.
-- Updated `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/20260703-image-search-no-query.md`.
+- Added a shared handoff contract with the required `AI_HANDOFF.md` sections.
+- Rebuilt `scripts/ai-collaboration.mjs` with readable messages and a `draft` command.
+- Added `release:doctor` to report `node`, `npm`, lockfile, `node_modules`, and `.next` state.
+- Expanded `release:plan` and `release:preflight` with clearer low-token guidance and package-manager safeguards.
+- Updated release workflow documentation and added a release-flow regression check.
+- Added `LESSON-043` to `AI_WORK_MANUAL.md`.
 
 ## 剩餘工作
 
-1. Amend this handoff fix into the release commit.
-2. Rerun `node scripts/release-preflight.mjs`.
-3. Push `codex/image-search-no-query`.
-4. Open PR, wait for GitHub checks, merge to `main`.
-5. Run production smoke against `https://bookflow-green.vercel.app` with the exact merged SHA.
+1. Run local validation.
+2. Commit the scoped release-flow changes.
+3. Run `node scripts/release-preflight.mjs`.
+4. Open a PR and wait for required checks.
+5. Merge and verify the production release if the user asks to deploy this tooling change.
 
 ## 修改範圍
 
-- `components/marketplace-app.tsx`
-- `scripts/check-image-search.mjs`
+- `scripts/ai-collaboration.mjs`
+- `scripts/lib/handoff-contract.mjs`
+- `scripts/lib/release-environment.mjs`
+- `scripts/release-plan.mjs`
+- `scripts/release-preflight.mjs`
+- `scripts/release-doctor.mjs`
+- `scripts/check-release-flow.mjs`
+- `scripts/run-project-checks.mjs`
+- `.ai/templates/handoff.md`
+- `docs/RELEASE_WORKFLOW.md`
+- `AI_WORK_MANUAL.md`
+- `package.json`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260703-image-search-no-query.md`
+- `.ai/history/20260703-release-flow-hardening.md`
 
 ## 驗證結果
 
+- `node --check scripts/ai-collaboration.mjs scripts/release-plan.mjs scripts/release-preflight.mjs scripts/release-doctor.mjs scripts/check-release-flow.mjs scripts/lib/handoff-contract.mjs scripts/lib/release-environment.mjs`: passed.
+- `node -e "JSON.parse(...package.json...)"`: passed.
+- `node scripts/check-release-flow.mjs`: passed.
+- `node scripts/ai-collaboration.mjs check`: passed.
+- `node scripts/release-doctor.mjs`: passed.
+- `node scripts/release-plan.mjs`: passed.
 - `git diff --check`: passed.
-- `node --experimental-strip-types scripts/check-image-search.mjs`: passed.
-- `node scripts/run-project-checks.mjs`: passed, 25/25.
-- `tsc --noEmit`: passed.
-- `eslint .`: passed.
-- `next build`: passed.
-- First `node scripts/release-preflight.mjs`: failed only because `AI_HANDOFF.md` used non-required section names; this handoff rewrite addresses that.
-- GitHub PR checks: pending.
-- Production smoke: pending after merge.
+- `node scripts/check-workflows.mjs`: passed.
+- `node scripts/run-project-checks.mjs`: passed, 26/26.
+- `node scripts/release-preflight.mjs`: passed after commit.
+- `tsc --noEmit`: passed using a temporary `node_modules` junction to the main checkout's npm-created dependency tree.
+- `eslint .`: passed using the same temporary dependency junction.
+- `next build`: passed using the same temporary dependency junction.
 
 ## 風險或阻礙
 
-- The bundled runtime exposes `node` but not `npm`, so local typecheck, lint, and build used a temporary `node_modules` junction to the main checkout's existing dependency tree. No dependency files or package-manager configuration are changed in this release.
-- GitHub/Vercel will still perform their own clean install and checks from `package-lock.json`.
-- There is no database or migration risk in this release.
+- The active original checkout has unrelated local edits, so this work is isolated in a clean worktree.
+- Local `npm` may be missing from PATH in Codex desktop; use the bundled Node runtime for repo scripts and preserve `package-lock.json`.
 
 ## 下一個 AI 的操作
 
-1. Amend the handoff rewrite into commit `9d1c1221b4c146e4383ae60de435c1caa69b3087`.
-2. Rerun `node scripts/release-preflight.mjs` and confirm it passes.
-3. Push the branch and open a PR.
-4. Merge after required checks pass.
-5. Verify production with `RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> node scripts/release-smoke.mjs`.
+1. Open a PR if the user wants this tooling change published.
+2. Merge after required checks pass.
+3. Verify production with `/api/health/release` and `release-smoke` if the user asks to deploy this tooling release.
 
 ## 最後基準 Commit
 
-- Base commit: `3452e3aed33c74d24a8f7e40c34056b959a578dc`.
-- Current implementation commit before final amend: `9d1c1221b4c146e4383ae60de435c1caa69b3087`.
+- Base commit: `6a24bfa90ddd06a67729137fa30125194c32fa70`.
+- Current implementation commit before final amend: pending.

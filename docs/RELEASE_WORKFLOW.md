@@ -60,6 +60,7 @@ workflow is approved. Application rollback does not reverse database changes.
 
 ```text
 npm run release:plan
+npm run release:doctor
 npm run release:preflight
 npm run check:all
 npm run check:workflows
@@ -75,6 +76,14 @@ already applied to `main` with new commits, which can happen after a squash
 merge, and when substantive code changes are missing the required
 `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/` updates.
 
+`release:doctor` prints the local release environment: `node` and `npm`
+availability, lockfiles, `packageManager`, `node_modules`, and `.next` state.
+If this npm-lock project has `package-lock.json` but `npm` is unavailable, use
+the active or bundled Node runtime for repo scripts and an npm-created
+`node_modules` for full local typecheck, lint, and build. Do not switch this
+npm-lock project to pnpm, add `packageManager`, or rewrite lockfiles merely to
+make local release checks run.
+
 ## Low-token Codex path
 
 When Codex is preparing or verifying a release, start with `npm run
@@ -87,6 +96,7 @@ with the active Node runtime:
 
 ```text
 node scripts/release-plan.mjs
+node scripts/release-doctor.mjs
 node scripts/release-preflight.mjs
 ```
 
@@ -96,6 +106,7 @@ same script:
 
 ```text
 <bundled-node.exe> scripts/release-plan.mjs
+<bundled-node.exe> scripts/release-doctor.mjs
 <bundled-node.exe> scripts/release-preflight.mjs
 ```
 
@@ -104,6 +115,30 @@ large workflow logs, or repeated DOM snapshots. The low-token path reduces
 exploration; it does not remove required evidence. Before a PR or merge, still
 run the applicable local checks, workflow checks, staging migration, production
 migration, and `release:smoke` gates described above.
+
+For substantive changes, keep the AI handoff trio in sync before opening a PR:
+
+```text
+node scripts/ai-collaboration.mjs draft "<task title>"
+node scripts/ai-collaboration.mjs check-ci origin/main HEAD
+```
+
+The generated draft and `.ai/templates/handoff.md` use the exact required
+sections. Do not invent alternate heading names; `release:preflight` will reject
+them before CI.
+
+After the PR checks pass, prefer remote state checks over local branch switching
+in multi-worktree setups:
+
+```text
+gh pr view <pr> --json state,mergedAt,mergeCommit
+```
+
+Use the merged SHA from GitHub, wait for
+`https://bookflow-green.vercel.app/api/health/release` to report that exact
+commit, then run `release:smoke`. Clean up the remote feature branch separately
+from any local worktree cleanup so a local `main` checkout collision does not
+look like a failed merge.
 
 ## Recovery changes
 
