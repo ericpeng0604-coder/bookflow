@@ -1,3 +1,13 @@
+# AI Handoff Archive
+
+- Task: marketplace navigation state refactor
+- Actor: codex
+- Status: handoff
+- Base commit: `3c68d05adb0f7151ea2befdf19175e17b456297a`
+- Archived at: 2026-07-04T01:32:54+08:00
+
+---
+
 # BookFlow AI Handoff
 
 ## 任務目標
