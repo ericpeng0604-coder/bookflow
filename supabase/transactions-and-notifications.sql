@@ -25,8 +25,6 @@ create table if not exists public.notifications (
   created_at timestamptz not null default now()
 );
 
-alter table public.notifications disable row level security;
-
 create index if not exists notifications_recipient_idx
   on public.notifications (recipient_id, created_at desc);
 create index if not exists notifications_unread_idx

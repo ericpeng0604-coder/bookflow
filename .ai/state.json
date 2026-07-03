@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260703-release-pr-status-helper",
-  "taskTitle": "reduce release PR wait without lowering verification quality",
-  "baseCommit": "574e5405356b44945de46075d379298ce2c27856",
-  "updatedAt": "2026-07-03T00:00:00.000Z",
+  "taskId": "20260703-react-doctor-count-post-release",
+  "taskTitle": "deploy React Doctor count API hardening",
+  "baseCommit": "2965309d07a76c243e64c99f98dd6070883fb03a",
+  "updatedAt": "2026-07-03T19:17:45.629+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260703-release-pr-status-helper.md"
+  "historyFile": ".ai/history/20260703-react-doctor-count-post-release.md"
 }

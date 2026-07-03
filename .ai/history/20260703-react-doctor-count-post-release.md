@@ -1,3 +1,13 @@
+# AI Handoff Archive
+
+- Task: deploy React Doctor count API hardening
+- Actor: codex
+- Status: handoff for release
+- Base commit: `2965309d07a76c243e64c99f98dd6070883fb03a`
+- Archived at: 2026-07-03T19:17:45.629+08:00
+
+---
+
 # BookFlow AI Handoff
 
 ## 任務目標

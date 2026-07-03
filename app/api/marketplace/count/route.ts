@@ -12,15 +12,30 @@ type CountFilters = {
   query: string | null;
 };
 
-function normalizedFilters(request: NextRequest): CountFilters {
-  const rawListingType = request.nextUrl.searchParams.get("listingType")?.trim();
+type CountRequestBody = {
+  listingType?: unknown;
+  itemCategory?: unknown;
+  department?: unknown;
+  maxPrice?: unknown;
+  query?: unknown;
+};
+
+function textField(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizedFilters(body: CountRequestBody): CountFilters {
+  const rawListingType = textField(body.listingType);
   const listingType = rawListingType === "secondhand" ? "secondhand" : "book";
-  const itemCategory = request.nextUrl.searchParams.get("itemCategory")?.trim() || null;
-  const department = request.nextUrl.searchParams.get("department")?.trim() || null;
-  const rawQuery = request.nextUrl.searchParams.get("query")?.trim().slice(0, 80) || "";
+  const itemCategory = textField(body.itemCategory) || null;
+  const department = textField(body.department) || null;
+  const rawQuery = textField(body.query).slice(0, 80);
   const query = (listingType === "book" ? normalizeTaiwanTextbookQuery(rawQuery) : rawQuery) || null;
-  const rawMaxPrice = request.nextUrl.searchParams.get("maxPrice");
-  const parsedMaxPrice = rawMaxPrice ? Number(rawMaxPrice) : null;
+  const rawMaxPrice = body.maxPrice;
+  const parsedMaxPrice =
+    typeof rawMaxPrice === "number" || typeof rawMaxPrice === "string"
+      ? Number(rawMaxPrice)
+      : null;
   return {
     listingType,
     itemCategory: listingType === "secondhand" ? itemCategory : null,
@@ -56,10 +71,19 @@ async function requestCount(filters: CountFilters) {
   return Number(await response.json());
 }
 
-export async function GET(request: NextRequest) {
-  const filters = normalizedFilters(request);
-  const cacheKey = Buffer.from(JSON.stringify(filters)).toString("base64url");
+async function readCountBody(request: NextRequest): Promise<CountRequestBody> {
   try {
+    const body = await request.json();
+    return body && typeof body === "object" ? body : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const filters = normalizedFilters(await readCountBody(request));
+    const cacheKey = Buffer.from(JSON.stringify(filters)).toString("base64url");
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (url && serviceRoleKey) {
@@ -85,4 +109,11 @@ export async function GET(request: NextRequest) {
   } catch {
     return NextResponse.json({ count: null, approximate: true }, { status: 503 });
   }
+}
+
+export async function GET() {
+  return NextResponse.json(
+    { error: "Use POST /api/marketplace/count with JSON filters." },
+    { status: 405, headers: { Allow: "POST" } },
+  );
 }
