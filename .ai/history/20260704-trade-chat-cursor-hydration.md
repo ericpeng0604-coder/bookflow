@@ -1,3 +1,13 @@
+# AI Handoff Archive
+
+- Task: trade chat cursor and hydration cleanup
+- Actor: codex
+- Status: handoff
+- Base commit: `dda106778fbc1e89043bfecf9e10222fabce28d4`
+- Archived at: 2026-07-04T02:05:13+08:00
+
+---
+
 # BookFlow AI Handoff
 
 ## 任務目標
