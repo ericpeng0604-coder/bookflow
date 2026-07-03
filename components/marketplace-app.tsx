@@ -2511,7 +2511,6 @@ export function MarketplaceApp() {
         setMarketplaceCursor(null);
       }
 
-      setQuery(finalPlan.displayQuery);
       setImageSearchQuery(finalPlan.displayQuery);
       setImageSearchActive(true);
       setImageSearchResultCount(rankedBooks.length);

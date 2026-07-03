@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260703-restore-price-color",
-  "taskTitle": "restore homepage price color",
-  "baseCommit": "d56bb41b53fe9e92f7d446cf9fa2a64ad8a8a43e",
+  "taskId": "20260703-image-search-no-query",
+  "taskTitle": "keep image search text out of normal search",
+  "baseCommit": "3452e3aed33c74d24a8f7e40c34056b959a578dc",
   "updatedAt": "2026-07-03T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260703-restore-price-color.md"
+  "historyFile": ".ai/history/20260703-image-search-no-query.md"
 }
