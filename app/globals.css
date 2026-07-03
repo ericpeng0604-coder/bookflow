@@ -1970,6 +1970,50 @@ footer,
   }
 }
 
+@media (max-width: 640px) {
+  .home-page .hero-search label {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 38px;
+  }
+
+  .home-page .hero-search .hero-search-arrow {
+    width: 38px;
+    min-height: 38px;
+    padding: 0;
+  }
+
+  .course-search-guide {
+    font-size: 12px;
+  }
+
+  .detail-favorite-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .trade-chat-log {
+    max-height: min(52vh, 430px);
+  }
+
+  .trade-chat-bubble {
+    max-width: min(92%, 330px);
+  }
+
+  .trade-chat-compose {
+    align-items: stretch;
+  }
+
+  .trade-chat-compose input {
+    min-width: 0;
+  }
+
+  .trade-chat-phrases {
+    max-height: 92px;
+    overflow-y: auto;
+  }
+}
+
 /* Homepage final polish pass: this must remain after earlier visual test blocks. */
 .home-page .hero,
 .theme-secondhand .home-page .hero {
@@ -2844,6 +2888,182 @@ footer,
 .home-page .image-search-filter-button {
   color: var(--green);
   justify-content: center;
+}
+
+.home-page .hero-search label {
+  position: relative;
+}
+
+.home-page .hero-search .hero-search-arrow {
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: 1px solid #cfe2da;
+  border-radius: 50%;
+  flex: 0 0 38px;
+  background: #eef7f3;
+  color: #1e7964;
+}
+
+.home-page .hero-search .hero-search-arrow:hover {
+  background: #dceee7;
+}
+
+.home-page .hero-trust button {
+  border: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+}
+
+.home-page .hero-trust button:hover {
+  color: #1e7964;
+}
+
+.course-search-guide {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #b9d6cb;
+  border-radius: 9px;
+  background: #edf6f2;
+  color: #25584c;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.course-search-guide button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: #25584c;
+  cursor: pointer;
+}
+
+.home-page .filters label {
+  position: relative;
+}
+
+.home-page .filters label svg {
+  pointer-events: none;
+}
+
+.home-page .filters select {
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.detail-favorite-button {
+  width: fit-content;
+  min-height: 40px;
+  border: 1px solid #d7e4de;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: #5f766e;
+  padding: 0 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.detail-favorite-button.active {
+  border-color: #f0c8c8;
+  background: #fff6f6;
+  color: #d64545;
+}
+
+.field-with-help {
+  gap: 7px;
+}
+
+.field-label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-help-button {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: #edf6f2;
+  color: var(--green);
+  cursor: pointer;
+}
+
+.field-help-text {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.trade-chat-log-wrap {
+  position: relative;
+}
+
+.trade-chat-bubble {
+  min-width: 0;
+}
+
+.trade-chat-bubble p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chat-new-message-button {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  min-height: 34px;
+  border: 1px solid #b9d6cb;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #1e7964;
+  color: #fff;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(30, 121, 100, .24);
+  cursor: pointer;
+}
+
+.trade-chat-phrases > div {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.trade-chat-compose input {
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  touch-action: pan-x pan-y;
+}
+
+.order-next-step {
+  margin: 7px 0 0;
+  color: #526a62;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .theme-secondhand .home-page .image-search-filter-button {

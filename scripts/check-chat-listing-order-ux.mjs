@@ -15,7 +15,11 @@ const checks = [
   ["chat safety actions are hidden behind menu", app.includes('className="trade-chat-actions chat-safety-actions"') && app.includes('className="chat-safety-menu"')],
   ["quick phrases stay until a message is sent", /function applyQuickPhrase\(phrase: string\) \{\s*setDraft\(phrase\);\s*\}/.test(app) && /const message = await sendTradeMessage[\s\S]*setShowQuickPhrases\(false\)/.test(app)],
   ["chat submit is guarded against rapid duplicate sends", app.includes("const sendingRef = useRef(false)") && app.includes("sendingRef.current ||") && app.includes("sendingRef.current = true") && app.includes("sendingRef.current = false")],
+  ["chat does not force-scroll while reading older messages", app.includes("stickToBottomRef") && app.includes("hasUnreadBelow") && app.includes('className="chat-new-message-button"')],
+  ["chat preserves scroll when loading older messages", app.includes("previousScrollHeight") && app.includes("previousScrollTop") && app.includes("heightDelta")],
+  ["seller can keep tracking completed orders", app.includes("sellerRequestNextStep") && app.includes('"completed"].includes(request.status)') && app.includes('className="order-next-step"')],
   ["chat context and safety menu have styles", css.includes(".chat-context-card") && css.includes(".chat-safety-menu")],
+  ["mobile chat long text has wrapping styles", css.includes(".trade-chat-bubble p") && css.includes("overflow-wrap: anywhere") && css.includes(".chat-new-message-button")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);

@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260703-release-environment-speedup",
-  "taskTitle": "release environment speedup",
-  "baseCommit": "25204680d1e32310190e4133e8d0cebe9547e3ad",
-  "updatedAt": "2026-07-03T12:21:14.045Z",
+  "owner": "codex",
+  "status": "handoff",
+  "taskId": "20260704-mobile-marketplace-chat-ux",
+  "taskTitle": "mobile marketplace and chat UX release",
+  "baseCommit": "9e8b1eb702e9c3734502b79b71d4ad48f2c15974",
+  "updatedAt": "2026-07-04T00:00:00+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260703-1221-20260703-release-environment-speedup.md"
+  "historyFile": ".ai/history/20260704-mobile-marketplace-chat-ux.md"
 }

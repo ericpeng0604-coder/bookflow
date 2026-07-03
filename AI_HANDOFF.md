@@ -2,69 +2,83 @@
 
 ## 任務目標
 
-Complete and deploy the release environment speedup work so future BookFlow releases spend less time and fewer tokens on repeated local setup diagnosis.
+部署 2026-07-04 要求的手機版市場與聊聊 UX 修正，並確認不會把舊分支差異或已合併的工具變更混進本次 release。
 
 ## 目前狀態與背景
 
-- Branch: `codex/release-env-speedup`.
-- Base commit: `25204680d1e32310190e4133e8d0cebe9547e3ad`.
-- This is a release tooling and documentation change.
+- Branch: `codex/mobile-ux-release`.
+- Base commit: `9e8b1eb702e9c3734502b79b71d4ad48f2c15974`.
+- 這是 UI/runtime release，加上對應靜態回歸檢查。
 - No database migration is required.
 - No GitHub workflow or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
+- 原始工作區位於舊分支；本 release worktree 已從最新 `origin/main` 重建，只套入手機 UX patch。
 
 ## 已完成
 
-- Added `scripts/dev-environment.mjs` for checkout-specific local diagnostics.
-- Added `npm run dev:doctor` for runtime, package, local Next process, and `.next` cache checks.
-- Added `npm run dev:clean` for manual cleanup of stale Node/Next processes for the current checkout and `.next` cache.
-- Documented the manual dev diagnostics in `docs/RELEASE_WORKFLOW.md`.
-- Added `LESSON-045` to `AI_WORK_MANUAL.md` so future agents diagnose local preview drift before repeating broad checks.
+- 手機首頁搜尋框新增可點擊的右側箭頭。
+- 「依課程快速找到課本」可開啟輕量提示並聚焦市場搜尋欄。
+- 手機篩選下拉箭頭不再攔截 select 點擊。
+- 上架表單將 `課程（選填）` 改為 `課堂名稱（選填）`，並加入問號說明。
+- 書籍詳情頁加入既有收藏/取消收藏功能。
+- 聊聊在使用者閱讀舊訊息時不強制捲到底，改顯示 `新訊息` 按鈕。
+- 載入較早訊息會保留目前閱讀位置。
+- 聊聊長訊息可安全換行，長輸入與常用語句在手機上可滑動。
+- dashboard URL 會保存分頁與聊天室狀態，刷新後回到目前頁面。
+- 賣家收到的訂單在確認/完成後仍有追蹤文案與聊聊入口。
 
 ## 下一步
 
-1. Run local release checks on this branch.
-2. Commit the scoped files.
-3. Run release preflight.
-4. Push, open a PR, wait for required release gates, merge, and verify production with the exact deployed SHA.
+1. Commit scoped files and this handoff trio.
+2. Run `node scripts/release-preflight.mjs`.
+3. Push branch and open PR.
+4. Wait for required release gates.
+5. Merge PR and verify production with exact merged SHA.
 
 ## 變更檔案
 
-- `.ai/state.json`
-- `.ai/history/20260703-1221-20260703-release-environment-speedup.md`
+- `components/marketplace-app.tsx`
+- `app/globals.css`
+- `scripts/check-home-accessibility.mjs`
+- `scripts/check-listing-navigation-ui.mjs`
+- `scripts/check-chat-listing-order-ux.mjs`
+- `scripts/check-favorites.mjs`
 - `AI_HANDOFF.md`
-- `AI_WORK_MANUAL.md`
-- `docs/RELEASE_WORKFLOW.md`
-- `package.json`
-- `scripts/dev-environment.mjs`
+- `.ai/state.json`
+- `.ai/history/20260704-mobile-marketplace-chat-ux.md`
 
 ## 驗證結果
 
-- `node scripts/dev-environment.mjs`: passed with bundled Node; reported no stale Node/Next processes and no `.next` cache before build.
-- `node -c scripts/dev-environment.mjs`: passed.
-- `git diff --check`: passed.
-- `node scripts/release-plan.mjs`: passed and identified tooling-only release scope.
-- `node scripts/release-doctor.mjs`: passed; reported `node`/`npm` missing on PATH, npm lockfile preserved, and linked `node_modules` used only for checks.
-- `tsc --noEmit`: passed via local TypeScript binary and bundled Node.
-- `eslint .`: passed via local ESLint binary and bundled Node.
-- `node scripts/run-project-checks.mjs`: passed, 26/26 checks.
-- `next build`: passed via local Next binary and bundled Node.
+- `node scripts/check-home-accessibility.mjs`: passed in source worktree after mobile UX change.
+- `node scripts/check-listing-navigation-ui.mjs`: passed in source worktree after mobile UX change.
+- `node scripts/check-chat-listing-order-ux.mjs`: passed in source worktree after mobile UX change.
+- `node --experimental-strip-types scripts/check-favorites.mjs`: passed in source worktree after mobile UX change.
+- `node scripts/check-refresh-guard.mjs`: passed in source worktree after mobile UX change.
+- `node scripts/check-trade-chat.mjs`: passed in source worktree after mobile UX change.
+- `node scripts/check-notification-refresh.mjs`: passed in source worktree after mobile UX change.
+- `tsc --noEmit`: passed via bundled Node and source worktree local TypeScript binary.
+- Mobile Playwright smoke at `440x920`: hero search arrow, course guide button, guide visibility, and filter focus passed.
+- `node scripts/run-project-checks.mjs`: passed in clean release worktree, 26/26 checks.
+- `node node_modules/typescript/bin/tsc --noEmit`: passed in clean release worktree.
+- `node node_modules/eslint/bin/eslint.js .`: passed in clean release worktree.
+- `node node_modules/next/dist/bin/next build`: passed in clean release worktree.
 
 ## 風險與注意事項
 
-- `dev:clean` is manual by design; `npm run dev` does not automatically stop local processes.
-- The cleanup script only targets Node/Next processes associated with the current checkout.
-- This change preserves the existing npm-lock project setup and does not add `packageManager` or switch to pnpm.
+- Do not include stale-branch deletions or already-merged release tooling/count API diffs.
+- No protected recovery files are changed.
+- `node_modules` in the clean worktree is a local junction for verification only and must not be committed.
+- Production proof should use `/api/health/release` for the merged SHA before running `release-smoke`.
 
 ## 下一位 AI 工作指引
 
-1. Keep the release scoped to tooling and documentation files listed above.
+1. Keep the release scoped to the files listed above.
 2. Do not touch protected recovery files or add the rollback approval trailer.
-3. Use the bundled Node executable if `node` is missing from the Windows shell PATH.
-4. Run `release:preflight`, then use `release:pr-status --wait` after opening the PR.
-5. After merge, verify `https://bookflow-green.vercel.app/api/health/release` reports the merged SHA and run `release:smoke`.
+3. After commit, run `node scripts/release-preflight.mjs`.
+4. Use direct GitHub status/release scripts instead of repeatedly opening dashboards.
+5. After merge, verify `https://bookflow-green.vercel.app/api/health/release` reports the merged SHA and then run `release-smoke`.
 
 ## 相關 Commit
 
-- Base commit: `25204680d1e32310190e4133e8d0cebe9547e3ad`.
+- Base commit: `9e8b1eb702e9c3734502b79b71d4ad48f2c15974`.
 - Current implementation commit before final commit: `not committed yet`.

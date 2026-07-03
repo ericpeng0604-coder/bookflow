@@ -10,8 +10,13 @@ import {
 } from "./lib/check-runner.mjs";
 
 const source = readFileSync(join(projectRoot, "lib/marketplace/favorites.ts"), "utf8");
+const appSource = readFileSync(join(projectRoot, "components/marketplace-app.tsx"), "utf8");
+const cssSource = readFileSync(join(projectRoot, "app/globals.css"), "utf8");
 assert.match(source, /bookflow-favorites-v1/, "favorites.ts should keep the legacy storage key");
 assert.match(source, /bookflow-favorites-synced-v2/, "favorites.ts should keep the sync marker key");
+assert.match(appSource, /className=\{`detail-favorite-button/, "book detail page should expose favorite toggle");
+assert.match(appSource, /toggleFavorite\(selectedBook\.id, event\)/, "detail favorite button should reuse shared favorite toggle");
+assert.match(cssSource, /\.detail-favorite-button/, "detail favorite button should have a stable style hook");
 
 if (!nodeSupportsStripTypes()) {
   throw new Error("check-favorites requires Node with --experimental-strip-types support");
