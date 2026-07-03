@@ -132,6 +132,16 @@ const listingDraftStorageKey = (
   listingType: ListingType,
   bookId?: string,
 ) => `bookflow-listing-draft-v1:${userId}:${bookId || `new-${listingType}`}`;
+const moneyFormatter = new Intl.NumberFormat("zh-TW", {
+  style: "currency",
+  currency: "TWD",
+  maximumFractionDigits: 0,
+});
+const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
 
 type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | "feedback" | null;
 
@@ -359,7 +369,7 @@ function studentVerificationFlagLabels(flags: StudentVerificationFlags) {
 }
 
 function money(value: number) {
-  return new Intl.NumberFormat("zh-TW", { style: "currency", currency: "TWD", maximumFractionDigits: 0 }).format(value);
+  return moneyFormatter.format(value);
 }
 
 function timeAgo(value: string) {
@@ -370,11 +380,7 @@ function timeAgo(value: string) {
 }
 
 function dateLabel(value: string) {
-  return new Intl.DateTimeFormat("zh-TW", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
+  return dateFormatter.format(new Date(value));
 }
 
 function maskEmail(email: string) {
@@ -395,6 +401,123 @@ function authErrorMessage(message: string, fallback: string) {
     return "驗證碼錯誤或已過期，請重新寄送";
   }
   return fallback;
+}
+
+function unreadNotificationIds(items: Notification[]) {
+  const ids: string[] = [];
+  for (const item of items) {
+    if (!item.readAt) ids.push(item.id);
+  }
+  return ids;
+}
+
+function uniqueFavoriteBooks(knownBooks: Book[], favoriteIds: Set<string>) {
+  const booksById = new Map<string, Book>();
+  for (const book of knownBooks) {
+    if (favoriteIds.has(book.id)) booksById.set(book.id, book);
+  }
+  return [...booksById.values()];
+}
+
+function matchesLocalMarketplaceBook(
+  book: Book,
+  options: {
+    listingType: ListingType;
+    itemCategory: string;
+    department: string;
+    maxPrice: string;
+    searchTokens: string[];
+  },
+) {
+  if (book.reviewStatus !== "approved") return false;
+  if (book.moderationVisibility !== "visible") return false;
+  if (book.lifecycleState !== "active") return false;
+  if (book.status === "sold") return false;
+  if ((book.listingType || "book") !== options.listingType) return false;
+  if (options.listingType !== "book" && options.itemCategory !== ALL_ITEM_CATEGORIES && book.itemCategory !== options.itemCategory) return false;
+  if (options.listingType === "book" && !isAllDepartments(options.department) && book.department !== options.department) return false;
+  if (options.maxPrice && book.price > Number(options.maxPrice)) return false;
+  if (options.searchTokens.length === 0) return true;
+
+  const searchableText = [
+    book.title,
+    book.author,
+    book.publisher,
+    book.course,
+    book.teacher,
+    book.description,
+    book.itemCategory,
+    book.educationLevel,
+    book.grade ? `${book.grade}年級` : "",
+    optionLabel(SEMESTER_OPTIONS, book.semester),
+    book.subject,
+    book.volume,
+    book.curriculum,
+    optionLabel(BOOK_TYPE_OPTIONS, book.bookType),
+    book.isbn13,
+    book.approvalNumber,
+  ].join(" ").toLowerCase();
+  return options.searchTokens.every((token) => searchableText.includes(token));
+}
+
+async function dispatchNotificationDeliveries() {
+  if (!supabase) return;
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (!accessToken) return;
+  await Promise.all([
+    fetch("/api/notifications/email", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }).catch(() => undefined),
+    dispatchBrowserPush(supabase),
+  ]);
+}
+
+async function loginWithGoogle() {
+  if (!supabase) return "請先完成 Supabase 驗證設定";
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: window.location.origin,
+      queryParams: { prompt: "select_account" },
+    },
+  });
+  if (error) return authErrorMessage(error.message, "Google 登入失敗，請稍後再試");
+  return null;
+}
+
+async function deleteAccount() {
+  if (!supabase) return "帳號刪除服務目前無法使用";
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (!accessToken) return "登入狀態已失效，請重新登入";
+
+  try {
+    const response = await fetch("/api/account/delete", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ confirmation: "DELETE" }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const result = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) return result.error || "帳號刪除暫時無法完成";
+    await supabase.auth.signOut().catch(() => undefined);
+    window.location.assign("/");
+    return null;
+  } catch {
+    return "帳號刪除請求逾時，請稍後再試；若公開資料已停止顯示，可再次操作完成登入帳號刪除";
+  }
+}
+
+function validateImageSearchFile(file: File) {
+  if (!IMAGE_SEARCH_ALLOWED_TYPES.has(file.type) || file.size > IMAGE_SEARCH_MAX_FILE_BYTES) {
+    return "請上傳 5MB 以內的 JPG、PNG 或 WebP 書封照片";
+  }
+  return "";
 }
 
 export function MarketplaceApp() {
@@ -425,7 +548,6 @@ export function MarketplaceApp() {
   const [marketplaceBooks, setMarketplaceBooks] = useState<Book[]>([]);
   const [marketplaceCount, setMarketplaceCount] = useState(0);
   const [marketplaceHasMore, setMarketplaceHasMore] = useState(false);
-  const [marketplaceCursor, setMarketplaceCursor] = useState<{ createdAt: string; id: string } | null>(null);
   const [marketplaceLoading, setMarketplaceLoading] = useState(false);
   const [imageSearchBusy, setImageSearchBusy] = useState(false);
   const [imageSearchProgress, setImageSearchProgress] = useState(0);
@@ -456,6 +578,7 @@ export function MarketplaceApp() {
   const adminOtpRequestedRef = useRef<string | null>(null);
   const imageSearchInputRef = useRef<HTMLInputElement>(null);
   const imageSearchRequestRef = useRef(0);
+  const marketplaceCursorRef = useRef<{ createdAt: string; id: string } | null>(null);
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
   const debouncedQuery = useDebouncedValue(query, 300);
@@ -537,12 +660,12 @@ export function MarketplaceApp() {
         const page = await fetchMarketplacePage(
           client,
           marketplaceFilters,
-          append ? marketplaceCursor : null,
+          append ? marketplaceCursorRef.current : null,
         );
         if (signal.aborted) return;
         setMarketplaceBooks((previous) => (append ? [...previous, ...page.books] : page.books));
         setMarketplaceHasMore(page.hasMore);
-        setMarketplaceCursor(page.nextCursor);
+        marketplaceCursorRef.current = page.nextCursor;
       } catch (error) {
         if (!isAbortError(error)) {
           setToast(`讀取刊登失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
@@ -551,7 +674,7 @@ export function MarketplaceApp() {
         if (!signal.aborted) setMarketplaceLoading(false);
       }
     });
-  }, [imageSearchActive, marketplaceCursor, marketplaceFilters]);
+  }, [imageSearchActive, marketplaceFilters]);
 
   const loadMarketplaceCount = useCallback(async () => {
     if (imageSearchActive) return;
@@ -658,10 +781,10 @@ export function MarketplaceApp() {
         const items = await fetchNotifications(client);
         if (signal.aborted) return;
         setNotifications(items);
-        setUnreadNotificationCount(items.filter((item) => !item.readAt).length);
+        const unreadIds = unreadNotificationIds(items);
+        setUnreadNotificationCount(unreadIds.length);
         lastNotificationRefreshRef.current = Date.now();
 
-        const unreadIds = items.filter((item) => !item.readAt).map((item) => item.id);
         if (unreadIds.length > 0) {
           const readAt = new Date().toISOString();
           const { error } = await client
@@ -746,7 +869,7 @@ export function MarketplaceApp() {
 
   useEffect(() => {
     if (!ready || !supabase || imageSearchActive) return;
-    setMarketplaceCursor(null);
+    marketplaceCursorRef.current = null;
     setMarketplaceCount(0);
     void Promise.all([loadMarketplaceBooks(), loadMarketplaceCount()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -974,20 +1097,6 @@ export function MarketplaceApp() {
     };
   }, [mobileMenuOpen]);
 
-  async function dispatchNotificationDeliveries() {
-    if (!supabase) return;
-    const { data } = await supabase.auth.getSession();
-    const accessToken = data.session?.access_token;
-    if (!accessToken) return;
-    await Promise.all([
-      fetch("/api/notifications/email", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }).catch(() => undefined),
-      dispatchBrowserPush(supabase),
-    ]);
-  }
-
   async function enablePushNotifications() {
     if (!supabase || pushSaving) return;
     setPushSaving(true);
@@ -1032,39 +1141,13 @@ export function MarketplaceApp() {
       : query.trim()).toLowerCase();
     const searchTokens = normalized.split(/\s+/).filter(Boolean);
     return store.books
-      .filter((book) => book.reviewStatus === "approved")
-      .filter((book) => book.moderationVisibility === "visible")
-      .filter((book) => book.lifecycleState === "active")
-      .filter((book) => book.status !== "sold")
-      .filter((book) => (book.listingType || "book") === listingType)
-      .filter((book) => listingType === "book" || itemCategory === ALL_ITEM_CATEGORIES || book.itemCategory === itemCategory)
-      .filter((book) => listingType !== "book" || isAllDepartments(department) || book.department === department)
-      .filter((book) => !maxPrice || book.price <= Number(maxPrice))
-      .filter((book) =>
-        searchTokens.length === 0
-          ? true
-          : searchTokens.every((token) => [
-              book.title,
-              book.author,
-              book.publisher,
-              book.course,
-              book.teacher,
-              book.description,
-              book.itemCategory,
-              book.educationLevel,
-              book.grade ? `${book.grade}年級` : "",
-              optionLabel(SEMESTER_OPTIONS, book.semester),
-              book.subject,
-              book.volume,
-              book.curriculum,
-              optionLabel(BOOK_TYPE_OPTIONS, book.bookType),
-              book.isbn13,
-              book.approvalNumber,
-            ]
-              .join(" ")
-              .toLowerCase()
-              .includes(token)),
-      )
+      .filter((book) => matchesLocalMarketplaceBook(book, {
+        listingType,
+        itemCategory,
+        department,
+        maxPrice,
+        searchTokens,
+      }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [department, imageSearchActive, itemCategory, listingType, maxPrice, query, store.books, marketplaceBooks]);
 
@@ -1178,19 +1261,6 @@ export function MarketplaceApp() {
     return null;
   }
 
-  async function loginWithGoogle() {
-    if (!supabase) return "請先完成 Supabase 驗證設定";
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-        queryParams: { prompt: "select_account" },
-      },
-    });
-    if (error) return authErrorMessage(error.message, "Google 登入失敗，請稍後再試");
-    return null;
-  }
-
   async function verifyAdminOtp(code: string) {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
     const { data } = await supabase.auth.getSession();
@@ -1294,32 +1364,6 @@ export function MarketplaceApp() {
     setModal(null);
     setToast("個人資料已更新");
     return null;
-  }
-
-  async function deleteAccount() {
-    if (!supabase) return "帳號刪除服務目前無法使用";
-    const { data } = await supabase.auth.getSession();
-    const accessToken = data.session?.access_token;
-    if (!accessToken) return "登入狀態已失效，請重新登入";
-
-    try {
-      const response = await fetch("/api/account/delete", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ confirmation: "DELETE" }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      const result = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) return result.error || "帳號刪除暫時無法完成";
-      await supabase.auth.signOut().catch(() => undefined);
-      window.location.assign("/");
-      return null;
-    } catch {
-      return "帳號刪除請求逾時，請稍後再試；若公開資料已停止顯示，可再次操作完成登入帳號刪除";
-    }
   }
 
   async function submitStudentVerification(file: File, ocrText: string, qualityFlags: StudentVerificationFlags) {
@@ -2307,11 +2351,7 @@ export function MarketplaceApp() {
   const knownBooks = supabase
     ? [...favoriteBookCache, ...marketplaceBooks, ...myBooks, ...requestBooks, ...pendingReviews, ...hiddenBooks]
     : store.books;
-  const favoriteBooks = [...new Map(
-    knownBooks
-      .filter((book) => favoriteIds.has(book.id))
-      .map((book) => [book.id, book]),
-  ).values()];
+  const favoriteBooks = uniqueFavoriteBooks(knownBooks, favoriteIds);
   const myRequests = currentUser ? store.requests.filter((request) => request.buyerId === currentUser.id) : [];
   const activeMyRequestCount = myRequests.filter((request) => request.status !== "expired").length;
   const receivedRequests = currentUser
@@ -2323,6 +2363,7 @@ export function MarketplaceApp() {
   const isModerator = currentUser?.accountStatus === "active"
     && (currentUser.role === "admin" || currentUser.role === "moderator");
   const pendingReports = reports.filter((report) => report.status === "pending");
+  const pendingFeedback = feedback.filter((item) => item.status === "pending");
   const unreadNotifications = unreadNotificationCount;
   const activeAvailableListings = myListings.filter((book) => book.lifecycleState === "active" && book.status === "available");
   const archivedListings = myListings.filter((book) => book.lifecycleState === "archived");
@@ -2360,13 +2401,6 @@ export function MarketplaceApp() {
 
   function openImageSearchPicker() {
     imageSearchInputRef.current?.click();
-  }
-
-  function validateImageSearchFile(file: File) {
-    if (!IMAGE_SEARCH_ALLOWED_TYPES.has(file.type) || file.size > IMAGE_SEARCH_MAX_FILE_BYTES) {
-      return "請上傳 5MB 以內的 JPG、PNG 或 WebP 書封照片";
-    }
-    return "";
   }
 
   async function runImageSearch(file: File) {
@@ -2463,7 +2497,7 @@ export function MarketplaceApp() {
         setMarketplaceBooks(rankedBooks);
         setMarketplaceCount(rankedBooks.length);
         setMarketplaceHasMore(false);
-        setMarketplaceCursor(null);
+        marketplaceCursorRef.current = null;
       } else {
         rankedBooks = rankImageSearchResults(
           store.books.filter((book) =>
@@ -2478,7 +2512,7 @@ export function MarketplaceApp() {
         setMarketplaceBooks(rankedBooks);
         setMarketplaceCount(rankedBooks.length);
         setMarketplaceHasMore(false);
-        setMarketplaceCursor(null);
+        marketplaceCursorRef.current = null;
       }
 
       setImageSearchQuery(finalPlan.displayQuery);
@@ -3425,12 +3459,12 @@ export function MarketplaceApp() {
               <h1>安全與審核後台</h1>
               <p>處理檢舉、刊登審核、商品隱藏與會員權限。</p>
             </div>
-            <div className="admin-count">{pendingReports.length + pendingReviews.length + feedback.filter((item) => item.status === "pending").length + studentVerifications.length} 筆待處理</div>
+            <div className="admin-count">{pendingReports.length + pendingReviews.length + pendingFeedback.length + studentVerifications.length} 筆待處理</div>
           </div>
 
           <h2 className="admin-section-title">網站問題回報</h2>
           <div className="reports-list">
-            {feedback.filter((item) => item.status === "pending").map((item) => (
+            {pendingFeedback.map((item) => (
               <article className="report-card" key={item.id}>
                 <div className="report-card-head">
                   <span className="report-target user"><Flag size={14} />{feedbackCategoryLabels[item.category] || "其他"}</span>
@@ -3444,7 +3478,7 @@ export function MarketplaceApp() {
               </article>
             ))}
           </div>
-          {feedback.every((item) => item.status !== "pending") && <EmptyDashboard text="目前沒有等待處理的問題回報" />}
+          {pendingFeedback.length === 0 && <EmptyDashboard text="目前沒有等待處理的問題回報" />}
 
           <h2 className="admin-section-title">學生證審核</h2>
           <div className="reports-list">

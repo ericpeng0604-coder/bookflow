@@ -1,3 +1,13 @@
+# AI Handoff Archive
+
+- Task: marketplace render and iteration cleanup
+- Actor: codex
+- Status: handoff
+- Base commit: `bd7b3e4b2bf50934c92a527db43750b5b8eabe95`
+- Archived at: 2026-07-04T01:53:50+08:00
+
+---
+
 # BookFlow AI Handoff
 
 ## 任務目標
