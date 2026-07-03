@@ -521,14 +521,18 @@ export function MarketplaceApp() {
 
   const loadMarketplaceCount = useCallback(async () => {
     if (imageSearchActive) return;
-    const params = new URLSearchParams();
-    params.set("listingType", marketplaceFilters.listingType);
-    if (marketplaceFilters.itemCategory) params.set("itemCategory", marketplaceFilters.itemCategory);
-    if (marketplaceFilters.department) params.set("department", marketplaceFilters.department);
-    if (marketplaceFilters.maxPrice !== null) params.set("maxPrice", String(marketplaceFilters.maxPrice));
-    if (marketplaceFilters.query) params.set("query", marketplaceFilters.query);
     try {
-      const response = await fetch(`/api/marketplace/count?${params.toString()}`);
+      const response = await fetch("/api/marketplace/count", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingType: marketplaceFilters.listingType,
+          itemCategory: marketplaceFilters.itemCategory,
+          department: marketplaceFilters.department,
+          maxPrice: marketplaceFilters.maxPrice,
+          query: marketplaceFilters.query,
+        }),
+      });
       if (!response.ok) throw new Error("count unavailable");
       const result = await response.json() as { count: number | null };
       if (result.count !== null) setMarketplaceCount(result.count);
