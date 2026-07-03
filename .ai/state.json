@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260702-release-preflight-speedup",
-  "taskTitle": "release preflight speedup",
-  "baseCommit": "c41c00b5c5926ea15379d79b33dcb2ea261d71a0",
-  "updatedAt": "2026-07-02T15:49:08.642Z",
+  "owner": "codex",
+  "status": "handoff",
+  "taskId": "20260703-restore-price-color",
+  "taskTitle": "restore homepage price color",
+  "baseCommit": "d56bb41b53fe9e92f7d446cf9fa2a64ad8a8a43e",
+  "updatedAt": "2026-07-03T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260702-1549-20260702-release-preflight-speedup.md"
+  "historyFile": ".ai/history/20260703-restore-price-color.md"
 }

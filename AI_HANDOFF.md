@@ -2,70 +2,60 @@
 
 ## 目前目標
 
-Ship a release preflight improvement so future deployments catch stale branches and missing AI handoff files before GitHub CI.
+Restore the homepage listing card price color to the previous effective color and deploy it to production.
 
 ## 重要背景與決策
 
-- Branch: `codex/release-preflight-speedup`.
-- Base: latest `origin/main` at `c41c00b5c5926ea15379d79b33dcb2ea261d71a0`.
-- This is a tooling and documentation release; no runtime product behavior is changed.
+- Branch: `codex/restore-price-color`.
+- Base: latest `origin/main` at `d56bb41b53fe9e92f7d446cf9fa2a64ad8a8a43e`.
+- Previous effective homepage card price color was `#2b3f38`.
 - No database migration is included.
-- No GitHub workflow or protected recovery file is changed.
-- Do not add `Rollback-Workflow-Approved: true`; this is not a rollback or recovery-system change.
-- The untracked hero draft images in `public/` are intentionally excluded.
+- No protected recovery files are changed.
+- Do not add `Rollback-Workflow-Approved: true`.
 
 ## 已完成
 
-- Added `scripts/release-preflight.mjs`.
-- Added `npm run release:preflight`.
-- Documented the preflight step in `docs/RELEASE_WORKFLOW.md`.
-- Added `LESSON-042` to `AI_WORK_MANUAL.md` so future agents know why the preflight is required.
-- The preflight checks:
-  - branch commits already applied to `origin/main` mixed with new commits;
-  - missing `AI_HANDOFF.md`, `.ai/state.json`, or `.ai/history/` updates for substantive PR changes;
-  - protected recovery file changes;
-  - dirty working tree entries that should be kept out of the release.
+- Restored `.home-page .card-footer strong` from `var(--orange)` to `#2b3f38`.
+- Rewrote the prior mojibake handoff file into readable UTF-8 content.
+- Added `.ai/history/20260703-restore-price-color.md`.
 
 ## 剩餘工作
 
 1. Push this branch.
 2. Open a PR.
-3. Wait for GitHub checks to pass.
-4. Merge into `main`.
-5. No production smoke is needed for product behavior, but confirm the merge lands on `main`.
+3. Wait for required GitHub checks.
+4. Merge to `main`.
+5. Verify production with `RELEASE_BASE_URL=https://bookflow-green.vercel.app` and the exact merged commit SHA.
 
 ## 修改範圍
 
-- `scripts/release-preflight.mjs`
-- `package.json`
-- `docs/RELEASE_WORKFLOW.md`
-- `AI_WORK_MANUAL.md`
+- `app/globals.css`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/*`
+- `.ai/history/20260703-restore-price-color.md`
 
 ## 驗證結果
 
-- `scripts/release-preflight.mjs`: passed locally on current clean-base branch; it reported the unrelated untracked hero images without including them.
-- `scripts/run-project-checks.mjs`: passed, 25/25.
-- `scripts/check-workflows.mjs`: passed.
-- `package.json` JSON parse check: passed.
-- `node --check scripts/release-preflight.mjs`: passed.
+- `git diff --check`: passed.
+- `node scripts/check-home-accessibility.mjs`: passed, 21/21.
+- `node scripts/release-preflight.mjs`: passed.
+- GitHub PR checks: pending.
+- Production smoke: pending after merge.
 
 ## 風險或阻礙
 
-- This preflight uses local `origin/main`; agents should run `git fetch origin main` first when preparing a release.
-- It is intentionally a fast local guard, not a replacement for PR checks or production smoke.
-- Local working tree still has untracked `public/bookflow-hero-*.png` files that are unrelated and must remain excluded.
+- CSS-only runtime change.
+- The original active checkout has unrelated local modifications; this release is isolated in a clean worktree.
+- The previous `AI_HANDOFF.md` on `main` had mojibake, so this change rewrites it to readable content.
 
 ## 下一個 AI 的操作
 
-1. Run local handoff check and release preflight before PR.
-2. Open PR from `codex/release-preflight-speedup`.
-3. Merge after required checks pass.
-4. After merge, use this preflight before future deployment PRs.
+1. Run `node scripts/release-preflight.mjs`.
+2. Push `codex/restore-price-color`.
+3. Open and merge the PR after checks pass.
+4. Run production smoke against `https://bookflow-green.vercel.app`.
 
 ## 最後基準 Commit
 
-- Base commit: `c41c00b5c5926ea15379d79b33dcb2ea261d71a0`
-- Current implementation commit before handoff update: not committed yet
+- Base commit: `d56bb41b53fe9e92f7d446cf9fa2a64ad8a8a43e`.
+- Current implementation commit before final amend: `a4ec2fb64da512b02cbb5b2017f26f87dc0d15b8`.
