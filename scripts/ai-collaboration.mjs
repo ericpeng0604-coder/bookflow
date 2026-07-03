@@ -9,6 +9,11 @@ import {
 } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
+import {
+  missingHandoffSections,
+  renderHandoffDraft,
+  UNREADABLE_TEXT_PATTERN,
+} from "./lib/handoff-contract.mjs";
 
 const ROOT = findGitRoot();
 const STATE_PATH = join(ROOT, ".ai", "state.json");
@@ -16,26 +21,14 @@ const HANDOFF_PATH = join(ROOT, "AI_HANDOFF.md");
 const HISTORY_DIR = join(ROOT, ".ai", "history");
 const AGENTS = new Set(["codex", "cursor"]);
 const TERMINAL_STATUSES = new Set(["idle", "handoff"]);
-const REQUIRED_SECTIONS = [
-  "目前目標",
-  "重要背景與決策",
-  "已完成",
-  "剩餘工作",
-  "修改範圍",
-  "驗證結果",
-  "風險或阻礙",
-  "下一個 AI 的操作",
-  "最後基準 Commit",
-];
 const SENSITIVE_PATTERNS = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i,
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/,
   /\bgh[opusr]_[A-Za-z0-9]{20,}\b/,
   /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/,
   /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b/,
-  /(?:password|passwd|密碼)\s*[:=]\s*[^\s`]{6,}/i,
+  /(?:password|passwd|密碼|token)\s*[:=]\s*[^\s`]{6,}/i,
 ];
-const UNREADABLE_TEXT_PATTERN = /[\uFFFD\uE000-\uF8FF]/u;
 
 function findGitRoot() {
   try {
@@ -43,7 +36,7 @@ function findGitRoot() {
       encoding: "utf8",
     }).trim();
   } catch {
-    console.error("找不到 Git 專案根目錄。");
+    console.error("Not inside a Git repository.");
     process.exit(1);
   }
 }
@@ -58,13 +51,13 @@ function git(args, options = {}) {
 
 function readState() {
   if (!existsSync(STATE_PATH)) {
-    fail("缺少 .ai/state.json。");
+    fail("Missing .ai/state.json.");
   }
 
   try {
     return JSON.parse(readFileSync(STATE_PATH, "utf8"));
   } catch {
-    fail(".ai/state.json 不是有效的 JSON。");
+    fail(".ai/state.json is not valid JSON.");
   }
 }
 
@@ -75,13 +68,13 @@ function writeState(state) {
 
 function readHandoff() {
   if (!existsSync(HANDOFF_PATH)) {
-    fail("缺少 AI_HANDOFF.md。");
+    fail("Missing AI_HANDOFF.md.");
   }
   return readFileSync(HANDOFF_PATH, "utf8");
 }
 
 function fail(message) {
-  console.error(`AI 交接檢查失敗：${message}`);
+  console.error(`AI handoff check failed: ${message}`);
   process.exit(1);
 }
 
@@ -108,7 +101,7 @@ function timestampForFile() {
 
 function validateAgent(agent) {
   if (!AGENTS.has(agent)) {
-    fail("AI 名稱只能是 codex 或 cursor。");
+    fail("Agent must be codex or cursor.");
   }
 }
 
@@ -127,65 +120,55 @@ function validateState(state) {
   ];
   const missing = required.filter((key) => !(key in state));
   if (missing.length > 0) {
-    fail(`狀態缺少欄位：${missing.join(", ")}`);
+    fail(`.ai/state.json is missing: ${missing.join(", ")}`);
   }
   if (state.schemaVersion !== 1 || state.project !== "bookflow") {
-    fail("狀態版本或專案名稱不正確。");
+    fail(".ai/state.json must use schemaVersion 1 and project bookflow.");
   }
   if (state.owner !== "none" && !AGENTS.has(state.owner)) {
-    fail("狀態中的 owner 不正確。");
+    fail(".ai/state.json owner must be none, codex, or cursor.");
   }
   if (!["idle", "in_progress", "handoff", "blocked"].includes(state.status)) {
-    fail("狀態中的 status 不正確。");
+    fail(".ai/state.json status must be idle, in_progress, handoff, or blocked.");
   }
   if (state.status === "idle" && state.owner !== "none") {
-    fail("idle 狀態的 owner 必須是 none。");
+    fail("idle state must use owner none.");
   }
   if (
     ["in_progress", "handoff", "blocked"].includes(state.status) &&
     !AGENTS.has(state.owner)
   ) {
-    fail(`${state.status} 狀態必須指定 codex 或 cursor。`);
+    fail(`${state.status} state must be owned by codex or cursor.`);
   }
   if (!/^[0-9a-f]{40}$/i.test(state.baseCommit)) {
-    fail("baseCommit 必須是完整的 Git commit SHA。");
+    fail("baseCommit must be a full Git commit SHA.");
   }
   if (Number.isNaN(Date.parse(state.updatedAt))) {
-    fail("updatedAt 不是有效時間。");
+    fail("updatedAt must be a valid ISO date.");
   }
-}
-
-function sectionContent(markdown, title) {
-  const lines = markdown.replaceAll("\r\n", "\n").split("\n");
-  const start = lines.findIndex((line) => line.trim() === `## ${title}`);
-  if (start === -1) return "";
-
-  const end = lines.findIndex(
-    (line, index) => index > start && line.startsWith("## "),
-  );
-  return lines.slice(start + 1, end === -1 ? undefined : end).join("\n").trim();
 }
 
 function validateHandoff(markdown) {
   validateReadableText(markdown, "AI_HANDOFF.md");
 
-  const missing = REQUIRED_SECTIONS.filter(
-    (section) => !sectionContent(markdown, section),
-  );
+  const missing = missingHandoffSections(markdown);
   if (missing.length > 0) {
-    fail(`AI_HANDOFF.md 缺少內容：${missing.join("、")}`);
+    fail(
+      `AI_HANDOFF.md is missing required sections: ${missing.join("、")}. Run ` +
+        "`node scripts/ai-collaboration.mjs draft <title>` or copy `.ai/templates/handoff.md`, then fill every section with confirmed facts.",
+    );
   }
 
   for (const pattern of SENSITIVE_PATTERNS) {
     if (pattern.test(markdown)) {
-      fail("交接內容疑似包含密碼、Token 或私鑰，請移除敏感資訊。");
+      fail("AI_HANDOFF.md appears to contain a secret, token, password, or credential.");
     }
   }
 }
 
 function validateReadableText(content, label) {
   if (UNREADABLE_TEXT_PATTERN.test(content)) {
-    fail(`${label} 含有疑似中文亂碼，請用 UTF-8 重新讀寫後再提交。`);
+    fail(`${label} contains mojibake or private-use replacement characters. Rewrite it as UTF-8 before continuing.`);
   }
 }
 
@@ -194,17 +177,17 @@ function archiveHandoff(state, actor, statusLabel) {
   const filename = `${timestampForFile()}-${taskSlug(state.taskId)}.md`;
   const path = join(HISTORY_DIR, filename);
   if (existsSync(path)) {
-    fail(`歷史檔案已存在，拒絕覆蓋：${filename}`);
+    fail(`History file already exists: ${filename}`);
   }
 
   const metadata = [
-    "# AI 交接歷史",
+    "# AI Handoff Archive",
     "",
-    `- 任務：${state.taskTitle}`,
-    `- 執行者：${actor}`,
-    `- 狀態：${statusLabel}`,
-    `- 基準 Commit：\`${state.baseCommit}\``,
-    `- 封存時間：${nowIso()}`,
+    `- Task: ${state.taskTitle}`,
+    `- Actor: ${actor}`,
+    `- Status: ${statusLabel}`,
+    `- Base commit: \`${state.baseCommit}\``,
+    `- Archived at: ${nowIso()}`,
     "",
     "---",
     "",
@@ -215,21 +198,21 @@ function archiveHandoff(state, actor, statusLabel) {
 
 function printStatus(state = readState()) {
   validateState(state);
-  console.log(`專案：${state.project}`);
-  console.log(`狀態：${state.status}`);
-  console.log(`目前 AI：${state.owner}`);
-  console.log(`任務：${state.taskTitle}`);
-  console.log(`更新時間：${state.updatedAt}`);
-  console.log(`交接摘要：${state.handoffFile}`);
+  console.log(`Project: ${state.project}`);
+  console.log(`Status: ${state.status}`);
+  console.log(`Owner: ${state.owner}`);
+  console.log(`Task: ${state.taskTitle}`);
+  console.log(`Updated: ${state.updatedAt}`);
+  console.log(`Handoff: ${state.handoffFile}`);
   if (state.historyFile) {
-    console.log(`最近歷史：${state.historyFile}`);
+    console.log(`History: ${state.historyFile}`);
   }
 }
 
 function claim(agent, title) {
   validateAgent(agent);
   if (!title?.trim()) {
-    fail("請提供任務名稱。");
+    fail("Provide a task title.");
   }
 
   const state = readState();
@@ -238,10 +221,10 @@ function claim(agent, title) {
     ["in_progress", "blocked"].includes(state.status) &&
     state.owner !== agent
   ) {
-    fail(`目前由 ${state.owner} 負責「${state.taskTitle}」，不可重複接手。`);
+    fail(`${state.owner} already owns this task: ${state.taskTitle}`);
   }
   if (state.status === "handoff" && state.owner !== agent) {
-    fail(`此工作指定交接給 ${state.owner}。`);
+    fail(`Task is handed off to ${state.owner}.`);
   }
 
   const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
@@ -253,14 +236,14 @@ function claim(agent, title) {
   state.updatedAt = nowIso();
   state.historyFile = null;
   writeState(state);
-  console.log(`${agent} 已接手：${state.taskTitle}`);
-  console.log("請更新 AI_HANDOFF.md，工作完成後執行交接或完成指令。");
+  console.log(`${agent} claimed: ${state.taskTitle}`);
+  console.log("Update AI_HANDOFF.md or run `node scripts/ai-collaboration.mjs draft <title>` before completing the task.");
 }
 
 function assertOwner(state, agent) {
   validateAgent(agent);
   if (state.owner !== agent || !["in_progress", "blocked"].includes(state.status)) {
-    fail(`目前狀態不是由 ${agent} 執行中的工作。`);
+    fail(`Current task is not owned by ${agent}.`);
   }
 }
 
@@ -268,20 +251,20 @@ function handoff(from, to) {
   validateAgent(from);
   validateAgent(to);
   if (from === to) {
-    fail("交接來源與目標不可相同。");
+    fail("Cannot hand off to the same agent.");
   }
 
   const state = readState();
   validateState(state);
   assertOwner(state, from);
   validateHandoff(readHandoff());
-  state.historyFile = archiveHandoff(state, from, `交接給 ${to}`);
+  state.historyFile = archiveHandoff(state, from, `handoff to ${to}`);
   state.owner = to;
   state.status = "handoff";
   state.updatedAt = nowIso();
   writeState(state);
-  console.log(`已由 ${from} 交接給 ${to}。`);
-  console.log(`歷史紀錄：${state.historyFile}`);
+  console.log(`Handed off from ${from} to ${to}.`);
+  console.log(`History saved: ${state.historyFile}`);
 }
 
 function complete(agent) {
@@ -289,18 +272,18 @@ function complete(agent) {
   validateState(state);
   assertOwner(state, agent);
   validateHandoff(readHandoff());
-  state.historyFile = archiveHandoff(state, agent, "完成");
+  state.historyFile = archiveHandoff(state, agent, "complete");
   state.owner = "none";
   state.status = "idle";
   state.updatedAt = nowIso();
   writeState(state);
-  console.log(`${agent} 已完成任務並解除占用。`);
-  console.log(`歷史紀錄：${state.historyFile}`);
+  console.log(`${agent} marked the task complete.`);
+  console.log(`History saved: ${state.historyFile}`);
 }
 
 function block(agent, reason) {
   if (!reason?.trim()) {
-    fail("請提供阻礙原因。");
+    fail("Provide a blocking reason.");
   }
   const state = readState();
   validateState(state);
@@ -308,8 +291,8 @@ function block(agent, reason) {
   state.status = "blocked";
   state.updatedAt = nowIso();
   writeState(state);
-  console.log(`${agent} 已將任務標記為 blocked：${reason.trim()}`);
-  console.log("請把阻礙與需要的協助寫入 AI_HANDOFF.md。");
+  console.log(`${agent} marked the task blocked: ${reason.trim()}`);
+  console.log("Document the blocker in AI_HANDOFF.md.");
 }
 
 function changedFiles(base, head) {
@@ -337,10 +320,10 @@ function checkHistoryChanges(base, head) {
     .split(/\r?\n/)
     .filter(Boolean);
   if (!entries.some((entry) => /^A\s+\.ai\/history\/.+\.md$/.test(entry))) {
-    fail("程式變更必須新增一筆 .ai/history/*.md 交接歷史。");
+    fail("Substantive PR changes must add one .ai/history/*.md handoff archive.");
   }
   if (entries.some((entry) => /^(?:M|D|R|C)\s/.test(entry))) {
-    fail(".ai/history 只能新增紀錄，不可修改、刪除或重新命名舊紀錄。");
+    fail(".ai/history is append-only. Add a new history file instead of editing old entries.");
   }
 }
 
@@ -352,7 +335,7 @@ function checkSecretsInHistory(files) {
     validateReadableText(content, file);
     for (const pattern of SENSITIVE_PATTERNS) {
       if (pattern.test(content)) {
-        fail(`${file} 疑似包含敏感資訊。`);
+        fail(`${file} appears to contain a secret, token, password, or credential.`);
       }
     }
   }
@@ -363,24 +346,24 @@ function checkLocal() {
   validateState(state);
   validateHandoff(readHandoff());
   if (state.historyFile && !existsSync(join(ROOT, state.historyFile))) {
-    fail(`找不到最近歷史檔案：${state.historyFile}`);
+    fail(`historyFile is set but missing: ${state.historyFile}`);
   }
-  console.log("AI 交接資料檢查通過。");
+  console.log("AI handoff local check passed.");
 }
 
 function checkCi(base, head) {
   if (!base || !head) {
-    fail("CI 檢查需要 base 與 head commit。");
+    fail("check-ci requires base and head commits.");
   }
   const files = changedFiles(base, head);
   const substantive = files.filter(isSubstantive);
   if (substantive.length === 0) {
-    console.log("只有文件或交接資料變更，不要求新增交接歷史。");
+    console.log("No substantive code changes; running local handoff validation only.");
     checkLocal();
     return;
   }
   if (!files.includes("AI_HANDOFF.md") || !files.includes(".ai/state.json")) {
-    fail("程式變更必須同步更新 AI_HANDOFF.md 與 .ai/state.json。");
+    fail("Substantive changes must update AI_HANDOFF.md and .ai/state.json.");
   }
   checkHistoryChanges(base, head);
   checkSecretsInHistory(files);
@@ -388,18 +371,18 @@ function checkCi(base, head) {
   validateState(state);
   validateHandoff(readHandoff());
   if (!TERMINAL_STATUSES.has(state.status)) {
-    fail("準備合併的 PR 狀態必須是 idle 或 handoff，不可仍在執行或阻塞。");
+    fail("PR handoff status must be idle or handoff before opening or merging a release PR.");
   }
   if (!state.historyFile || !files.includes(state.historyFile)) {
-    fail("state.json 的 historyFile 必須指向本次新增的歷史紀錄。");
+    fail("state.json historyFile must point at the new .ai/history entry included in this PR.");
   }
-  console.log(`AI 交接完整性檢查通過，共檢查 ${substantive.length} 個程式檔案。`);
+  console.log(`AI handoff CI check passed for ${substantive.length} substantive file(s).`);
 }
 
 function hookStart() {
-  console.log("BookFlow AI 交接狀態：");
+  console.log("BookFlow AI handoff status");
   printStatus();
-  console.log("\n目前交接摘要：\n");
+  console.log("\nCurrent handoff:\n");
   console.log(readHandoff());
 }
 
@@ -416,9 +399,26 @@ function hookStop() {
     !changed.includes(".ai/state.json")
   ) {
     console.warn(
-      "提醒：目前有程式變更，但尚未更新 AI_HANDOFF.md 與 .ai/state.json。",
+      "Reminder: substantive changes are present without AI_HANDOFF.md and .ai/state.json updates.",
     );
   }
+}
+
+function draft(title) {
+  const branch = git(["branch", "--show-current"]) || "(detached)";
+  const baseCommit = git(["rev-parse", "HEAD"]);
+  const state = existsSync(STATE_PATH) ? readState() : null;
+  const taskTitle = title?.trim() || state?.taskTitle || "<任務標題>";
+  const historyFile = state?.historyFile || `.ai/history/${timestampForFile()}-${taskSlug(taskTitle)}.md`;
+  process.stdout.write(
+    renderHandoffDraft({
+      title: taskTitle,
+      branch,
+      baseCommit,
+      currentCommit: "not committed yet",
+      historyFile,
+    }),
+  );
 }
 
 const [command = "status", ...args] = process.argv.slice(2);
@@ -445,6 +445,9 @@ switch (command) {
   case "check-ci":
     checkCi(args[0], args[1]);
     break;
+  case "draft":
+    draft(args.join(" "));
+    break;
   case "hook-start":
     hookStart();
     break;
@@ -453,6 +456,6 @@ switch (command) {
     break;
   default:
     fail(
-      `未知指令 ${basename(command)}。可用指令：status、claim、handoff、complete、block、check、check-ci。`,
+      `Unknown command ${basename(command)}. Available commands: status, claim, handoff, complete, block, check, check-ci, draft.`,
     );
 }

@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260703-image-search-no-query",
-  "taskTitle": "keep image search text out of normal search",
-  "baseCommit": "3452e3aed33c74d24a8f7e40c34056b959a578dc",
+  "taskId": "20260703-release-flow-hardening",
+  "taskTitle": "harden low-token release workflow",
+  "baseCommit": "6a24bfa90ddd06a67729137fa30125194c32fa70",
   "updatedAt": "2026-07-03T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260703-image-search-no-query.md"
+  "historyFile": ".ai/history/20260703-release-flow-hardening.md"
 }

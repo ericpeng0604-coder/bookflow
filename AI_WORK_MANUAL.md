@@ -737,6 +737,28 @@ new commits, create a clean branch from `origin/main` and cherry-pick only the
 new release commit. If it reports missing handoff files, update
 `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/` before pushing.
 
+### LESSON-043: Release flow assumptions need executable guards
+
+**Observed problem:** A small image-search release still hit avoidable release
+friction: the handoff file used non-required section names, local verification
+ran in a Codex shell with `node` but no `npm`, and a local `gh pr merge`
+reported a worktree checkout error even though GitHub had merged the PR.
+
+**Cause:** The release process depended on memory and free-form handoff writing
+instead of one shared handoff contract, environment diagnostics, and remote
+merge/deployment proof.
+
+**Detection:** Run `release:plan`, `release:doctor`, and `release:preflight`
+before opening or merging a PR. Treat missing handoff sections, npm-lock plus
+pnpm/packageManager drift, linked `node_modules`, and multi-worktree merge
+errors as workflow signals to resolve before spending CI or dashboard time.
+
+**Prevention rule:** Generate handoff drafts from the repo template, keep
+`AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/` in sync, preserve the
+npm-lock package manager unless a package-manager migration is explicit, and
+verify merge/deploy state with `gh pr view`, `/api/health/release`, and
+`release-smoke` before using dashboards.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
