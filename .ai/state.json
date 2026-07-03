@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260704-marketplace-render-cleanup",
-  "taskTitle": "marketplace render and iteration cleanup",
-  "baseCommit": "bd7b3e4b2bf50934c92a527db43750b5b8eabe95",
-  "updatedAt": "2026-07-04T01:53:50+08:00",
+  "taskId": "20260704-trade-chat-cursor-hydration",
+  "taskTitle": "trade chat cursor and hydration cleanup",
+  "baseCommit": "dda106778fbc1e89043bfecf9e10222fabce28d4",
+  "updatedAt": "2026-07-04T02:05:13+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260704-marketplace-render-cleanup.md"
+  "historyFile": ".ai/history/20260704-trade-chat-cursor-hydration.md"
 }

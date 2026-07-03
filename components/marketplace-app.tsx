@@ -124,6 +124,7 @@ const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
 const LAST_CHAT_KEY = "bookflow-last-chat-v1";
 const IMAGE_SEARCH_MAX_FILE_BYTES = 5 * 1024 * 1024;
 const IMAGE_SEARCH_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MESSAGE_RECALL_WINDOW_MS = 10 * 60_000;
 const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
 const lastChatStorageKey = (userId: string) => `${LAST_CHAT_KEY}:${userId}`;
 const listingDepartmentStorageKey = (userId: string) => `bookflow-last-book-department-v1:${userId}`;
@@ -518,6 +519,14 @@ function validateImageSearchFile(file: File) {
     return "請上傳 5MB 以內的 JPG、PNG 或 WebP 書封照片";
   }
   return "";
+}
+
+function canRecallTradeMessage(message: TradeMessage, currentUserId: string, now: number | null) {
+  return Boolean(
+    now
+    && message.senderId === currentUserId
+    && now - new Date(message.createdAt).getTime() <= MESSAGE_RECALL_WINDOW_MS,
+  );
 }
 
 export function MarketplaceApp() {
@@ -5217,17 +5226,18 @@ function TradeChatPanel({
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
-  const [messageCursor, setMessageCursor] = useState<{ createdAt: string; id: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const actionDialog = useActionDialog();
   const logRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messageCursorRef = useRef<{ createdAt: string; id: string } | null>(null);
   const sendingRef = useRef(false);
   const stickToBottomRef = useRef(true);
   const lastMessageCountRef = useRef(0);
   const sentByCurrentUserRef = useRef(false);
   const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
+  const [messageActionNow, setMessageActionNow] = useState<number | null>(null);
   const otherUserId = conversation.buyerId === currentUserId ? conversation.sellerId : conversation.buyerId;
   const isSeller = conversation.sellerId === currentUserId;
   const canRespondToRequest = Boolean(
@@ -5250,7 +5260,7 @@ function TradeChatPanel({
         window.requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "auto" }));
         setShowQuickPhrases(!page.messages.some((item) => item.senderId === currentUserId));
         setHasOlderMessages(page.hasMore);
-        setMessageCursor(page.nextCursor);
+        messageCursorRef.current = page.nextCursor;
         onRead(conversation.id);
         try {
           await markConversationRead(client, conversation.id);
@@ -5319,6 +5329,13 @@ function TradeChatPanel({
       void client.removeChannel(channel);
     };
   }, [conversation.id, currentUserId, onRead]);
+
+  useEffect(() => {
+    const updateMessageActionTime = () => setMessageActionNow(Date.now());
+    updateMessageActionTime();
+    const interval = window.setInterval(updateMessageActionTime, 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const messageCount = messages.length;
@@ -5396,19 +5413,20 @@ function TradeChatPanel({
   }
 
   async function loadOlderMessages() {
-    if (!supabase || !messageCursor || loadingOlder) return;
+    const cursor = messageCursorRef.current;
+    if (!supabase || !cursor || loadingOlder) return;
     const log = logRef.current;
     const previousScrollHeight = log?.scrollHeight ?? 0;
     const previousScrollTop = log?.scrollTop ?? 0;
     setLoadingOlder(true);
     try {
-      const page = await fetchTradeMessages(supabase, conversation.id, messageCursor);
+      const page = await fetchTradeMessages(supabase, conversation.id, cursor);
       setMessages((previous) => [
         ...page.messages.filter((item) => !previous.some((existing) => existing.id === item.id)),
         ...previous,
       ]);
       setHasOlderMessages(page.hasMore);
-      setMessageCursor(page.nextCursor);
+      messageCursorRef.current = page.nextCursor;
       window.requestAnimationFrame(() => {
         if (!logRef.current) return;
         const heightDelta = logRef.current.scrollHeight - previousScrollHeight;
@@ -5605,8 +5623,7 @@ function TradeChatPanel({
                 )}
                 <div className="message-tools">
                   <button type="button" onClick={() => void reportChat(message.id)}>檢舉</button>
-                  {message.senderId === currentUserId
-                    && Date.now() - new Date(message.createdAt).getTime() <= 10 * 60_000
+                  {canRecallTradeMessage(message, currentUserId, messageActionNow)
                     && <button type="button" onClick={() => void recall(message.id)}>收回</button>}
                 </div>
               </>
