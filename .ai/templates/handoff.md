@@ -1,10 +1,10 @@
 # BookFlow AI Handoff
 
-## 目前目標
+## 任務目標
 
-用一句話描述目前要完成的任務與成功狀態。
+<用一段話描述本次任務要完成什麼>
 
-## 重要背景與決策
+## 目前狀態與背景
 
 - Branch: `<branch>`.
 - Base commit: `<base-commit>`.
@@ -14,31 +14,31 @@
 
 ## 已完成
 
-- 列出已經完成且有證據的工作。
+- <列出已完成且有證據的項目>
 
-## 剩餘工作
+## 下一步
 
-1. 列出下一步操作。
-2. 包含 PR、merge、production smoke 等尚未完成的 release 步驟。
+1. <下一個具體步驟>
+2. <下一個具體步驟>
 
-## 修改範圍
+## 變更檔案
 
 - `path/to/file`
 
 ## 驗證結果
 
-- `command`: passed / failed / NOT VERIFIED。
+- `<command>`: passed / failed / NOT VERIFIED
 
-## 風險或阻礙
+## 風險與注意事項
 
-- 列出仍然存在的風險、阻礙或需要人工確認的事項。
+- <仍需注意的風險、限制或未驗證事項>
 
-## 下一個 AI 的操作
+## 下一位 AI 工作指引
 
-1. 寫下下一個 AI 應該照做的具體步驟。
-2. 保持 `AI_HANDOFF.md`、`.ai/state.json`、`.ai/history/*.md` 同步。
+1. <下一位 AI 應如何接手>
+2. Keep `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/*.md` in sync.
 
-## 最後基準 Commit
+## 相關 Commit
 
 - Base commit: `<base-commit>`.
 - Current implementation commit before final commit: `<sha-or-not-committed-yet>`.

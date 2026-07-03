@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260703-release-flow-hardening",
-  "taskTitle": "harden low-token release workflow",
-  "baseCommit": "6a24bfa90ddd06a67729137fa30125194c32fa70",
+  "taskId": "20260703-release-pr-status-helper",
+  "taskTitle": "reduce release PR wait without lowering verification quality",
+  "baseCommit": "574e5405356b44945de46075d379298ce2c27856",
   "updatedAt": "2026-07-03T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260703-release-flow-hardening.md"
+  "historyFile": ".ai/history/20260703-release-pr-status-helper.md"
 }
