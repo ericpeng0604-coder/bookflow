@@ -100,9 +100,11 @@ if (touchedMigrations.length) {
 }
 
 console.log("\nProduction proof after merge:");
-console.log("  1. Get the merged SHA with gh pr view <pr> --json mergeCommit or the GitHub API.");
-console.log("  2. Poll https://bookflow-green.vercel.app/api/health/release until commit matches the merged SHA.");
-console.log("  3. RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> node scripts/release-smoke.mjs");
+console.log("  1. Use node scripts/release-pr-status.mjs <pr> --wait to stop when release gates pass.");
+console.log("  2. Merge remotely in multi-worktree setups; do not depend on checking out local main.");
+console.log("  3. Get the merged SHA with gh pr view <pr> --json mergeCommit or the GitHub API.");
+console.log("  4. Poll https://bookflow-green.vercel.app/api/health/release until commit matches the merged SHA.");
+console.log("  5. RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> node scripts/release-smoke.mjs");
 console.log("  Avoid repeated Vercel or GitHub dashboard reloads unless a direct status check fails.");
 
 console.log("\nSuggested next step:");
@@ -113,5 +115,5 @@ if (touchedProtected.length) {
 } else if (report.packageManagerLocks.includes("package-lock.json") && !report.npmOnPath) {
   console.log("  Use the bundled Node runtime for scripts and preserve package-lock.json; do not add pnpm/packageManager as a release workaround.");
 } else {
-  console.log("  Finish local checks, commit, then run node scripts/release-preflight.mjs before opening the PR.");
+  console.log("  Finish local checks, commit, run node scripts/release-preflight.mjs, then use node scripts/release-pr-status.mjs <pr> --wait after opening the PR.");
 }

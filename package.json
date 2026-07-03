@@ -47,6 +47,7 @@
     "verify": "node scripts/verify.mjs",
     "release:plan": "node scripts/release-plan.mjs",
     "release:doctor": "node scripts/release-doctor.mjs",
+    "release:pr-status": "node scripts/release-pr-status.mjs",
     "release:preflight": "node scripts/release-preflight.mjs",
     "release:smoke": "node scripts/release-smoke.mjs",
     "staging:check": "node scripts/check-staging.mjs"

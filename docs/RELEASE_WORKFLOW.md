@@ -61,6 +61,7 @@ workflow is approved. Application rollback does not reverse database changes.
 ```text
 npm run release:plan
 npm run release:doctor
+npm run release:pr-status -- <pr> --wait
 npm run release:preflight
 npm run check:all
 npm run check:workflows
@@ -83,6 +84,12 @@ the active or bundled Node runtime for repo scripts and an npm-created
 `node_modules` for full local typecheck, lint, and build. Do not switch this
 npm-lock project to pnpm, add `packageManager`, or rewrite lockfiles merely to
 make local release checks run.
+
+`release:pr-status` prints GitHub required checks plus the BookFlow release
+gates: AI handoff, Release Readiness, Quality and build, Workflow syntax,
+Staging Migration, and Vercel. With `--wait`, it polls at a compact interval and
+exits as soon as release gates pass, even if optional review bots are still
+pending.
 
 ## Low-token Codex path
 
@@ -127,10 +134,22 @@ The generated draft and `.ai/templates/handoff.md` use the exact required
 sections. Do not invent alternate heading names; `release:preflight` will reject
 them before CI.
 
-After the PR checks pass, prefer remote state checks over local branch switching
-in multi-worktree setups:
+After opening a PR, poll only required GitHub checks with the compact status
+helper:
 
 ```text
+node scripts/release-pr-status.mjs <pr> --wait --interval 25 --timeout 600
+```
+
+The helper uses GitHub's required-check list plus BookFlow's release gates. If
+optional review bots such as CodeRabbit are still pending, list them as
+non-blocking and continue once all release gates pass.
+
+After the required PR checks pass, prefer remote state checks and remote merge
+over local branch switching in multi-worktree setups:
+
+```text
+gh api -X PUT repos/ericpeng0604-coder/bookflow/pulls/<pr>/merge -f merge_method=squash
 gh pr view <pr> --json state,mergedAt,mergeCommit
 ```
 

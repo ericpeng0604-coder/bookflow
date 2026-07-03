@@ -1,13 +1,13 @@
 export const REQUIRED_HANDOFF_SECTIONS = [
-  "目前目標",
-  "重要背景與決策",
+  "任務目標",
+  "目前狀態與背景",
   "已完成",
-  "剩餘工作",
-  "修改範圍",
+  "下一步",
+  "變更檔案",
   "驗證結果",
-  "風險或阻礙",
-  "下一個 AI 的操作",
-  "最後基準 Commit",
+  "風險與注意事項",
+  "下一位 AI 工作指引",
+  "相關 Commit",
 ];
 
 export const UNREADABLE_TEXT_PATTERN =
@@ -39,11 +39,11 @@ export function renderHandoffDraft({
 } = {}) {
   return `# BookFlow AI Handoff
 
-## 目前目標
+## 任務目標
 
 ${title}
 
-## 重要背景與決策
+## 目前狀態與背景
 
 - Branch: \`${branch}\`.
 - Base commit: \`${baseCommit}\`.
@@ -55,14 +55,14 @@ ${title}
 
 - Not started yet.
 
-## 剩餘工作
+## 下一步
 
 1. Implement the scoped change.
 2. Run the required local checks.
 3. Commit, run \`node scripts/release-preflight.mjs\`, then open a PR.
 4. After merge, verify production with \`/api/health/release\` and \`release:smoke\`.
 
-## 修改範圍
+## 變更檔案
 
 - ${historyFile}
 
@@ -70,17 +70,17 @@ ${title}
 
 - Not verified yet.
 
-## 風險或阻礙
+## 風險與注意事項
 
 - None known yet.
 
-## 下一個 AI 的操作
+## 下一位 AI 工作指引
 
 1. Replace every placeholder in this handoff with confirmed facts.
 2. Keep \`AI_HANDOFF.md\`, \`.ai/state.json\`, and the matching \`.ai/history/*.md\` in sync.
 3. Run \`node scripts/ai-collaboration.mjs check-ci origin/main HEAD\` before opening or merging the PR.
 
-## 最後基準 Commit
+## 相關 Commit
 
 - Base commit: \`${baseCommit}\`.
 - Current implementation commit before final commit: \`${currentCommit}\`.

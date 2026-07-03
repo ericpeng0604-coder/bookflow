@@ -759,6 +759,27 @@ npm-lock package manager unless a package-manager migration is explicit, and
 verify merge/deploy state with `gh pr view`, `/api/health/release`, and
 `release-smoke` before using dashboards.
 
+### LESSON-044: Release merges should wait only on required checks
+
+**Observed problem:** A release appeared to take several extra minutes because
+the operator waited for optional PR activity and used a local merge command that
+collided with a multi-worktree `main` checkout even though required checks had
+already passed.
+
+**Cause:** The release flow treated all visible PR checks and bot activity as
+blocking, and the merge command depended on local branch switching.
+
+**Detection:** Compare `gh pr checks --required` with all PR checks. If
+required checks are green while optional review bots remain pending, the wait is
+operator overhead. In multi-worktree setups, local `main` checkout errors after
+a remote merge should not be interpreted as a failed release.
+
+**Prevention rule:** Use `release:pr-status` to poll GitHub required checks plus
+BookFlow release gates, merge through remote GitHub state or API when local
+worktrees may hold `main`, then prove production with `/api/health/release` and
+`release:smoke`. Save tokens by using compact status checks and direct APIs, not
+by skipping required evidence.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

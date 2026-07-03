@@ -1,82 +1,80 @@
 # BookFlow AI Handoff
 
-## 目前目標
+## 任務目標
 
-Harden the BookFlow release workflow so future deployments use a fixed low-token path: readable handoff sections, explicit local release environment diagnostics, stale-branch preflight checks, and remote production proof through `/api/health/release` plus `release-smoke`.
+Reduce BookFlow release wait time and token use without lowering verification quality by adding a required-check PR status helper, documenting remote merge for multi-worktree setups, and repairing readable handoff/workflow names.
 
-## 重要背景與決策
+## 目前狀態與背景
 
-- Branch: `codex/release-flow-hardening`.
-- Base commit: `6a24bfa90ddd06a67729137fa30125194c32fa70`.
+- Branch: `codex/release-pr-status-helper`.
+- Base commit: `574e5405356b44945de46075d379298ce2c27856`.
 - This is release tooling and documentation only; no product runtime behavior is changed.
 - No database migration is included.
-- No GitHub workflow or protected recovery file is changed.
+- No protected recovery file is changed.
+- `.github/workflows/check-ai-handoff.yml` is changed only to repair the readable status name `AI 交接完整性`.
 - Do not add `Rollback-Workflow-Approved: true`.
-- Keep the existing npm/package-lock workflow; do not introduce pnpm as a local workaround.
 
 ## 已完成
 
-- Added a shared handoff contract with the required `AI_HANDOFF.md` sections.
-- Rebuilt `scripts/ai-collaboration.mjs` with readable messages and a `draft` command.
-- Added `release:doctor` to report `node`, `npm`, lockfile, `node_modules`, and `.next` state.
-- Expanded `release:plan` and `release:preflight` with clearer low-token guidance and package-manager safeguards.
-- Updated release workflow documentation and added a release-flow regression check.
-- Added `LESSON-043` to `AI_WORK_MANUAL.md`.
+- Added `scripts/release-pr-status.mjs` to poll GitHub required checks plus BookFlow release gates and stop without waiting for optional review bots.
+- Added `release:pr-status` to `package.json`.
+- Updated `release:plan` to recommend compact required-check polling, remote merge, merged-SHA lookup, production health, and `release-smoke`.
+- Rebuilt `docs/RELEASE_WORKFLOW.md` with readable required-check names, compact PR polling, remote merge guidance, and production proof steps.
+- Rebuilt `.ai/templates/handoff.md` and `scripts/lib/handoff-contract.mjs` with readable Chinese section names.
+- Rebuilt `.github/workflows/check-ai-handoff.yml` with readable workflow/job names.
+- Added `LESSON-044` to `AI_WORK_MANUAL.md`.
 
-## 剩餘工作
+## 下一步
 
-1. Run local validation.
+1. Run local release-flow, workflow, project, and preflight checks.
 2. Commit the scoped release-flow changes.
-3. Run `node scripts/release-preflight.mjs`.
-4. Open a PR and wait for required checks.
-5. Merge and verify the production release if the user asks to deploy this tooling change.
+3. Open a PR and use `node scripts/release-pr-status.mjs <pr> --wait` instead of waiting for optional checks.
+4. Merge remotely and verify production with `/api/health/release` plus `release-smoke`.
 
-## 修改範圍
+## 變更檔案
 
-- `scripts/ai-collaboration.mjs`
-- `scripts/lib/handoff-contract.mjs`
-- `scripts/lib/release-environment.mjs`
-- `scripts/release-plan.mjs`
-- `scripts/release-preflight.mjs`
-- `scripts/release-doctor.mjs`
-- `scripts/check-release-flow.mjs`
-- `scripts/run-project-checks.mjs`
 - `.ai/templates/handoff.md`
-- `docs/RELEASE_WORKFLOW.md`
-- `AI_WORK_MANUAL.md`
-- `package.json`
-- `AI_HANDOFF.md`
+- `.github/workflows/check-ai-handoff.yml`
 - `.ai/state.json`
-- `.ai/history/20260703-release-flow-hardening.md`
+- `.ai/history/20260703-release-pr-status-helper.md`
+- `AI_HANDOFF.md`
+- `AI_WORK_MANUAL.md`
+- `docs/RELEASE_WORKFLOW.md`
+- `package.json`
+- `scripts/check-release-flow.mjs`
+- `scripts/lib/handoff-contract.mjs`
+- `scripts/release-plan.mjs`
+- `scripts/release-pr-status.mjs`
 
 ## 驗證結果
 
-- `node --check scripts/ai-collaboration.mjs scripts/release-plan.mjs scripts/release-preflight.mjs scripts/release-doctor.mjs scripts/check-release-flow.mjs scripts/lib/handoff-contract.mjs scripts/lib/release-environment.mjs`: passed.
-- `node -e "JSON.parse(...package.json...)"`: passed.
+- Bundled Node syntax checks for changed release scripts: passed.
 - `node scripts/check-release-flow.mjs`: passed.
 - `node scripts/ai-collaboration.mjs check`: passed.
-- `node scripts/release-doctor.mjs`: passed.
 - `node scripts/release-plan.mjs`: passed.
 - `git diff --check`: passed.
 - `node scripts/check-workflows.mjs`: passed.
 - `node scripts/run-project-checks.mjs`: passed, 26/26.
-- `node scripts/release-preflight.mjs`: passed after commit.
+- `node scripts/release-pr-status.mjs 65`: passed and reported all release gates green.
 - `tsc --noEmit`: passed using a temporary `node_modules` junction to the main checkout's npm-created dependency tree.
 - `eslint .`: passed using the same temporary dependency junction.
 - `next build`: passed using the same temporary dependency junction.
 
-## 風險或阻礙
+## 風險與注意事項
 
 - The active original checkout has unrelated local edits, so this work is isolated in a clean worktree.
-- Local `npm` may be missing from PATH in Codex desktop; use the bundled Node runtime for repo scripts and preserve `package-lock.json`.
+- The change intentionally keeps verification quality: it reduces repeated polling/log reading, not required checks.
+- Local `npm` may be missing from PATH in Codex desktop; use Node scripts directly when needed.
+- The temporary `node_modules` junction and `.next` build output were removed after verification.
 
-## 下一個 AI 的操作
+## 下一位 AI 工作指引
 
-1. Open a PR if the user wants this tooling change published.
-2. Merge after required checks pass.
-3. Verify production with `/api/health/release` and `release-smoke` if the user asks to deploy this tooling release.
+1. Keep this release scoped to release workflow tooling and documentation.
+2. Do not touch protected recovery files or add the rollback approval trailer.
+3. After PR creation, run `node scripts/release-pr-status.mjs <pr> --wait` and merge only after required checks pass.
+4. Verify the deployed merged SHA with `/api/health/release` and `release-smoke`.
 
-## 最後基準 Commit
+## 相關 Commit
 
-- Base commit: `6a24bfa90ddd06a67729137fa30125194c32fa70`.
-- Current implementation commit before final amend: pending.
+- Base commit: `574e5405356b44945de46075d379298ce2c27856`.
+- Current implementation commit before final commit: `not committed yet`.
