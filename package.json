@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:doctor": "node scripts/dev-environment.mjs",
+    "dev:clean": "node scripts/dev-environment.mjs --fix",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

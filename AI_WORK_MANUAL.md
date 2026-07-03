@@ -780,6 +780,23 @@ worktrees may hold `main`, then prove production with `/api/health/release` and
 `release:smoke`. Save tokens by using compact status checks and direct APIs, not
 by skipping required evidence.
 
+### LESSON-045: Local preview drift burns release time
+
+**Observed problem:** Deployment work kept spending time on repeated local
+preview and verification setup before the actual PR and production checks.
+
+**Cause:** Stale Next dev processes, `.next` cache state, and shell runtime
+assumptions were rediscovered manually instead of checked with one local
+diagnostic.
+
+**Detection:** Before restarting previews or rerunning broad checks, run
+`npm run dev:doctor` or `node scripts/dev-environment.mjs` to see the current
+checkout's Node/Next processes, package/runtime state, and `.next` cache state.
+
+**Prevention rule:** Use `dev:doctor` for diagnosis and `dev:clean` for manual
+cleanup before fresh local previews. Keep this separate from `npm run dev` so
+release acceleration does not unexpectedly kill active work.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

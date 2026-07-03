@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: release environment speedup
+- Actor: codex
+- Status: complete
+- Base commit: `25204680d1e32310190e4133e8d0cebe9547e3ad`
+- Archived at: 2026-07-03T12:21:14.044Z
+
+---
 # BookFlow AI Handoff
 
 ## 任務目標
