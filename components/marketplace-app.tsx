@@ -215,6 +215,7 @@ const CHAT_PHRASES = [
 ];
 
 const HIDDEN_REQUEST_MESSAGES = new Set(["通用語句提供選擇"]);
+const REQUEST_COORDINATION_MAX_LENGTH = 120;
 
 const statusLabels: Record<BookStatus, string> = {
   available: "販售中",
@@ -234,11 +235,26 @@ const requestLabels: Record<RequestStatus, string> = {
 };
 
 function sellerRequestNextStep(request: PurchaseRequest) {
-  if (request.status === "reserved") return "你已選定買家，可用聊聊約面交；完成後按「已完成面交」。";
+  if (request.status === "reserved") {
+    return hasRequestCoordination(request)
+      ? "你已選定買家，可先核對對方填寫的面交時間與地點，再用聊聊確認細節。"
+      : "你已選定買家，但對方還沒填好面交時間或地點；可先用聊聊確認，再安排面交。";
+  }
   if (request.status === "awaiting_confirmation") return "你已確認面交，正在等待買家確認收到。";
   if (request.status === "completed") return "這筆交易已完成，紀錄與聊天室仍可用來回查。";
   if (request.status === "pending" || request.status === "waitlisted") return "尚未選定買家，確認前可先用聊聊溝通。";
   return "";
+}
+
+function hasRequestCoordination(request: Pick<PurchaseRequest, "preferredMeetupLocation" | "preferredMeetupTime">) {
+  return Boolean(request.preferredMeetupLocation.trim() || request.preferredMeetupTime.trim());
+}
+
+function requestCoordinationLines(request: Pick<PurchaseRequest, "preferredMeetupLocation" | "preferredMeetupTime">) {
+  return [
+    request.preferredMeetupLocation.trim() ? `希望地點：${request.preferredMeetupLocation.trim()}` : "",
+    request.preferredMeetupTime.trim() ? `希望時間：${request.preferredMeetupTime.trim()}` : "",
+  ].filter(Boolean);
 }
 
 const reviewLabels: Record<ReviewStatus, string> = {
@@ -1650,7 +1666,14 @@ export function MarketplaceApp() {
       setToast("你的帳號目前為唯讀模式，不能送出購買意願");
       return;
     }
-    const message = String(new FormData(event.currentTarget).get("message") || "").trim();
+    const formData = new FormData(event.currentTarget);
+    const message = String(formData.get("message") || "").trim();
+    const preferredMeetupLocation = String(formData.get("preferredMeetupLocation") || "")
+      .trim()
+      .slice(0, REQUEST_COORDINATION_MAX_LENGTH);
+    const preferredMeetupTime = String(formData.get("preferredMeetupTime") || "")
+      .trim()
+      .slice(0, REQUEST_COORDINATION_MAX_LENGTH);
     const duplicate = store.requests.find(
       (request) =>
         request.bookId === selectedBook.id &&
@@ -1659,10 +1682,12 @@ export function MarketplaceApp() {
     );
     if (supabase) {
       let existingMessage = duplicate?.message;
+      let existingMeetupLocation = duplicate?.preferredMeetupLocation;
+      let existingMeetupTime = duplicate?.preferredMeetupTime;
       if (!duplicate) {
         const { data: existing, error: existingError } = await supabase
           .from("purchase_requests")
-          .select("id,message,status")
+          .select("id,message,status,preferred_meetup_location,preferred_meetup_time")
           .eq("book_id", selectedBook.id)
           .eq("buyer_id", currentUser.id)
           .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation"])
@@ -1672,8 +1697,14 @@ export function MarketplaceApp() {
           return;
         }
         existingMessage = existing ? String(existing.message || "") : undefined;
+        existingMeetupLocation = existing ? String(existing.preferred_meetup_location || "") : undefined;
+        existingMeetupTime = existing ? String(existing.preferred_meetup_time || "") : undefined;
       }
-      if (existingMessage?.trim() === message) {
+      if (
+        existingMessage?.trim() === message
+        && String(existingMeetupLocation || "").trim() === preferredMeetupLocation
+        && String(existingMeetupTime || "").trim() === preferredMeetupTime
+      ) {
         setModal(null);
         setEditingRequest(null);
         setToast("已送出購買意願");
@@ -1682,6 +1713,8 @@ export function MarketplaceApp() {
       const { error } = await supabase.rpc("create_purchase_request", {
         target_book_id: selectedBook.id,
         request_message: message,
+        preferred_meetup_location: preferredMeetupLocation,
+        preferred_meetup_time: preferredMeetupTime,
       });
       if (error) {
         setToast(error.code === "23505" ? "你已送出過購買意願" : `送出失敗：${error.message}`);
@@ -1695,7 +1728,11 @@ export function MarketplaceApp() {
       return;
     }
     if (duplicate) {
-      if (duplicate.message.trim() === message) {
+      if (
+        duplicate.message.trim() === message
+        && duplicate.preferredMeetupLocation.trim() === preferredMeetupLocation
+        && duplicate.preferredMeetupTime.trim() === preferredMeetupTime
+      ) {
         setModal(null);
         setEditingRequest(null);
         setToast("已送出購買意願");
@@ -1705,7 +1742,13 @@ export function MarketplaceApp() {
         ...previous,
         requests: previous.requests.map((request) =>
           request.id === duplicate.id
-            ? { ...request, message, updatedAt: new Date().toISOString() }
+            ? {
+              ...request,
+              message,
+              preferredMeetupLocation,
+              preferredMeetupTime,
+              updatedAt: new Date().toISOString(),
+            }
             : request,
         ),
       }));
@@ -1723,6 +1766,8 @@ export function MarketplaceApp() {
           bookId: selectedBook.id,
           buyerId: currentUser.id,
           message,
+          preferredMeetupLocation,
+          preferredMeetupTime,
           status: "pending",
           titleSnapshot: selectedBook.title,
           priceSnapshot: selectedBook.price,
@@ -2854,7 +2899,7 @@ export function MarketplaceApp() {
                 </button>
               )}
               {listingType === "book" ? (
-                <label htmlFor="home-filter-department">
+                <label className="select-filter" htmlFor="home-filter-department">
                   <span className="visually-hidden">科系</span>
                   <select
                     id="home-filter-department"
@@ -2867,7 +2912,7 @@ export function MarketplaceApp() {
                   <ChevronDown size={16} aria-hidden="true" />
                 </label>
               ) : (
-                <label htmlFor="home-filter-category">
+                <label className="select-filter" htmlFor="home-filter-category">
                   <span className="visually-hidden">分類</span>
                   <select
                     id="home-filter-category"
@@ -2880,7 +2925,7 @@ export function MarketplaceApp() {
                   <ChevronDown size={16} aria-hidden="true" />
                 </label>
               )}
-              <label className="price-filter" htmlFor="home-filter-price">
+              <label className="price-filter select-filter" htmlFor="home-filter-price">
                 <span className="visually-hidden">最高價格</span>
                 <select
                   id="home-filter-price"
@@ -3305,6 +3350,13 @@ export function MarketplaceApp() {
                         onBack={() => setExpandedConversationId(null)}
                         onHide={() => void hideClosedConversation(expandedConversationId)}
                         onOpenBook={openBook}
+                        onEditRequest={() => {
+                          if (!conversationRequest) return;
+                          setEditingRequest(conversationRequest);
+                          setSelectedId(conversation.bookId);
+                          setDetailBook(null);
+                          setModal("request");
+                        }}
                         onRespondToRequest={respondToRequest}
                       />
                     );
@@ -3337,6 +3389,7 @@ export function MarketplaceApp() {
                         </div>
                       )}
                       {["reserved", "awaiting_confirmation", "completed"].includes(request.status) && !contact && <div className="contact-note">賣家尚未分享額外聯絡方式，請使用聊聊聯絡。</div>}
+                      <RequestCoordinationPanel request={request} viewer="buyer" />
                       <OrderTimeline request={request} />
                     </div>
                     <div className="request-actions">
@@ -3381,6 +3434,7 @@ export function MarketplaceApp() {
                       <h3>{buyer?.name} 想買《{book.title}》</h3>
                       {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
                       {["reserved", "awaiting_confirmation"].includes(request.status) && <div className="contact-note">聯絡請使用獨立的「聊聊」頁籤。</div>}
+                      <RequestCoordinationPanel request={request} viewer="seller" />
                       {sellerRequestNextStep(request) && <p className="order-next-step">{sellerRequestNextStep(request)}</p>}
                       <OrderTimeline request={request} />
                     </div>
@@ -3674,6 +3728,21 @@ export function MarketplaceApp() {
           book={selectedBook}
           request={editingRequest}
           onClose={() => { setModal(null); setEditingRequest(null); }}
+          onOpenChat={() => {
+            setModal(null);
+            const activeRequest = editingRequest
+              || store.requests.find((request) =>
+                request.bookId === selectedBook.id
+                && request.buyerId === currentUser?.id
+                && ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status),
+              )
+              || null;
+            if (activeRequest) {
+              void openOrderConversation(activeRequest.id);
+              return;
+            }
+            void startConversation(selectedBook.id);
+          }}
           onSubmit={sendRequest}
         />
       )}
@@ -4977,22 +5046,24 @@ function BookFormModal({
               <label className="field-with-help">
                 <span className="field-label-row">
                   課堂名稱（選填）
-                  <button
-                    type="button"
-                    className="field-help-button"
-                    aria-label="課堂名稱填寫說明"
-                    aria-expanded={showCourseHelp}
-                    onClick={() => setShowCourseHelp((open) => !open)}
-                  >
-                    <HelpCircle size={15} aria-hidden="true" />
-                  </button>
+                  <span className="field-help-anchor">
+                    <button
+                      type="button"
+                      className="field-help-button"
+                      aria-label="課堂名稱填寫說明"
+                      aria-expanded={showCourseHelp}
+                      onClick={() => setShowCourseHelp((open) => !open)}
+                    >
+                      <HelpCircle size={15} aria-hidden="true" />
+                    </button>
+                    {showCourseHelp && (
+                      <small className="field-help-text" role="tooltip">
+                        填課表上的課名、老師常用的課堂名稱，或同學搜尋時會打的稱呼；不確定可以留空。
+                      </small>
+                    )}
+                  </span>
                 </span>
                 <input name="course" maxLength={LISTING_FIELD_LIMITS.course} value={draft.course} onChange={(event) => updateDraft("course", event.target.value)} placeholder="例如：資料結構、微積分（一）" />
-                {showCourseHelp && (
-                  <small className="field-help-text">
-                    填課表上的課名、老師常用的課堂名稱，或同學搜尋時會打的稱呼；不確定可以留空。
-                  </small>
-                )}
               </label>
               <label>授課老師（選填）<input name="teacher" maxLength={LISTING_FIELD_LIMITS.teacher} value={draft.teacher} onChange={(event) => updateDraft("teacher", event.target.value)} /></label>
             </>
@@ -5071,15 +5142,19 @@ function RequestModal({
   book,
   request,
   onClose,
+  onOpenChat,
   onSubmit,
 }: {
   book: Book;
   request?: PurchaseRequest | null;
   onClose: () => void;
+  onOpenChat: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const [message, setMessage] = useState(request?.message || REQUEST_PHRASES[0]);
   const [versionConfirmed, setVersionConfirmed] = useState(book.listingType !== "book");
+  const [preferredMeetupLocation, setPreferredMeetupLocation] = useState(request?.preferredMeetupLocation || "");
+  const [preferredMeetupTime, setPreferredMeetupTime] = useState(request?.preferredMeetupTime || "");
   const versionDetails = [
     book.publisher && `出版社：${book.publisher}`,
     book.edition && `版本：${book.edition}`,
@@ -5132,11 +5207,44 @@ function RequestModal({
             placeholder="介紹一下方便面交的時間，或想確認的書況..."
           />
         </label>
+        <div className="request-coordination-card">
+          <div className="request-coordination-head">
+            <b>想約的面交資訊</b>
+            <small>還沒確定也可以先留空，先去聊聊確認。</small>
+          </div>
+          <label>
+            希望面交地點（選填）
+            <input
+              name="preferredMeetupLocation"
+              maxLength={REQUEST_COORDINATION_MAX_LENGTH}
+              value={preferredMeetupLocation}
+              onChange={(event) => setPreferredMeetupLocation(event.target.value)}
+              placeholder="例如：圖書館一樓、第一教學區"
+            />
+          </label>
+          <label>
+            希望面交時間（選填）
+            <input
+              name="preferredMeetupTime"
+              maxLength={REQUEST_COORDINATION_MAX_LENGTH}
+              value={preferredMeetupTime}
+              onChange={(event) => setPreferredMeetupTime(event.target.value)}
+              placeholder="例如：週三下午、今晚 7 點後"
+            />
+          </label>
+          <div className="request-coordination-actions">
+            <button type="button" className="ghost" onClick={onOpenChat}>
+              <MessageCircle size={16} />
+              先去聊聊確認
+            </button>
+            <small>送出後，在賣家按下「已完成面交」前，都能回聊天室再修改。</small>
+          </div>
+        </div>
         <button className="primary wide" type="submit" disabled={!versionConfirmed}>
           {request ? <Pencil size={17} /> : <MessageCircle size={17} />}
           {request ? "儲存訂單修改" : "確認下訂"}
         </button>
-        <p className="form-note">下訂後仍需等待賣家選定，不代表交易完成。</p>
+        <p className="form-note">下訂後仍需等待賣家選定，不代表交易完成；若時間地點還沒談好，先用聊聊確認最穩妥。</p>
       </form>
     </ModalShell>
   );
@@ -5188,6 +5296,33 @@ function OrderTimeline({ request }: { request: PurchaseRequest }) {
   return <div className="order-timeline">{steps.map((step) => <span className={step.done ? "done" : ""} key={step.label}>{step.label}</span>)}</div>;
 }
 
+function RequestCoordinationPanel({
+  request,
+  viewer,
+}: {
+  request: PurchaseRequest;
+  viewer: "buyer" | "seller";
+}) {
+  const lines = requestCoordinationLines(request);
+  if (lines.length === 0) {
+    return (
+      <div className="request-coordination-note is-empty">
+        {viewer === "buyer"
+          ? "你還沒填寫希望的面交時間或地點，可以先去聊聊和賣家確認。"
+          : "買家還沒填寫希望的面交時間或地點，建議先到聊聊確認。"}
+      </div>
+    );
+  }
+  return (
+    <div className="request-coordination-note">
+      <b>{viewer === "buyer" ? "你填寫的面交偏好" : "買家填寫的面交偏好"}</b>
+      <ul>
+        {lines.map((line) => <li key={line}>{line}</li>)}
+      </ul>
+    </div>
+  );
+}
+
 /* eslint-disable @next/next/no-img-element */
 function TradeChatPanel({
   conversation,
@@ -5201,6 +5336,7 @@ function TradeChatPanel({
   onBack,
   onHide,
   onOpenBook,
+  onEditRequest,
   onRespondToRequest,
 }: {
   conversation: Conversation;
@@ -5214,6 +5350,7 @@ function TradeChatPanel({
   onBack: () => void;
   onHide: () => void;
   onOpenBook: (bookId: string) => void;
+  onEditRequest: () => void;
   onRespondToRequest: (requestId: string, status: "accepted" | "rejected") => void | Promise<void>;
 }) {
   const [messages, setMessages] = useState<TradeMessage[]>([]);
@@ -5231,6 +5368,7 @@ function TradeChatPanel({
   const actionDialog = useActionDialog();
   const logRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const draftInputRef = useRef<HTMLTextAreaElement>(null);
   const messageCursorRef = useRef<{ createdAt: string; id: string } | null>(null);
   const sendingRef = useRef(false);
   const stickToBottomRef = useRef(true);
@@ -5246,6 +5384,18 @@ function TradeChatPanel({
     && ["pending", "waitlisted"].includes(request.status)
     && book?.status === "available",
   );
+  const canEditRequestFromChat = Boolean(
+    !isSeller
+    && request
+    && ["pending", "waitlisted", "reserved"].includes(request.status),
+  );
+
+  useEffect(() => {
+    const input = draftInputRef.current;
+    if (!input) return;
+    input.style.height = "0px";
+    input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+  }, [draft]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -5576,8 +5726,15 @@ function TradeChatPanel({
             <div className="chat-order-status">
               <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
               <p>{isSeller ? `${senderName(request.buyerId)} 已送出購買意願` : "你已送出購買意願"}</p>
+              <RequestCoordinationPanel request={request} viewer={isSeller ? "seller" : "buyer"} />
+              {canEditRequestFromChat && (
+                <button type="button" className="chat-inline-edit" onClick={onEditRequest}>
+                  <Pencil size={14} />
+                  修改面交資訊
+                </button>
+              )}
               {canRespondToRequest && (
-                <div>
+                <div className="chat-order-actions">
                   <button className="accept" type="button" disabled={currentUser.accountStatus === "suspended"} onClick={() => void respondFromChat("accepted")}><Check size={15} />接受</button>
                   <button type="button" disabled={currentUser.accountStatus === "suspended"} onClick={() => void respondFromChat("rejected")}><X size={15} />婉拒</button>
                 </div>
@@ -5642,7 +5799,7 @@ function TradeChatPanel({
       {showQuickPhrases && (
         <div className="trade-chat-phrases">
           <small>常用語句</small>
-          <div>{CHAT_PHRASES.map((phrase) => <button type="button" key={phrase} onClick={() => applyQuickPhrase(phrase)}>{phrase}</button>)}</div>
+          <div className="trade-chat-phrases-scroll">{CHAT_PHRASES.map((phrase) => <button type="button" key={phrase} onClick={() => applyQuickPhrase(phrase)}>{phrase}</button>)}</div>
         </div>
       )}
       {conversation.status === "active" ? (
@@ -5651,7 +5808,15 @@ function TradeChatPanel({
             <ImagePlus size={18} />
             <input type="file" accept="image/jpeg,image/png,image/webp" multiple aria-label="加入聊天圖片" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 5))} />
           </label>
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="輸入訊息..." maxLength={500} aria-label="輸入聊天訊息" />
+          <textarea
+            ref={draftInputRef}
+            rows={1}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="輸入訊息..."
+            maxLength={500}
+            aria-label="輸入聊天訊息"
+          />
           <button type="submit" disabled={(!draft.trim() && files.length === 0) || sending}>{sending ? "傳送中" : "送出"}</button>
           {files.length > 0 && <small className="selected-images">已選擇 {files.length} 張圖片</small>}
         </form>

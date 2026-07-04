@@ -2,91 +2,100 @@
 
 ## 任務目標
 
-Write durable deploy guardrails into the repository so future BookFlow tasks
-stop early on dirty release scope and broken local runtime paths instead of
-burning hours of token and setup time mid-implementation.
+Ship the marketplace order-coordination and chat-input UX update so buyers can
+submit meetup preferences during checkout, revise them from chat before seller
+handoff, and use a more stable mobile-friendly chat composer.
 
 ## 目前狀態與背景
 
-- Branch: `codex/deploy-guardrails`.
-- Base commit: `afcb626935323ea0362fcc8a7cdb661fe350e4ae`.
-- This is a tooling and workflow hardening change only; no product runtime
-  behavior or database schema is changed.
-- No database migration is included.
+- Branch: `codex/marketplace-ui-flow-release`.
+- Base commit: `e469b50fca7f9ff0cfb206f862e9ca2ada5020ae`.
+- This release changes user-facing marketplace UI behavior and adds one
+  database migration for purchase-request meetup preferences.
 - No GitHub workflow or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
 
 ## 已完成
 
-- Added a hard routing rule to `AGENTS.md`: deploy, merge, and production
-  confirmation tasks must inspect `git status --short` first, move to a clean
-  worktree when the active checkout is dirty, and confirm runtime readiness
-  before substantial implementation.
-- Added `LESSON-046` to `AI_WORK_MANUAL.md` to capture the failure mode where
-  dirty scope and runtime drift were discovered after coding had already
-  started.
-- Added `scripts/context-budget.mjs` and `npm run ai:budget` as the lowest-cost
-  triage helper for non-trivial tasks.
-- Updated `docs/RELEASE_WORKFLOW.md` and `scripts/release-plan.mjs` so the
-  clean-worktree stop rule and runtime stop rule are explicit in the release
-  path.
-- Extended `scripts/check-release-flow.mjs` to cover the new helper and the new
-  release/documentation guardrails.
-
-## 下一步
-
-1. Review the final diff and keep the PR scoped to deploy guardrails.
-2. Commit the workflow/tooling changes and updated handoff files.
-3. Run `node scripts/release-preflight.mjs`.
-4. Push the branch, open a PR, and wait only on the required release gates.
-5. After merge, verify production with the merged SHA through
-   `/api/health/release` and `release:smoke`.
+- Added `preferredMeetupLocation` and `preferredMeetupTime` to purchase request
+  client types and Supabase row mapping.
+- Updated the request modal so buyers can:
+  - fill preferred meetup location/time before confirming;
+  - jump straight into chat with `先去聊聊確認`;
+  - understand that meetup details can still be revised before seller handoff.
+- Updated request submission logic to dedupe on message plus meetup preference
+  fields and pass the new values through the RPC.
+- Added `RequestCoordinationPanel` to request lists and the trade chat context.
+- Added a buyer-only `修改面交資訊` action inside chat while the request is
+  still pending, waitlisted, or reserved.
+- Switched the chat composer from single-line input to auto-sizing textarea and
+  gave quick phrases a dedicated horizontal scroller.
+- Kept the chat log from force-scrolling while reviewing older messages and kept
+  the unread-jump affordance intact.
+- Made the course-name help affordance floating and restored filter-chevron
+  tap-through behavior with explicit `select-filter` label treatment.
+- Added migration
+  `supabase/migrations/20260704160000_purchase_request_handoff_preferences.sql`
+  to store meetup preference fields and expand `create_purchase_request(...)`.
 
 ## 變更檔案
 
-- `AGENTS.md`
-- `AI_WORK_MANUAL.md`
-- `docs/RELEASE_WORKFLOW.md`
-- `package.json`
-- `scripts/context-budget.mjs`
-- `scripts/release-plan.mjs`
-- `scripts/check-release-flow.mjs`
+- `components/marketplace-app.tsx`
+- `app/globals.css`
+- `lib/types.ts`
+- `lib/marketplace/mappers.ts`
+- `scripts/check-chat-listing-order-ux.mjs`
+- `scripts/check-listing-navigation-ui.mjs`
+- `scripts/check-home-accessibility.mjs`
+- `supabase/migrations/20260704160000_purchase_request_handoff_preferences.sql`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
+- `.ai/history/20260704-marketplace-order-coordination-release.md`
 
 ## 驗證結果
 
-- `node --check scripts/context-budget.mjs`: passed with bundled Node runtime.
-- `node -e "JSON.parse(...package.json...)"`: passed.
-- `node scripts/check-release-flow.mjs`: passed.
-- `node scripts/release-plan.mjs`: passed and now prints deploy-scope and
-  environment guards.
-- `node scripts/context-budget.mjs`: passed and prints deploy/runtime stop rules
-  plus high-context guidance.
+- `node node_modules/typescript/bin/tsc --noEmit`: passed.
+- `node scripts/check-chat-listing-order-ux.mjs`: passed, 16/16.
+- `node scripts/check-listing-navigation-ui.mjs`: passed.
+- `node scripts/check-home-accessibility.mjs`: passed, 26/26.
+- `node scripts/run-project-checks.mjs`: passed, 26/26.
+- `node node_modules/next/dist/bin/next build`: passed; production pages
+  generated successfully.
+- `node node_modules/eslint/bin/eslint.js .`: `NOT VERIFIED` in this worktree
+  because the local install cannot resolve `eslint-plugin-react-hooks`.
 
 ## 風險與注意事項
 
-- This change makes future routing stricter, but it cannot force an external
-  agent to obey the rules if that agent ignores `AGENTS.md` and
-  `AI_WORK_MANUAL.md`.
-- Local `node` and `npm` are still absent from PATH in this environment; the
-  new rules intentionally direct agents to the bundled Node runtime rather than
-  changing the repo to pnpm.
-- No production proof exists until the PR is merged and the production health
-  endpoint reports the merged SHA.
+- The migration is required before production behavior is fully online; a web
+-only deploy is insufficient.
+- Local `pnpm` verification in this clean worktree generated temporary
+  `pnpm-lock.yaml` and `pnpm-workspace.yaml`; they were removed and must stay
+  out of the commit.
+- `node_modules` in this worktree is local verification state only and must not
+  be committed.
+- No production proof exists until the branch is merged, the production
+  migration is approved/applied, and `release:smoke` confirms the merged SHA.
+
+## 下一步
+
+1. Review the final diff and keep the PR scoped to this marketplace UX and
+   migration release.
+2. Commit the feature files plus updated handoff files.
+3. Run `node scripts/release-preflight.mjs`.
+4. Push the branch and open a PR.
+5. After required checks and staging migration pass, apply the production
+   migration with explicit approval.
+6. After merge and deployment, verify the merged SHA with
+   `/api/health/release` and `release:smoke`.
 
 ## 下一位 AI 工作指引
 
-1. Keep this PR scoped to deploy guardrails and low-output workflow hardening.
-2. Do not touch protected recovery files or add the rollback approval trailer.
-3. Use `npm run ai:budget` or `node scripts/context-budget.mjs` before broad
-   exploration in future non-trivial tasks.
-4. On deploy-complete work, treat a dirty checkout or unusable runtime as a
-   stop rule before coding deeper.
-5. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` and
-   `node scripts/release-preflight.mjs` before opening or merging the PR.
+1. Keep the PR scoped to this marketplace UX and migration release.
+2. Keep `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/*.md` in sync.
+3. Use direct status checks plus `/api/health/release` and `release:smoke` for
+   post-merge production proof.
 
 ## 相關 Commit
 
-- Base commit: `afcb626935323ea0362fcc8a7cdb661fe350e4ae`.
-- Current implementation commit before final commit: `not committed yet`.
+- Base commit: `e469b50fca7f9ff0cfb206f862e9ca2ada5020ae`.
+- Current implementation commit before final commit: `df60935918579c43112a1d55a3c215c1d2f70d4b`.
