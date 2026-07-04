@@ -1,3 +1,13 @@
+# AI Handoff Archive
+
+- Task: release proof lesson
+- Actor: codex
+- Status: handoff
+- Base commit: `203190213717a297f4e07929ee12138808f8a2c6`
+- Archived at: 2026-07-04T21:05:00+08:00
+
+---
+
 # BookFlow AI Handoff
 
 ## 任務目標

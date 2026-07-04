@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260704-marketplace-order-coordination-release",
-  "taskTitle": "marketplace order coordination release",
-  "baseCommit": "e469b50fca7f9ff0cfb206f862e9ca2ada5020ae",
-  "updatedAt": "2026-07-04T08:45:00.000Z",
+  "owner": "codex",
+  "status": "handoff",
+  "taskId": "20260704-release-proof-lesson",
+  "taskTitle": "release proof lesson",
+  "baseCommit": "203190213717a297f4e07929ee12138808f8a2c6",
+  "updatedAt": "2026-07-04T13:05:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260704-marketplace-order-coordination-release.md"
+  "historyFile": ".ai/history/20260704-release-proof-lesson.md"
 }
