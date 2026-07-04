@@ -65,6 +65,8 @@ export function mapRequest(row: Record<string, unknown>): PurchaseRequest {
     bookId: String(row.book_id),
     buyerId: String(row.buyer_id),
     message: String(row.message),
+    preferredMeetupLocation: String(row.preferred_meetup_location || ""),
+    preferredMeetupTime: String(row.preferred_meetup_time || ""),
     status: row.status as RequestStatus,
     titleSnapshot: String(row.title_snapshot || ""),
     priceSnapshot: Number(row.price_snapshot || 0),

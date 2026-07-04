@@ -59,10 +59,12 @@ assert.ok(
 );
 assert.ok(
   listingForm.includes("課堂名稱（選填）")
+    && listingForm.includes('className="field-help-anchor"')
     && listingForm.includes('className="field-help-button"')
     && listingForm.includes("課堂名稱填寫說明")
+    && css.includes(".field-help-anchor")
     && css.includes(".field-help-text"),
-  "the course field must be presented as classroom name with inline help",
+  "the course field must be presented as classroom name with floating help",
 );
 assert.ok(
   listingForm.includes("ocrProgress")

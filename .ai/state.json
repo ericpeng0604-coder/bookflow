@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260704-deploy-guardrails-and-worktree-stop-rule",
-  "taskTitle": "deploy guardrails and worktree stop rules",
-  "baseCommit": "afcb626935323ea0362fcc8a7cdb661fe350e4ae",
-  "updatedAt": "2026-07-04T05:20:35.252Z",
+  "taskId": "20260704-marketplace-order-coordination-release",
+  "taskTitle": "marketplace order coordination release",
+  "baseCommit": "e469b50fca7f9ff0cfb206f862e9ca2ada5020ae",
+  "updatedAt": "2026-07-04T08:45:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260704-0520-20260704-deploy-guardrails-and-worktree-.md"
+  "historyFile": ".ai/history/20260704-marketplace-order-coordination-release.md"
 }

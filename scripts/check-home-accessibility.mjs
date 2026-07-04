@@ -23,7 +23,7 @@ const checks = [
   ["filter query label", homeBlock.includes('htmlFor="home-filter-query"')],
   ["filter department label", homeBlock.includes('htmlFor="home-filter-department"')],
   ["filter price label", homeBlock.includes('htmlFor="home-filter-price"')],
-  ["filter chevrons do not steal taps", globalCss.includes(".home-page .filters label svg") && globalCss.includes("pointer-events: none")],
+  ["filter chevrons do not steal taps", globalCss.includes(".home-page .filters label svg") && globalCss.includes("pointer-events: none") && homeBlock.includes('className="select-filter"') && globalCss.includes(".home-page .filters .select-filter svg")],
   ["unfinished advanced filter removed", !homeBlock.includes("進階篩選（即將推出）")],
   ["book cards keyboard buttons", homeBlock.includes('className="book-card-main"') && !homeBlock.includes('onClick={() => openBook(book.id)}>\n                  <div className="card-image"')],
   ["home card labels reserve alignment space", homeBlock.includes('className={`course-tag ${cardContextLabel(book) ? "" : "is-empty"}`}') && globalCss.includes(".home-page .course-tag.is-empty")],
