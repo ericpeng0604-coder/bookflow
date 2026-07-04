@@ -781,6 +781,36 @@ HTTP/API probes for deployment proof. Do not save context by skipping required
 tests, staging checks, production smoke, security review, diff review, or
 protected-file checks.
 
+### LESSON-045: UI workflow fixes need a narrow verification ladder
+
+**Observed problem:** Multi-surface UI fixes around marketplace chat, request
+flow, and homepage filters can waste substantial context when agents reread
+large component files, retry shell-specific dev startup commands, and fall back
+to broad manual browser exploration before running the focused checks that
+already exist in the repository.
+
+**Cause:** The task spans one large UI surface, but the verification path was
+not reduced into a stable ladder. Agents rediscovered the same file regions,
+runtime fallback, and regression targets instead of moving through a fixed
+sequence.
+
+**Detection:** Watch for repeated full reads of
+`components/marketplace-app.tsx` or `app/globals.css` after the relevant
+symbols are already known, repeated attempts to start local preview servers
+through wrapper scripts when only host or port changes are needed, or browser
+checks that begin before targeted static checks and a production build have
+already narrowed the risk.
+
+**Prevention rule:** For marketplace UI tasks, first locate exact symbols with
+targeted search and read only the affected ranges. Then run the smallest
+relevant regression scripts, such as `pnpm run check:chat-listing-order-ux`,
+`pnpm run check:listing-ui`, and `pnpm run check:home-accessibility`, plus
+`pnpm run typecheck` and `pnpm run build` when behavior crosses shared state,
+chat flows, or database-backed request data. Use the bundled Node/pnpm runtime
+when the shell PATH is incomplete. Only start a browser after the focused
+checks pass, and treat that browser step as confirmation of the changed
+interaction rather than the primary way to rediscover application state.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
