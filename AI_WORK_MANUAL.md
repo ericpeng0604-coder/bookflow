@@ -799,6 +799,30 @@ checkout's Node/Next processes, package/runtime state, and `.next` cache state.
 cleanup before fresh local previews. Keep this separate from `npm run dev` so
 release acceleration does not unexpectedly kill active work.
 
+### LESSON-046: Deploy tasks must isolate scope before implementation
+
+**Observed problem:** A product task consumed hours of token and operator time
+because implementation started in a dirty checkout, then moved midstream to a
+clean worktree after unrelated edits, runtime gaps, and dependency drift had
+already complicated the flow.
+
+**Cause:** Release-scope isolation and runtime readiness were treated as
+cleanup work after coding instead of entry conditions before coding.
+
+**Detection:** At the start of any deploy, merge, or production-confirmation
+task, inspect `git status --short`, the current branch, and whether `node`,
+`npm`, `typecheck`, `lint`, and `build` are runnable in the intended worktree.
+If unrelated edits are already present or the runtime path is not usable, do
+not continue into substantial code changes yet.
+
+**Prevention rule:** For deploy-complete work, isolate the scoped patch in a
+clean worktree from latest `origin/main` before implementation whenever the
+active checkout is dirty or mixed-purpose. Run `npm run ai:budget`,
+`npm run release:plan`, or `npm run release:doctor` first, fix environment
+blockers before broad edits, and keep verification layered as
+typecheck -> lint -> project checks -> build -> release preflight -> PR checks
+-> production proof.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

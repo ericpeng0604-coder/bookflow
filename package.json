@@ -17,6 +17,7 @@
     "ai:block": "node scripts/ai-collaboration.mjs block",
     "ai:check": "node scripts/ai-collaboration.mjs check",
     "ai:draft": "node scripts/ai-collaboration.mjs draft",
+    "ai:budget": "node scripts/context-budget.mjs",
     "setup:check": "node scripts/setup-health-check.mjs",
     "load-test:marketplace": "node scripts/load-test-marketplace.mjs",
     "check:filters": "node scripts/check-filters.mjs",

@@ -59,6 +59,7 @@ workflow is approved. Application rollback does not reverse database changes.
 ## Commands
 
 ```text
+npm run ai:budget
 npm run release:plan
 npm run release:doctor
 npm run dev:doctor
@@ -71,6 +72,10 @@ RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> npm run release:
 
 `release:smoke` verifies the homepage, `/api/marketplace/count`, and
 `/api/health/release`.
+
+`ai:budget` is the lowest-cost triage helper for non-trivial tasks. It prints
+the changed areas, high-context files, deploy stop rules, and the smallest
+likely evidence path before the agent opens large files, logs, or dashboards.
 
 `release:preflight` runs after the release commit and handoff update are ready
 but before opening or merging the PR. It fails fast when a branch mixes commits
@@ -100,15 +105,26 @@ pending.
 
 ## Low-token Codex path
 
-When Codex is preparing or verifying a release, start with `npm run
-release:plan`. It prints a short summary of the current branch, changed areas,
-protected recovery-file risk, and the minimum gates required for the change.
+When Codex is preparing or verifying a release, start with `npm run ai:budget`
+or `npm run release:plan`. If the checkout is dirty and the task implies
+deploy, merge, or production confirmation, stop and move to a clean worktree
+from latest `origin/main` before substantial implementation or release work.
 Before opening or merging the PR, run `npm run release:preflight` so stale
 branch and handoff problems are caught locally instead of after GitHub checks.
+If `node`, `npm`, `typecheck`, `lint`, or `build` are not runnable in the
+chosen worktree, fix that environment path first instead of coding deeper and
+discovering the blocker later.
+
+Use `ai:budget` to identify whether the next step is a narrow code read, a
+runtime fix, a handoff update, or a clean-worktree release path. Use
+`release:plan` when the task is already on the release path and you need the
+minimum local and production gates.
+
 If `npm` is not available in the current shell, run the same helper directly
 with the active Node runtime:
 
 ```text
+node scripts/context-budget.mjs
 node scripts/release-plan.mjs
 node scripts/release-doctor.mjs
 node scripts/release-preflight.mjs
@@ -119,16 +135,17 @@ bundled Node executable shown by the workspace dependency helper, then run the
 same script:
 
 ```text
+<bundled-node.exe> scripts/context-budget.mjs
 <bundled-node.exe> scripts/release-plan.mjs
 <bundled-node.exe> scripts/release-doctor.mjs
 <bundled-node.exe> scripts/release-preflight.mjs
 ```
 
-Use the plan to choose the next proof point before opening browser dashboards,
-large workflow logs, or repeated DOM snapshots. The low-token path reduces
-exploration; it does not remove required evidence. Before a PR or merge, still
-run the applicable local checks, workflow checks, staging migration, production
-migration, and `release:smoke` gates described above.
+Use these helpers to choose the next proof point before opening browser
+dashboards, large workflow logs, or repeated DOM snapshots. The low-token path
+reduces exploration; it does not remove required evidence. Before a PR or
+merge, still run the applicable local checks, workflow checks, staging
+migration, production migration, and `release:smoke` gates described above.
 
 For substantive changes, keep the AI handoff trio in sync before opening a PR:
 

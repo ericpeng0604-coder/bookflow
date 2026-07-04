@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "handoff",
-  "taskId": "20260704-trade-chat-cursor-hydration",
-  "taskTitle": "trade chat cursor and hydration cleanup",
-  "baseCommit": "dda106778fbc1e89043bfecf9e10222fabce28d4",
-  "updatedAt": "2026-07-04T02:05:13+08:00",
+  "owner": "none",
+  "status": "idle",
+  "taskId": "20260704-deploy-guardrails-and-worktree-stop-rule",
+  "taskTitle": "deploy guardrails and worktree stop rules",
+  "baseCommit": "afcb626935323ea0362fcc8a7cdb661fe350e4ae",
+  "updatedAt": "2026-07-04T05:20:35.252Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260704-trade-chat-cursor-hydration.md"
+  "historyFile": ".ai/history/20260704-0520-20260704-deploy-guardrails-and-worktree-.md"
 }
