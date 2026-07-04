@@ -69,6 +69,8 @@ assert.match(prStatus, /Release gates passed/);
 const plan = read("scripts/release-plan.mjs");
 assert.match(plan, /printReleaseEnvironment/);
 assert.match(plan, /Suggested next step:/);
+assert.match(plan, /Deploy scope guard:/);
+assert.match(plan, /Environment guard:/);
 assert.match(plan, /release-pr-status\.mjs/);
 assert.match(plan, /\/api\/health\/release/);
 assert.match(plan, /release-smoke\.mjs/);
@@ -77,9 +79,19 @@ const doctorOutput = runNode(["scripts/release-doctor.mjs"]);
 assert.match(doctorOutput, /Release environment:/);
 assert.match(doctorOutput, /lockfiles:/);
 
+const budgetScript = read("scripts/context-budget.mjs");
+assert.match(budgetScript, /BookFlow context budget/);
+assert.match(budgetScript, /Deploy stop rule:/);
+assert.match(budgetScript, /Environment stop rule:/);
+
+const budgetOutput = runNode(["scripts/context-budget.mjs"]);
+assert.match(budgetOutput, /BookFlow context budget/);
+
 const workflow = read("docs/RELEASE_WORKFLOW.md");
+assert.match(workflow, /ai:budget/);
 assert.match(workflow, /release:doctor/);
 assert.match(workflow, /release:pr-status/);
+assert.match(workflow, /clean worktree/);
 assert.match(workflow, /optional review bots/);
 assert.match(workflow, /gh pr view/);
 assert.match(workflow, /gh api/);

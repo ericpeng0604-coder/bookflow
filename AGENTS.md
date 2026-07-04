@@ -22,6 +22,22 @@ Never add that trailer to an unrelated commit.
 Before starting work, read `AI_WORK_MANUAL.md` and apply its recorded lessons,
 quality gates, and incident-prevention rules.
 
+## Deploy And Environment Guardrails
+
+When the user asks for deploy, merge, production confirmation, or other
+release-complete work:
+
+1. Check `git status --short` first.
+2. If the active checkout is dirty with unrelated edits, stop release work in
+   that checkout and move to a clean worktree from latest `origin/main`.
+3. Before substantial implementation, confirm the local runtime path for the
+   required verification commands. If `node`, `npm`, `lint`, `typecheck`, or
+   `build` cannot run because of environment setup, fix that first or record
+   the exact blocker before expanding the code change.
+4. Use the repo's low-output helpers such as `npm run ai:budget`,
+   `npm run release:plan`, and `npm run release:doctor` to narrow the next
+   proof point before opening large logs or dashboards.
+
 When a mistake, failed assumption, escaped defect, unsafe action, or recurring
 workflow problem is discovered:
 

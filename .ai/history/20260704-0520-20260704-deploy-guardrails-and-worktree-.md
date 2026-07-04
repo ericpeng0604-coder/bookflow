@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: deploy guardrails and worktree stop rules
+- Actor: codex
+- Status: complete
+- Base commit: `afcb626935323ea0362fcc8a7cdb661fe350e4ae`
+- Archived at: 2026-07-04T05:20:35.252Z
+
+---
 # BookFlow AI Handoff
 
 ## 任務目標

@@ -80,6 +80,16 @@ if (touchedProtected.length) {
   console.log("Run workflow structure checks and use the required approval trailer in that isolated commit.");
 }
 
+if (status.length) {
+  console.log("\nDeploy scope guard:");
+  console.log("  If this task needs deploy, merge, or production confirmation and the checkout also contains unrelated edits, stop here and move the release work to a clean worktree from latest origin/main.");
+}
+
+if (!report.nodeOnPath || !report.npmOnPath) {
+  console.log("\nEnvironment guard:");
+  console.log("  Fix the runnable Node/npm path before broad implementation or repeated release checks.");
+}
+
 console.log("\nMinimum local evidence before PR:");
 console.log("  1. Review the final diff and preserve unrelated edits.");
 console.log("  2. node scripts/run-project-checks.mjs");
