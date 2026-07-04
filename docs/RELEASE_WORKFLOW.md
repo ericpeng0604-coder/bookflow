@@ -90,9 +90,18 @@ node scripts/release-plan.mjs
 node scripts/release-preflight.mjs
 ```
 
-In Codex desktop on Windows, `node` and `npm` may not be on `PATH`. Use the
-bundled Node executable shown by the workspace dependency helper, then run the
-same script:
+In Codex desktop on Windows, `node` and `npm` may not be on `PATH`. Prefer the
+Codex-safe package scripts first:
+
+```text
+pnpm run ai:budget:codex
+pnpm run release:plan:codex
+pnpm run release:preflight:codex
+RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> pnpm run release:smoke:codex
+```
+
+If `pnpm` itself is not available, use the bundled Node executable shown by the
+workspace dependency helper, then run the same script directly:
 
 ```text
 <bundled-node.exe> scripts/release-plan.mjs

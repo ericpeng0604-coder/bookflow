@@ -737,6 +737,50 @@ new commits, create a clean branch from `origin/main` and cherry-pick only the
 new release commit. If it reports missing handoff files, update
 `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/` before pushing.
 
+### LESSON-043: Duplicate dev servers slow local verification
+
+**Observed problem:** The BookFlow checkout accumulated many Node/Next dev and
+start processes on different local ports, while `.next` held a large cache and
+the shell could not find the expected Node runtime.
+
+**Cause:** Local preview servers were started repeatedly without a cleanup
+gate, and checks assumed `node` or `npm` were available from the shell PATH.
+
+**Detection:** Before blaming product code or Codex latency, inspect active
+Node/Next processes for this checkout, check whether `.next` is stale or large,
+and verify `node` plus the project package manager resolve in a fresh shell.
+If cleanup fails because a listed process no longer exists, treat that as a
+normal race rather than a product or deployment failure.
+
+**Prevention rule:** Use the bundled runtime, a verified PATH, or the
+Codex-safe `:codex` package scripts when the shell cannot find `node`. Run
+`pnpm run dev:doctor` when local work feels slow, and run `pnpm run dev:clean`
+before starting a new local preview if stale Next processes or `.next` cache
+are present. Cleanup scripts must tolerate already-exited processes.
+
+### LESSON-044: Context budget must not replace evidence
+
+**Observed problem:** AI work in this repository can consume excessive context
+and quota when agents repeatedly dump large files, logs, browser snapshots, or
+deployment dashboards while trying to rediscover known project state.
+
+**Cause:** Context reduction was treated as an ad hoc conversation preference
+instead of a project workflow with explicit guardrails and evidence gates.
+
+**Detection:** Watch for repeated full reads of high-context files such as
+`components/marketplace-app.tsx`, `app/globals.css`, `AI_WORK_MANUAL.md`, and
+large logs after the relevant location is already known. Also watch for repeated
+dashboard polling when a direct status endpoint or release smoke script would
+give stronger proof.
+
+**Prevention rule:** Start each non-trivial task with targeted search, changed
+hunks, `pnpm run ai:budget`, `pnpm run ai:budget:codex`, or
+`pnpm run release:plan` as appropriate. Read only the narrow context needed to
+make a safe change, reuse evidence gathered during the task, and prefer direct
+HTTP/API probes for deployment proof. Do not save context by skipping required
+tests, staging checks, production smoke, security review, diff review, or
+protected-file checks.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

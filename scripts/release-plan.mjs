@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import process from "node:process";
 
 function git(args) {
   return execFileSync("git", args, { encoding: "utf8" }).trim();
@@ -46,6 +47,9 @@ const touchedRuntime = changedFiles.filter((file) =>
 const touchedPackage = changedFiles.filter((file) =>
   ["package.json", "package-lock.json", "tsconfig.json", "eslint.config.mjs"].includes(file),
 );
+const isCodexRuntime = process.execPath.toLowerCase().includes("codex-runtimes");
+const packageRunner = isCodexRuntime ? "pnpm run" : "pnpm run";
+const smokeScript = isCodexRuntime ? "release:smoke:codex" : "release:smoke";
 
 console.log("BookFlow release plan (low-output)");
 console.log(`Branch: ${branch}`);
@@ -55,7 +59,7 @@ console.log(`Working tree: ${status.length ? `${status.length} changed entries` 
 if (!changedFiles.length) {
   console.log("\nNo local file changes detected.");
   console.log("For an already-merged release, verify production with:");
-  console.log("  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> npm run release:smoke");
+  console.log(`  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> ${packageRunner} ${smokeScript}`);
   process.exit(0);
 }
 
@@ -75,13 +79,13 @@ if (touchedProtected.length) {
 
 console.log("\nMinimum local evidence before PR:");
 console.log("  1. Review the final diff and preserve unrelated edits.");
-console.log("  2. npm run check:project");
-console.log("  3. npm run typecheck");
-console.log("  4. npm run lint");
-console.log("  5. npm run build");
+console.log(`  2. ${packageRunner} check:project`);
+console.log(`  3. ${packageRunner} typecheck`);
+console.log(`  4. ${packageRunner} lint`);
+console.log(`  5. ${packageRunner} build`);
 
 if (touchedWorkflows.length || touchedProtected.length) {
-  console.log("  6. npm run check:workflows");
+  console.log(`  6. ${packageRunner} check:workflows`);
 }
 
 if (touchedMigrations.length) {
@@ -92,5 +96,8 @@ if (touchedMigrations.length) {
 }
 
 console.log("\nProduction proof after merge:");
-console.log("  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> npm run release:smoke");
+console.log(`  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> ${packageRunner} ${smokeScript}`);
 console.log("  Use /api/health/release for the deployed commit before opening large dashboards.");
+if (isCodexRuntime) {
+  console.log("  Codex Windows PATH note: use the :codex scripts when plain node is unavailable.");
+}
