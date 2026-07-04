@@ -799,29 +799,35 @@ checkout's Node/Next processes, package/runtime state, and `.next` cache state.
 cleanup before fresh local previews. Keep this separate from `npm run dev` so
 release acceleration does not unexpectedly kill active work.
 
-### LESSON-046: Deploy tasks must isolate scope before implementation
+### LESSON-046: Production release proof must follow the protected workflow path
 
-**Observed problem:** A product task consumed hours of token and operator time
-because implementation started in a dirty checkout, then moved midstream to a
-clean worktree after unrelated edits, runtime gaps, and dependency drift had
-already complicated the flow.
+**Observed problem:** A marketplace release shipped successfully from the clean
+`codex/marketplace-ui-flow-release` PR branch, but later triage looked only at a
+different dirty local worktree and incorrectly described the release as blocked
+by uncommitted edits, no PR, and release-preflight failure.
 
-**Cause:** Release-scope isolation and runtime readiness were treated as
-cleanup work after coding instead of entry conditions before coding.
+**Cause:** Release completion was treated as a local git or build state instead
+of an end-to-end workflow that includes the actual shipping branch, PR state,
+protected GitHub Actions, database migration approval, Vercel deployment
+propagation, and repository smoke evidence.
 
-**Detection:** At the start of any deploy, merge, or production-confirmation
-task, inspect `git status --short`, the current branch, and whether `node`,
-`npm`, `typecheck`, `lint`, and `build` are runnable in the intended worktree.
-If unrelated edits are already present or the runtime path is not usable, do
-not continue into substantial code changes yet.
+**Detection:** Before claiming a BookFlow release is deployed or blocked,
+identify the actual shipping branch and PR, then verify these in order: the PR
+is not draft, required PR workflows are green, database-backed releases have a
+completed `Production Migration` run, the merge commit has a successful Vercel
+status, `/api/health/release` reports the expected commit once propagation
+finishes, and the latest `Production Deployment Monitor` run or equivalent
+`release:smoke` evidence passed for that deployment.
 
 **Prevention rule:** For deploy-complete work, isolate the scoped patch in a
-clean worktree from latest `origin/main` before implementation whenever the
-active checkout is dirty or mixed-purpose. Run `npm run ai:budget`,
-`npm run release:plan`, or `npm run release:doctor` first, fix environment
-blockers before broad edits, and keep verification layered as
-typecheck -> lint -> project checks -> build -> release preflight -> PR checks
--> production proof.
+clean worktree from latest `origin/main` whenever the active checkout is dirty
+or mixed-purpose. Do not infer production state from the currently open dirty
+worktree; use the shipping PR, merge commit, workflow runs, Vercel status, and
+release smoke as the release source of truth. When a release includes
+database-backed application changes, trigger and verify `Production Migration`
+before merging, then treat `Production Deployment Monitor` or `release:smoke`
+success as the final proof point if `/api/health/release` briefly shows an
+older commit during propagation.
 
 ## New Lesson Template
 
