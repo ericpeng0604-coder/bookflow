@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260705-fix-purchase-request-listing-table",
-  "taskTitle": "fix purchase request listing table",
-  "baseCommit": "f70ce8b2deed5d37df66614d07f722480329a48f",
-  "updatedAt": "2026-07-05T14:32:29.443Z",
+  "taskId": "20260705-fix-purchase-request-live",
+  "taskTitle": "fix purchase request live migration",
+  "baseCommit": "7d32e77c7407d15ffd7d3ad01034e777739192e5",
+  "updatedAt": "2026-07-05T14:43:19.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260705-fix-purchase-request-listing-table.md"
+  "historyFile": ".ai/history/20260705-fix-purchase-request-live.md"
 }

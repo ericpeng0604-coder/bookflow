@@ -1,3 +1,13 @@
+# AI Handoff Archive
+
+- Task: fix purchase request live migration
+- Actor: codex
+- Status: ready for verification
+- Base commit: `7d32e77c7407d15ffd7d3ad01034e777739192e5`
+- Archived at: 2026-07-05T14:43:19.000Z
+
+---
+
 # BookFlow AI Handoff
 
 ## 任務目標
