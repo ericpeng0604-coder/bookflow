@@ -75,6 +75,7 @@ import {
   uploadChatImages,
 } from "@/lib/marketplace/trade-chat";
 import {
+  fetchActiveRequestForBook,
   fetchBookById,
   fetchFavoriteIds,
   fetchImageSearchCandidates,
@@ -1186,7 +1187,7 @@ export function MarketplaceApp() {
     ? store.requests.find((request) =>
       request.bookId === selectedBook.id
       && request.buyerId === currentUser.id
-      && ["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status)
+      && ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status)
     )
     : null;
   const profile = (id: string) => store.profiles.find((item) => item.id === id);
@@ -1203,6 +1204,28 @@ export function MarketplaceApp() {
       })
       .catch(() => undefined);
   }, [selectedBook, view, store.profiles]);
+
+  useEffect(() => {
+    if (!supabase || !currentUser || !selectedBook || view !== "book") return;
+    if (selectedBook.sellerId === currentUser.id) return;
+    if (selectedBookActiveRequest) return;
+    let active = true;
+    void fetchActiveRequestForBook(supabase, selectedBook.id, currentUser.id)
+      .then((request) => {
+        if (!active || !request) return;
+        setStore((previous) => ({
+          ...previous,
+          requests: [
+            request,
+            ...previous.requests.filter((item) => item.id !== request.id),
+          ],
+        }));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [currentUser, selectedBook, selectedBookActiveRequest, view]);
 
   function clearBookDetailRouteState() {
     setDetailBook(null);
@@ -1865,13 +1888,24 @@ export function MarketplaceApp() {
       setToast("你的帳號目前為唯讀模式，不能操作交易");
       return;
     }
+    const targetRequest = store.requests.find((request) => request.id === requestId);
+    const targetBook = targetRequest
+      ? [...myBooks, ...requestBooks, ...marketplaceBooks, ...store.books].find((book) => book.id === targetRequest.bookId)
+      : null;
+    const sellerCancellingReservation = Boolean(
+      targetRequest
+      && targetBook?.sellerId === currentUser.id
+      && ["reserved", "awaiting_confirmation"].includes(targetRequest.status),
+    );
     const reason = await actionDialog.ask({
-      title: "取消購買意願",
-      message: "取消後這筆交易會結束，聊天室與交易紀錄仍會依平台政策保留供雙方查閱。",
+      title: sellerCancellingReservation ? "取消保留" : "取消購買意願",
+      message: sellerCancellingReservation
+        ? "取消保留後課本會恢復可購買狀態，候補買家會回到等待處理；聊天室與交易紀錄仍會保留供雙方查閱。"
+        : "取消後這筆交易會結束，聊天室與交易紀錄仍會依平台政策保留供雙方查閱。",
       inputLabel: "取消原因",
       inputPlaceholder: "請至少輸入 2 個字",
       minLength: 2,
-      confirmLabel: "確認取消",
+      confirmLabel: sellerCancellingReservation ? "確認取消保留" : "確認取消",
       danger: true,
     });
     if (!reason?.trim()) return;
@@ -1886,7 +1920,7 @@ export function MarketplaceApp() {
       }
       await reloadAfterUserMutation();
       void dispatchNotificationDeliveries();
-      setToast("購買意願已取消");
+      setToast(sellerCancellingReservation ? "保留已取消" : "購買意願已取消");
       return;
     }
     setStore((previous) => ({
@@ -1924,7 +1958,14 @@ export function MarketplaceApp() {
   }
 
   async function openConversation(conversationId: string) {
+    const preserveScroll = typeof window !== "undefined"
+      && window.matchMedia("(min-width: 641px)").matches
+      ? { x: window.scrollX, y: window.scrollY }
+      : null;
     setExpandedConversationId(conversationId);
+    if (preserveScroll) {
+      window.requestAnimationFrame(() => window.scrollTo({ top: preserveScroll.y, left: preserveScroll.x, behavior: "auto" }));
+    }
     if (currentUser) {
       window.localStorage.setItem(lastChatStorageKey(currentUser.id), conversationId);
     }
@@ -3123,7 +3164,7 @@ export function MarketplaceApp() {
                         requireActive(() => setModal("request"));
                       }}
                     >
-                      <Check size={18} />{selectedBookActiveRequest ? requestLabels[selectedBookActiveRequest.status] : selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
+                      <Check size={18} />{selectedBookActiveRequest ? `已下訂：${requestLabels[selectedBookActiveRequest.status]}` : selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
                     </button>
                   </div>
                 )}
@@ -3294,15 +3335,7 @@ export function MarketplaceApp() {
 
           {dashboardTab === "chats" && (
             <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""}`}>
-              <div
-                className="conversation-list"
-                onClickCapture={(event) => {
-                  if (!expandedConversationId) return;
-                  if (!window.matchMedia("(max-width: 640px)").matches) return;
-                  event.stopPropagation();
-                  setExpandedConversationId(null);
-                }}
-              >
+              <div className="conversation-list">
                 {conversations.map((conversation) => {
                   const book = knownBooks.find((item) => item.id === conversation.bookId);
                   const otherId = conversation.buyerId === currentUser.id

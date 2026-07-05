@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../lib/marketplace/queries.ts", import.meta.url), "utf8");
+const sellerCancelMigration = readFileSync(new URL("../supabase/migrations/20260705100000_seller_cancel_reserved_request.sql", import.meta.url), "utf8");
 
 const checks = [
   ["listing card uses department and course helper", /function cardContextLabel\(book: Book\)[\s\S]*listingContextLabel\(book\)/.test(app) && /cardContextLabel\(book\)/.test(app)],
@@ -21,6 +22,10 @@ const checks = [
   ["chat preserves scroll when loading older messages", app.includes("previousScrollHeight") && app.includes("previousScrollTop") && app.includes("heightDelta")],
   ["chat compose uses multiline input and dedicated phrase scroller", app.includes("<textarea") && app.includes('className="trade-chat-phrases-scroll"') && css.includes(".trade-chat-compose textarea")],
   ["seller can keep tracking completed orders", app.includes("sellerRequestNextStep") && app.includes('"completed"].includes(request.status)') && app.includes('className="order-next-step"')],
+  ["desktop chat selection preserves page scroll", app.includes("const preserveScroll") && app.includes("window.scrollTo({ top: preserveScroll.y")],
+  ["mobile chat rail remains usable for switching", !app.includes("onClickCapture") && css.includes("minmax(118px, 34vw)") && css.includes("-webkit-line-clamp: 2")],
+  ["book detail reload keeps existing order state", queries.includes("fetchActiveRequestForBook") && app.includes("fetchActiveRequestForBook") && app.includes("已下訂：")],
+  ["seller can cancel reserved handoff in migration", sellerCancelMigration.includes("actor = target_book.seller_id") && sellerCancelMigration.includes("target.status in ('reserved', 'awaiting_confirmation')")],
   ["chat context and safety menu have styles", css.includes(".chat-context-card") && css.includes(".chat-safety-menu")],
   ["mobile chat long text has wrapping styles", css.includes(".trade-chat-bubble p") && css.includes("overflow-wrap: anywhere") && css.includes(".chat-new-message-button")],
 ];
