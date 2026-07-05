@@ -880,6 +880,26 @@ release.
 tables and eligibility predicates. Add a feature check for any new SQL path that
 touches order creation or listing availability.
 
+### LESSON-050: Editing an applied migration does not repair production
+
+**Observed problem:** A purchase-request release changed the contents of an
+already applied migration file, passed code review and deployment checks, but
+left production running the old broken database function.
+
+**Cause:** The fix was written into an existing migration filename instead of a
+new versioned migration. Supabase production migration applies new migration
+versions; it does not re-run old applied files just because their contents
+changed in git.
+
+**Detection:** If a production issue is supposed to be fixed by SQL but the
+live behavior is unchanged after a successful deployment, compare the fix path
+against migration history and check whether the patch only edited an older
+already-applied migration file.
+
+**Prevention rule:** Never rely on editing an applied migration to repair live
+databases. Ship database fixes as a new timestamped migration, then verify the
+new migration actually ran in staging and production.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
