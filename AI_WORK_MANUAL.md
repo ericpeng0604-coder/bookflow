@@ -823,6 +823,46 @@ blockers before broad edits, and keep verification layered as
 typecheck -> lint -> project checks -> build -> release preflight -> PR checks
 -> production proof.
 
+### LESSON-047: Mobile chat switching must preserve the page viewport
+
+**Observed problem:** Tapping a conversation in the mobile chat rail could move
+the whole page to the bottom while opening the selected chat.
+
+**Cause:** The chat switch preserved outer-page scroll only for desktop-width
+layouts, and message loading used a bottom sentinel `scrollIntoView`, which can
+move the browser viewport instead of only the chat message pane on narrow
+layouts.
+
+**Detection:** On a narrow viewport, scroll the dashboard so the chat rail is
+visible, tap between conversations in the left rail, and verify the browser
+viewport stays in place while only the message log scrolls.
+
+**Prevention rule:** Conversation-list switching must explicitly preserve and
+restore the outer page scroll on all viewport widths. Message-loading auto
+scroll may target only the chat log container, not the browser page.
+
+### LESSON-048: Clean release worktrees must match the package manager
+
+**Observed problem:** A clean release worktree spent extra time and context on
+verification because Codex-safe pnpm commands were tried on a baseline that
+uses `package-lock.json`, creating a pnpm dependency tree and causing lint/build
+runtime mismatches.
+
+**Cause:** Runtime fallback guidance from a newer checkout was applied before
+checking the actual shipping branch's package manager, helper scripts, and
+available dependency tree.
+
+**Detection:** Before running checks in a release worktree, inspect
+`package.json`, lockfiles, helper scripts such as `scripts/run-node.ps1`, and
+whether `npm`, `node_modules`, or a dependency junction already exists. Treat
+first-run package installation as setup, not as a parallelizable check step.
+
+**Prevention rule:** In clean release worktrees, confirm the package manager
+and runtime helpers from that worktree before verification. Do not launch
+parallel checks that can all trigger dependency installation. If the shell lacks
+the matching package manager, use an existing verified dependency tree read-only
+for checks, or stop and fix the runtime explicitly before continuing.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

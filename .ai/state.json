@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260705-chat-order-deploy",
-  "taskTitle": "chat order deploy",
-  "baseCommit": "2031902ff8d71ea8dd2a6d211a159288c2d63cdb",
-  "updatedAt": "2026-07-05T06:45:00.000Z",
+  "taskId": "20260705-mobile-chat-page-scroll",
+  "taskTitle": "mobile chat page scroll deploy",
+  "baseCommit": "3877a9e0ddbca67ad8aaa10c4063ade6c61b6992",
+  "updatedAt": "2026-07-05T08:31:07.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260705-chat-order-deploy.md"
+  "historyFile": ".ai/history/20260705-mobile-chat-page-scroll.md"
 }

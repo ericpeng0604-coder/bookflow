@@ -1957,14 +1957,21 @@ export function MarketplaceApp() {
     void openConversation(String(data));
   }
 
-  async function openConversation(conversationId: string) {
-    const preserveScroll = typeof window !== "undefined"
-      && window.matchMedia("(min-width: 641px)").matches
+  function restorePageScroll(position: { x: number; y: number }) {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: position.y, left: position.x, behavior: "auto" });
+      window.requestAnimationFrame(() => window.scrollTo({ top: position.y, left: position.x, behavior: "auto" }));
+      window.setTimeout(() => window.scrollTo({ top: position.y, left: position.x, behavior: "auto" }), 120);
+    });
+  }
+
+  async function openConversation(conversationId: string, options: { preservePageScroll?: boolean } = {}) {
+    const preserveScroll = typeof window !== "undefined" && options.preservePageScroll
       ? { x: window.scrollX, y: window.scrollY }
       : null;
     setExpandedConversationId(conversationId);
     if (preserveScroll) {
-      window.requestAnimationFrame(() => window.scrollTo({ top: preserveScroll.y, left: preserveScroll.x, behavior: "auto" }));
+      restorePageScroll(preserveScroll);
     }
     if (currentUser) {
       window.localStorage.setItem(lastChatStorageKey(currentUser.id), conversationId);
@@ -3346,7 +3353,7 @@ export function MarketplaceApp() {
                       type="button"
                       className={`conversation-item ${expandedConversationId === conversation.id ? "active" : ""}`}
                       key={conversation.id}
-                      onClick={() => void openConversation(conversation.id)}
+                      onClick={() => void openConversation(conversation.id, { preservePageScroll: true })}
                     >
                       <span className="avatar">{profile(otherId)?.name.slice(0, 1) || "聊"}</span>
                       <span>
@@ -5400,7 +5407,6 @@ function TradeChatPanel({
   const [error, setError] = useState("");
   const actionDialog = useActionDialog();
   const logRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const draftInputRef = useRef<HTMLTextAreaElement>(null);
   const messageCursorRef = useRef<{ createdAt: string; id: string } | null>(null);
   const sendingRef = useRef(false);
@@ -5440,7 +5446,7 @@ function TradeChatPanel({
         setMessages(page.messages);
         lastMessageCountRef.current = page.messages.length;
         stickToBottomRef.current = true;
-        window.requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "auto" }));
+        window.requestAnimationFrame(() => scrollChatLogToBottom("auto"));
         setShowQuickPhrases(!page.messages.some((item) => item.senderId === currentUserId));
         setHasOlderMessages(page.hasMore);
         messageCursorRef.current = page.nextCursor;
@@ -5528,7 +5534,7 @@ function TradeChatPanel({
     if (stickToBottomRef.current || sentByCurrentUserRef.current) {
       sentByCurrentUserRef.current = false;
       setHasUnreadBelow(false);
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      scrollChatLogToBottom("smooth");
     } else {
       setHasUnreadBelow(true);
     }
@@ -5589,10 +5595,16 @@ function TradeChatPanel({
     if (nearBottom) setHasUnreadBelow(false);
   }
 
+  function scrollChatLogToBottom(behavior: ScrollBehavior) {
+    const log = logRef.current;
+    if (!log) return;
+    log.scrollTo({ top: log.scrollHeight, behavior });
+  }
+
   function scrollToLatestMessage() {
     stickToBottomRef.current = true;
     setHasUnreadBelow(false);
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollChatLogToBottom("smooth");
   }
 
   async function loadOlderMessages() {
@@ -5820,7 +5832,6 @@ function TradeChatPanel({
             )}
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
       {hasUnreadBelow && (
         <button type="button" className="chat-new-message-button" onClick={scrollToLatestMessage}>
