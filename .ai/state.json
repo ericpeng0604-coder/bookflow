@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260705-mobile-chat-page-scroll",
-  "taskTitle": "mobile chat page scroll deploy",
-  "baseCommit": "3877a9e0ddbca67ad8aaa10c4063ade6c61b6992",
-  "updatedAt": "2026-07-05T08:31:07.000Z",
+  "taskId": "20260705-fix-purchase-request-listing-table",
+  "taskTitle": "fix purchase request listing table",
+  "baseCommit": "f70ce8b2deed5d37df66614d07f722480329a48f",
+  "updatedAt": "2026-07-05T14:32:29.443Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260705-mobile-chat-page-scroll.md"
+  "historyFile": ".ai/history/20260705-fix-purchase-request-listing-table.md"
 }

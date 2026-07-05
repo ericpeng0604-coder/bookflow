@@ -863,6 +863,23 @@ parallel checks that can all trigger dependency installation. If the shell lacks
 the matching package manager, use an existing verified dependency tree read-only
 for checks, or stop and fix the runtime explicitly before continuing.
 
+### LESSON-049: Migrations must reference the real schema
+
+**Observed problem:** A purchase-request migration called a table that does not
+exist in the deployed schema, causing order submission to fail at runtime.
+
+**Cause:** A new migration used an assumed listing table name instead of
+matching the repository's canonical `public.books` schema and existing RPC
+eligibility checks.
+
+**Detection:** Search new SQL for table names not present in `supabase/schema.sql`
+or established migrations, and run the related feature structure check before
+release.
+
+**Prevention rule:** Database migrations must reuse the repository's canonical
+tables and eligibility predicates. Add a feature check for any new SQL path that
+touches order creation or listing availability.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

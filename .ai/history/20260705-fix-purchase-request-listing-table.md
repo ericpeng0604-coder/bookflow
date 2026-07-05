@@ -1,3 +1,13 @@
+# AI Handoff Archive
+
+- Task: fix purchase request listing table
+- Actor: codex
+- Status: ready for release
+- Base commit: `f70ce8b2deed5d37df66614d07f722480329a48f`
+- Archived at: 2026-07-05T14:32:29.443Z
+
+---
+
 # BookFlow AI Handoff
 
 ## 任務目標

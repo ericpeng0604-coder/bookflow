@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../lib/marketplace/queries.ts", import.meta.url), "utf8");
+const handoffPreferencesMigration = readFileSync(new URL("../supabase/migrations/20260704160000_purchase_request_handoff_preferences.sql", import.meta.url), "utf8");
 const sellerCancelMigration = readFileSync(new URL("../supabase/migrations/20260705100000_seller_cancel_reserved_request.sql", import.meta.url), "utf8");
 
 const checks = [
@@ -26,6 +27,7 @@ const checks = [
   ["chat list selection preserves page scroll", app.includes("preservePageScroll") && app.includes("restorePageScroll(preserveScroll)") && app.includes('openConversation(conversation.id, { preservePageScroll: true })')],
   ["mobile chat rail remains usable for switching", !app.includes("onClickCapture") && css.includes("minmax(118px, 34vw)") && css.includes("-webkit-line-clamp: 2")],
   ["book detail reload keeps existing order state", queries.includes("fetchActiveRequestForBook") && app.includes("fetchActiveRequestForBook") && app.includes("已下訂：")],
+  ["handoff preference migration checks the existing books table", handoffPreferencesMigration.includes("from public.books") && !handoffPreferencesMigration.includes("marketplace_listings")],
   ["seller can cancel reserved handoff in migration", sellerCancelMigration.includes("actor = target_book.seller_id") && sellerCancelMigration.includes("target.status in ('reserved', 'awaiting_confirmation')")],
   ["chat context and safety menu have styles", css.includes(".chat-context-card") && css.includes(".chat-safety-menu")],
   ["mobile chat long text has wrapping styles", css.includes(".trade-chat-bubble p") && css.includes("overflow-wrap: anywhere") && css.includes(".chat-new-message-button")],

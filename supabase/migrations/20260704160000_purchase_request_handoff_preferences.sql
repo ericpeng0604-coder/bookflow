@@ -45,10 +45,13 @@ begin
 
   if not exists (
     select 1
-    from public.marketplace_listings
+    from public.books
     where id = target_book_id
       and seller_id <> requester
       and status = 'available'
+      and lifecycle_state = 'active'
+      and review_status = 'approved'
+      and moderation_visibility = 'visible'
   ) then
     raise exception 'Listing unavailable';
   end if;
