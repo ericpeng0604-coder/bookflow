@@ -13,7 +13,7 @@ const migration = readFileSync(
 const checks = [
   ["signup is the default auth view", app.includes('useState<"login" | "signup" | "forgot">("signup")')],
   ["mobile chat has a back control", app.includes('className="chat-mobile-back"') && app.includes("onBack={() => setExpandedConversationId(null)}")],
-  ["mobile chat list rail can collapse an open panel", app.includes('window.matchMedia("(max-width: 640px)").matches') && app.includes("onClickCapture") && css.includes(".conversation-layout.conversation-open { grid-template-columns: 42px minmax(0, 1fr);")],
+  ["mobile chat list rail remains readable and switchable", !app.includes("onClickCapture") && css.includes("minmax(118px, 34vw)") && css.includes("-webkit-line-clamp: 2")],
   ["closed chat exposes per-user hide", app.includes('conversation.status === "closed"') && app.includes('rpc("hide_closed_conversation"')],
   ["hidden chats are excluded from both list RPCs", (migration.match(/conversation_user_preferences/g) || []).length >= 5],
   ["issue report form is authenticated", app.includes('modal === "feedback" && currentUser')],

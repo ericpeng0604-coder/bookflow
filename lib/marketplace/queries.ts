@@ -14,7 +14,7 @@ import {
   mapConversation,
   mapFeedback,
 } from "@/lib/marketplace/mappers";
-import type { Book, Conversation, Feedback, Profile, SellerLifecycle, StudentVerification, TradeContact } from "@/lib/types";
+import type { Book, Conversation, Feedback, Profile, PurchaseRequest, SellerLifecycle, StudentVerification, TradeContact } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 
@@ -170,6 +170,24 @@ export async function fetchUserRequests(client: SupabaseClient, limit = 50) {
     .limit(limit);
   if (error) throw error;
   return (data ?? []).map((row) => mapRequest(row));
+}
+
+export async function fetchActiveRequestForBook(
+  client: SupabaseClient,
+  bookId: string,
+  buyerId: string,
+): Promise<PurchaseRequest | null> {
+  const { data, error } = await client
+    .from("purchase_requests")
+    .select("*")
+    .eq("book_id", bookId)
+    .eq("buyer_id", buyerId)
+    .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapRequest(data) : null;
 }
 
 export async function fetchNotifications(client: SupabaseClient) {
