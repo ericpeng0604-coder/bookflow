@@ -2,75 +2,77 @@
 
 ## 任務目標
 
-Ship the July 5 marketplace chat and order fixes:
-
-- desktop chat selection must not move the outer page to the bottom;
-- mobile chat must keep the left conversation rail usable for switching and show the related book;
-- sellers must be able to cancel a reserved handoff;
-- book detail refreshes must keep showing the buyer's existing order state instead of offering a new order.
+Deploy the mobile chat scroll fix so tapping a conversation in the left chat
+rail no longer moves the whole page to the bottom.
 
 ## 目前狀態與背景
 
-- Branch: `codex/chat-order-deploy`.
-- Base commit: `2031902ff8d71ea8dd2a6d211a159288c2d63cdb` (`origin/main`).
-- This release changes marketplace chat/order UI behavior and adds one Supabase migration that replaces the existing `cancel_purchase_request(uuid, text)` RPC.
+- Branch: `codex/mobile-chat-page-scroll`.
+- Base commit: `3877a9e0ddbca67ad8aaa10c4063ade6c61b6992` (`origin/main`).
+- This release is scoped to marketplace chat scrolling and regression
+  documentation.
+- No database migration is included.
 - No GitHub workflow or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
 
 ## 已完成
 
-- Added `fetchActiveRequestForBook(...)` and used it on book detail pages so existing pending, reserved, awaiting-confirmation, or completed buyer requests are restored after refresh.
-- Changed the book detail CTA to show `已下訂：...` whenever the active/completed request is known.
-- Preserved desktop scroll position while switching conversations from the left chat list.
-- Removed the mobile chat rail click-capture collapse behavior and widened the open-state rail so the buyer/seller and book title remain visible and switchable.
-- Updated seller cancellation copy for reserved handoffs.
-- Added migration `supabase/migrations/20260705100000_seller_cancel_reserved_request.sql` so sellers can cancel requests in `reserved` or `awaiting_confirmation`, while buyers retain the existing cancellable statuses.
-- Updated chat/order regression checks and the older chat visibility check to assert the new mobile rail behavior.
+- Added page-scroll restoration for conversation-list selections on all
+  viewport widths.
+- Replaced chat bottom-sentinel `scrollIntoView` usage with
+  `scrollChatLogToBottom(...)`, which scrolls only the chat message container.
+- Updated `check-chat-listing-order-ux.mjs` to assert both the local chat-log
+  scroll behavior and page-scroll preservation.
+- Added work-manual lessons for mobile chat viewport preservation and for
+  package-manager-aware clean release worktrees.
+- Added an ad-hoc memory update for the deploy token waste discovered during
+  this run.
 
 ## 變更檔案
 
 - `components/marketplace-app.tsx`
-- `app/globals.css`
-- `lib/marketplace/queries.ts`
 - `scripts/check-chat-listing-order-ux.mjs`
-- `scripts/check-chat-visibility-and-feedback.mjs`
-- `supabase/migrations/20260705100000_seller_cancel_reserved_request.sql`
+- `AI_WORK_MANUAL.md`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260705-chat-order-deploy.md`
+- `.ai/history/20260705-mobile-chat-page-scroll.md`
 
 ## 驗證結果
 
-- `node scripts/check-chat-listing-order-ux.mjs`: passed, 20/20.
-- `node scripts/check-chat-visibility-and-feedback.mjs`: passed, 9/9.
+- `node scripts/check-chat-listing-order-ux.mjs`: passed, 21/21.
 - `node node_modules/typescript/bin/tsc --noEmit`: passed.
-- `node node_modules/next/dist/bin/next build`: passed; production pages generated successfully.
 - `node node_modules/eslint/bin/eslint.js .`: passed.
 - `node scripts/run-project-checks.mjs`: passed, 26/26.
-- `node scripts/check-workflows.mjs`: passed.
-- `git diff --check`: passed.
+- `node node_modules/next/dist/bin/next build`: passed.
+- Protected recovery files were checked and are unchanged.
 
 ## 風險與注意事項
 
-- This release includes a database migration. Staging Migration must pass before production approval, and production behavior is not fully online until the protected Production Migration workflow applies it.
-- Supabase CLI is not installed in the local shell, so local `supabase --version` / CLI advisors were not run. Use the repository GitHub migration gates for staging and production proof.
-- The clean worktree uses a local ignored `node_modules` junction to the existing checkout for verification only. It must not be committed.
+- The Codex shell has `node` but not `npm`; the clean worktree is npm-lock based.
+- A read-only local `node_modules` junction to the existing checkout was used
+  for verification only. Do not run a package manager through this worktree
+  while that junction exists.
+- The initial verification attempt wasted time by trying pnpm-based Codex
+  commands on an npm-lock baseline; this is now recorded in `AI_WORK_MANUAL.md`
+  and in the global memory update note.
 
 ## 下一步
 
-1. Commit this scoped branch.
+1. Commit the scoped branch.
 2. Run `node scripts/release-preflight.mjs`.
-3. Push and open the PR.
-4. Wait for PR checks, Staging Migration, and Vercel Preview.
-5. Apply the protected Production Migration after approval.
-6. Merge, wait for production deployment, then verify the merged SHA with `release:smoke`.
+3. Push and open a PR.
+4. Wait for PR checks and Vercel Preview.
+5. Merge, wait for production deployment, then verify the merged SHA with
+   `/api/health/release` and `release:smoke`.
 
 ## 下一位 AI 工作指引
 
-1. Keep the PR scoped to the six product/check/migration files plus handoff files listed above.
+1. Keep this PR scoped to the changed files listed above.
 2. Do not include unrelated dirty changes from the original checkout.
-3. Use direct GitHub workflow status, `/api/health/release`, and `release:smoke` for final production proof.
+3. Use direct GitHub status, `/api/health/release`, and `release:smoke` for
+   final production proof.
 
 ## 相關 Commit
 
-- Base commit: `2031902ff8d71ea8dd2a6d211a159288c2d63cdb`.
+- Base commit: `3877a9e0ddbca67ad8aaa10c4063ade6c61b6992`.
+- Current implementation commit before final commit: not committed yet.
