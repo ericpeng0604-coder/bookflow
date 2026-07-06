@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260705-fix-purchase-request-live",
-  "taskTitle": "fix purchase request live migration",
-  "baseCommit": "7d32e77c7407d15ffd7d3ad01034e777739192e5",
-  "updatedAt": "2026-07-05T14:43:19.000Z",
+  "taskId": "20260707-sentry-guardrails-isolated",
+  "taskTitle": "ship sentry guardrails from isolated worktree",
+  "baseCommit": "6312a52a27166d470dc3778b24eff804f39cc9ba",
+  "updatedAt": "2026-07-07T01:40:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260705-fix-purchase-request-live.md"
+  "historyFile": ".ai/history/20260707-sentry-guardrails-isolated.md"
 }

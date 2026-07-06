@@ -53,13 +53,11 @@ filters, and displayed text.
 **Cause:** Text encoding was not inspected after generating or rewriting files.
 
 **Detection:** Review every added or modified text file, search for replacement
-characters or suspicious byte-decoding patterns, inspect diffs after any
-scripted rewrite that touches Chinese text, and run type checks/builds.
+characters or suspicious byte-decoding patterns, and run type checks/builds.
 
 **Prevention rule:** Preserve the repository's encoding, use UTF-8 for files
-containing Chinese text, do not rewrite mixed Chinese/TypeScript files with
-PowerShell `Get-Content`/`Set-Content` default encoding, inspect rendered
-strings, and fix all corruption before reporting completion.
+containing Chinese text, inspect rendered strings, and fix all corruption before
+reporting completion.
 
 ### LESSON-003: A load-test script is not a capacity result
 
@@ -739,99 +737,206 @@ new commits, create a clean branch from `origin/main` and cherry-pick only the
 new release commit. If it reports missing handoff files, update
 `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/` before pushing.
 
-### LESSON-043: Release flow assumptions need executable guards
+### LESSON-043: Duplicate dev servers slow local verification
 
-**Observed problem:** A small image-search release still hit avoidable release
-friction: the handoff file used non-required section names, local verification
-ran in a Codex shell with `node` but no `npm`, and a local `gh pr merge`
-reported a worktree checkout error even though GitHub had merged the PR.
+**Observed problem:** The BookFlow checkout accumulated many Node/Next dev and
+start processes on different local ports, while `.next` held a large cache and
+the shell could not find the expected Node runtime.
 
-**Cause:** The release process depended on memory and free-form handoff writing
-instead of one shared handoff contract, environment diagnostics, and remote
-merge/deployment proof.
+**Cause:** Local preview servers were started repeatedly without a cleanup
+gate, and checks assumed `node` or `npm` were available from the shell PATH.
 
-**Detection:** Run `release:plan`, `release:doctor`, and `release:preflight`
-before opening or merging a PR. Treat missing handoff sections, npm-lock plus
-pnpm/packageManager drift, linked `node_modules`, and multi-worktree merge
-errors as workflow signals to resolve before spending CI or dashboard time.
+**Detection:** Before blaming product code or Codex latency, inspect active
+Node/Next processes for this checkout, check whether `.next` is stale or large,
+and verify `node` plus the project package manager resolve in a fresh shell.
+If cleanup fails because a listed process no longer exists, treat that as a
+normal race rather than a product or deployment failure.
 
-**Prevention rule:** Generate handoff drafts from the repo template, keep
-`AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/` in sync, preserve the
-npm-lock package manager unless a package-manager migration is explicit, and
-verify merge/deploy state with `gh pr view`, `/api/health/release`, and
-`release-smoke` before using dashboards.
+**Prevention rule:** Use the bundled runtime, a verified PATH, or the
+Codex-safe `:codex` package scripts when the shell cannot find `node`. Run
+`pnpm run dev:doctor` when local work feels slow, and run `pnpm run dev:clean`
+before starting a new local preview if stale Next processes or `.next` cache
+are present. Cleanup scripts must tolerate already-exited processes.
 
-### LESSON-044: Release merges should wait only on required checks
+### LESSON-044: Context budget must not replace evidence
 
-**Observed problem:** A release appeared to take several extra minutes because
-the operator waited for optional PR activity and used a local merge command that
-collided with a multi-worktree `main` checkout even though required checks had
-already passed.
+**Observed problem:** AI work in this repository can consume excessive context
+and quota when agents repeatedly dump large files, logs, browser snapshots, or
+deployment dashboards while trying to rediscover known project state.
 
-**Cause:** The release flow treated all visible PR checks and bot activity as
-blocking, and the merge command depended on local branch switching.
+**Cause:** Context reduction was treated as an ad hoc conversation preference
+instead of a project workflow with explicit guardrails and evidence gates.
 
-**Detection:** Compare `gh pr checks --required` with all PR checks. If
-required checks are green while optional review bots remain pending, the wait is
-operator overhead. In multi-worktree setups, local `main` checkout errors after
-a remote merge should not be interpreted as a failed release.
+**Detection:** Watch for repeated full reads of high-context files such as
+`components/marketplace-app.tsx`, `app/globals.css`, `AI_WORK_MANUAL.md`, and
+large logs after the relevant location is already known. Also watch for repeated
+dashboard polling when a direct status endpoint or release smoke script would
+give stronger proof.
 
-**Prevention rule:** Use `release:pr-status` to poll GitHub required checks plus
-BookFlow release gates, merge through remote GitHub state or API when local
-worktrees may hold `main`, then prove production with `/api/health/release` and
-`release:smoke`. Save tokens by using compact status checks and direct APIs, not
-by skipping required evidence.
+**Prevention rule:** Start each non-trivial task with targeted search, changed
+hunks, `pnpm run ai:budget`, `pnpm run ai:budget:codex`, or
+`pnpm run release:plan` as appropriate. Read only the narrow context needed to
+make a safe change, reuse evidence gathered during the task, and prefer direct
+HTTP/API probes for deployment proof. Do not save context by skipping required
+tests, staging checks, production smoke, security review, diff review, or
+protected-file checks.
 
-### LESSON-045: Local preview drift burns release time
+### LESSON-045: UI workflow fixes need a narrow verification ladder
 
-**Observed problem:** Deployment work kept spending time on repeated local
-preview and verification setup before the actual PR and production checks.
+**Observed problem:** Multi-surface UI fixes around marketplace chat, request
+flow, and homepage filters can waste substantial context when agents reread
+large component files, retry shell-specific dev startup commands, and fall back
+to broad manual browser exploration before running the focused checks that
+already exist in the repository.
 
-**Cause:** Stale Next dev processes, `.next` cache state, and shell runtime
-assumptions were rediscovered manually instead of checked with one local
-diagnostic.
+**Cause:** The task spans one large UI surface, but the verification path was
+not reduced into a stable ladder. Agents rediscovered the same file regions,
+runtime fallback, and regression targets instead of moving through a fixed
+sequence.
 
-**Detection:** Before restarting previews or rerunning broad checks, run
-`npm run dev:doctor` or `node scripts/dev-environment.mjs` to see the current
-checkout's Node/Next processes, package/runtime state, and `.next` cache state.
+**Detection:** Watch for repeated full reads of
+`components/marketplace-app.tsx` or `app/globals.css` after the relevant
+symbols are already known, repeated attempts to start local preview servers
+through wrapper scripts when only host or port changes are needed, or browser
+checks that begin before targeted static checks and a production build have
+already narrowed the risk.
 
-**Prevention rule:** Use `dev:doctor` for diagnosis and `dev:clean` for manual
-cleanup before fresh local previews. Keep this separate from `npm run dev` so
-release acceleration does not unexpectedly kill active work.
+**Prevention rule:** For marketplace UI tasks, first locate exact symbols with
+targeted search and read only the affected ranges. Then run the smallest
+relevant regression scripts, such as `pnpm run check:chat-listing-order-ux`,
+`pnpm run check:listing-ui`, and `pnpm run check:home-accessibility`, plus
+`pnpm run typecheck` and `pnpm run build` when behavior crosses shared state,
+chat flows, or database-backed request data. Use the bundled Node/pnpm runtime
+when the shell PATH is incomplete. Only start a browser after the focused
+checks pass, and treat that browser step as confirmation of the changed
+interaction rather than the primary way to rediscover application state.
 
-### LESSON-046: Deploy tasks must isolate scope before implementation
+### LESSON-046: Production release proof must follow the protected workflow path
 
-**Observed problem:** A product task consumed hours of token and operator time
-because implementation started in a dirty checkout, then moved midstream to a
-clean worktree after unrelated edits, runtime gaps, and dependency drift had
-already complicated the flow.
+**Observed problem:** A marketplace release was ready to ship, but deployment
+could not finish from the dirty local checkout alone because the real gating
+steps were outside the code diff: the PR was still a draft, `Production
+Migration` required a protected manual dispatch, and Vercel reported success
+before direct health probes immediately reflected the new commit.
 
-**Cause:** Release-scope isolation and runtime readiness were treated as
-cleanup work after coding instead of entry conditions before coding.
+**Cause:** Release completion was treated as a git or build task instead of an
+end-to-end workflow that includes PR state, protected GitHub Actions, database
+migration approval, deployment propagation, and the repository's own smoke
+evidence.
 
-**Detection:** At the start of any deploy, merge, or production-confirmation
-task, inspect `git status --short`, the current branch, and whether `node`,
-`npm`, `typecheck`, `lint`, and `build` are runnable in the intended worktree.
-If unrelated edits are already present or the runtime path is not usable, do
-not continue into substantial code changes yet.
+**Detection:** Before claiming a BookFlow release is deployed, verify all of
+these in order: the shipping PR is not draft, required PR workflows are green,
+database releases have a completed `Production Migration` run, the merge commit
+has a successful Vercel status, and the latest `Production Deployment Monitor`
+run (or equivalent `release:smoke` evidence) passed for that deployment.
 
-**Prevention rule:** For deploy-complete work, isolate the scoped patch in a
-clean worktree from latest `origin/main` before implementation whenever the
-active checkout is dirty or mixed-purpose. Run `npm run ai:budget`,
-`npm run release:plan`, or `npm run release:doctor` first, fix environment
-blockers before broad edits, and keep verification layered as
-typecheck -> lint -> project checks -> build -> release preflight -> PR checks
--> production proof.
+**Prevention rule:** When a release includes database-backed application
+changes, ship from the clean PR branch rather than the dirty working tree. Move
+the PR out of draft before waiting on checks. If no direct workflow-dispatch API
+is available, use the authenticated GitHub workflow page to trigger
+`Production Migration` with the exact confirmation string, wait for that run to
+succeed, then merge. Treat `Production Deployment Monitor` or `release:smoke`
+success as the final proof point when `/api/health/release` still shows the
+older commit during propagation.
 
-### LESSON-047: Mobile chat switching must preserve the page viewport
+### LESSON-047: Codex checks need stable runtime and preview commands
+
+**Observed problem:** Local verification lost time because `node` was not on
+the shell PATH, a guessed `typecheck:codex` script did not exist, `pnpm run dev
+-- --hostname ...` passed Next flags as a project directory, and a stuck local
+preview left `.next` in a state that blocked a later production build.
+
+**Cause:** Runtime fallback, type checking, preview startup, and stale-process
+cleanup were handled as ad hoc shell fixes instead of repository scripts with
+known argument shapes.
+
+**Detection:** Watch for `node is not recognized`, missing `:*codex` scripts,
+Next reporting an invalid project directory named like a flag, `next dev`
+staying on `Starting...`, or `next build` timing out while Node/Next processes
+for this checkout are still running.
+
+**Prevention rule:** In Codex or any shell that may not have Node on PATH, use
+the repository `:codex` scripts: `pnpm run typecheck:codex`, `pnpm run
+build:codex`, `pnpm run dev:doctor:codex`, `pnpm run dev:clean:codex`,
+`pnpm run start:codex`, and targeted check variants such as `pnpm run
+check:chat-listing-order-ux:codex`. Before rerunning a build after a stuck
+preview, run `pnpm run dev:clean:codex` so `.next` is not shared with stale
+Next processes. Because `dev:clean:codex` removes `.next`, run `pnpm run
+build:codex` again before `pnpm run start:codex`.
+
+### LESSON-048: Memory and project lookups need a low-output first pass
+
+**Observed problem:** A memory inspection request consumed excessive context
+because the investigation expanded from a narrow question into broad recursive
+memory scans, full manual reads, and rollout-summary inspection before the
+first pass had identified concrete high-risk entries.
+
+**Cause:** Precision evidence gathering was started too early. The agent used
+large source reads and broad keyword scans as the default lookup mechanism
+instead of first building a small candidate list.
+
+**Detection:** Watch for full reads of `MEMORY.md`, rollout summaries, raw
+session logs, `AI_WORK_MANUAL.md`, browser DOM snapshots, or large source files
+when the user only asked for a narrow inspection or creation task.
+
+**Prevention rule:** Start lookup-heavy tasks with `pnpm run ai:lookup -- ...`
+or `pnpm run ai:lookup:codex -- ...` and inspect only the returned candidate
+line windows. Use `--deep` only after the first pass shows a concrete need for
+rollout history. Do not reduce token usage by skipping required checks,
+security review, deployment proof, or evidence needed for a reliable
+conclusion.
+
+### LESSON-049: Repeated mistakes need autonomous prevention
+
+**Observed problem:** The user had to repeatedly remind agents to turn errors,
+token waste, unsafe recall, and workflow friction into durable improvements
+instead of one-off explanations.
+
+**Cause:** Agents fixed the immediate symptom but waited for explicit follow-up
+before adding the check, helper, redaction, lesson, or workflow guard that would
+prevent the same issue from recurring.
+
+**Detection:** Watch for any real mistake, failed assumption, repeated blocker,
+escaped defect, sensitive-detail exposure, token-heavy rediscovery loop, or
+workflow step that required user correction.
+
+**Prevention rule:** Do not wait for the user to ask for prevention. Fix the
+immediate issue, identify the root cause, add the smallest durable guard, and
+verify that guard. Use `pnpm run ai:improve -- "problem"` or
+`pnpm run ai:improve:codex -- "problem"` for a low-output self-improvement
+brief, then implement the recommended script, check, manual lesson, redaction,
+or regression test when it fits the issue. Keep the guard scoped and do not
+replace required product checks or release proof with a checklist.
+
+### LESSON-050: PR check waiting must be low-output
+
+**Observed problem:** A deployment consumed excessive context because
+`gh pr checks --watch --interval 10` repeatedly printed the full check table
+while waiting for GitHub Actions, Vercel, CodeRabbit, staging migration, and
+release readiness to complete.
+
+**Cause:** The agent used an interactive watch command as if it were a compact
+status poller. The command was operationally correct, but its repeated full
+output did not add evidence beyond the final pass/fail state.
+
+**Detection:** Watch for commands such as `gh pr checks --watch`, dashboard
+polling loops, or repeated full workflow tables during release work. If the
+same pending/pass rows appear more than once, the wait path is too noisy.
+
+**Prevention rule:** Use `pnpm run release:watch-pr -- <pr-number-or-url>` or
+`pnpm run release:watch-pr:codex -- <pr-number-or-url>` to wait for PR checks.
+It prints compact status changes and final failures only. Do not use
+`gh pr checks --watch` in Codex unless the low-output helper is unavailable and
+the user explicitly accepts the extra context cost.
+
+### LESSON-051: Mobile chat switching must preserve the page viewport
 
 **Observed problem:** Tapping a conversation in the mobile chat rail could move
 the whole page to the bottom while opening the selected chat.
 
 **Cause:** The chat switch preserved outer-page scroll only for desktop-width
-layouts, and message loading used a bottom sentinel `scrollIntoView`, which can
-move the browser viewport instead of only the chat message pane on narrow
-layouts.
+layouts, while the mobile open-chat layout also changes height and loads a
+scrollable message panel.
 
 **Detection:** On a narrow viewport, scroll the dashboard so the chat rail is
 visible, tap between conversations in the left rail, and verify the browser
@@ -839,40 +944,18 @@ viewport stays in place while only the message log scrolls.
 
 **Prevention rule:** Conversation-list switching must explicitly preserve and
 restore the outer page scroll on all viewport widths. Message-loading auto
-scroll may target only the chat log container, not the browser page.
+scroll may target only the chat log, not the browser page.
 
-### LESSON-048: Clean release worktrees must match the package manager
+### LESSON-052: Migrations must reference the real schema
 
-**Observed problem:** A clean release worktree spent extra time and context on
-verification because Codex-safe pnpm commands were tried on a baseline that
-uses `package-lock.json`, creating a pnpm dependency tree and causing lint/build
-runtime mismatches.
+**Observed problem:** A purchase-request migration called
+`public.marketplace_listings`, but the project stores listings in
+`public.books`, causing order submission to fail at runtime.
 
-**Cause:** Runtime fallback guidance from a newer checkout was applied before
-checking the actual shipping branch's package manager, helper scripts, and
-available dependency tree.
+**Cause:** A new migration used an assumed table name instead of matching the
+existing schema and RPC implementation.
 
-**Detection:** Before running checks in a release worktree, inspect
-`package.json`, lockfiles, helper scripts such as `scripts/run-node.ps1`, and
-whether `npm`, `node_modules`, or a dependency junction already exists. Treat
-first-run package installation as setup, not as a parallelizable check step.
-
-**Prevention rule:** In clean release worktrees, confirm the package manager
-and runtime helpers from that worktree before verification. Do not launch
-parallel checks that can all trigger dependency installation. If the shell lacks
-the matching package manager, use an existing verified dependency tree read-only
-for checks, or stop and fix the runtime explicitly before continuing.
-
-### LESSON-049: Migrations must reference the real schema
-
-**Observed problem:** A purchase-request migration called a table that does not
-exist in the deployed schema, causing order submission to fail at runtime.
-
-**Cause:** A new migration used an assumed listing table name instead of
-matching the repository's canonical `public.books` schema and existing RPC
-eligibility checks.
-
-**Detection:** Search new SQL for table names not present in `supabase/schema.sql`
+**Detection:** Search new SQL for tables not present in `supabase/schema.sql`
 or established migrations, and run the related feature structure check before
 release.
 
@@ -880,25 +963,46 @@ release.
 tables and eligibility predicates. Add a feature check for any new SQL path that
 touches order creation or listing availability.
 
-### LESSON-050: Editing an applied migration does not repair production
+### LESSON-053: Production observability proof needs code-shipping proof first
 
-**Observed problem:** A purchase-request release changed the contents of an
-already applied migration file, passed code review and deployment checks, but
-left production running the old broken database function.
+**Observed problem:** Sentry smoke verification was attempted after adding the
+production DSN in Vercel, but before the Sentry integration code itself had
+been shipped to the production deployment.
 
-**Cause:** The fix was written into an existing migration filename instead of a
-new versioned migration. Supabase production migration applies new migration
-versions; it does not re-run old applied files just because their contents
-changed in git.
+**Cause:** Environment-variable rollout and application-code rollout were
+treated as if they moved together. A production redeploy of the old `main`
+commit was incorrectly used as a proxy for shipping the new observability code.
 
-**Detection:** If a production issue is supposed to be fixed by SQL but the
-live behavior is unchanged after a successful deployment, compare the fix path
-against migration history and check whether the patch only edited an older
-already-applied migration file.
+**Detection:** Before testing a new monitoring, analytics, or feature flag
+integration in production, compare the local commit containing the integration
+with the commit currently reported by Vercel or `/api/health/release`. If the
+production commit does not contain the new code, any smoke result is premature.
 
-**Prevention rule:** Never rely on editing an applied migration to repair live
-databases. Ship database fixes as a new timestamped migration, then verify the
-new migration actually ran in staging and production.
+**Prevention rule:** For observability changes, verify shipping order
+explicitly: commit merged to `main`, production deployment updated to that
+commit, required environment variables present, then trigger the production
+smoke or synthetic error. Never treat an env-only redeploy as proof that new
+client or server instrumentation is live.
+
+### LESSON-054: Small release scopes must leave dirty checkouts early
+
+**Observed problem:** A Sentry rollout started in a checkout that already mixed
+unrelated UI, SQL, workflow, and tooling edits, so later verification kept
+re-separating intended release files from unrelated local work.
+
+**Cause:** Scope isolation happened too late. The agent kept moving forward in
+the active dirty checkout instead of moving the narrow change to a clean
+worktree before verification, commit selection, and production rollout.
+
+**Detection:** Before adding release-only or observability-only changes, inspect
+the working tree areas. If the checkout already spans multiple substantive
+areas such as runtime, database, workflows, and tooling, stop and isolate the
+target change in a clean worktree or fresh branch.
+
+**Prevention rule:** Treat "small change in a dirty checkout" as an early stop
+condition, not a later cleanup task. Run `npm run check:release-scope` before
+release verification, and move narrow production changes to a clean worktree
+before building, committing, or testing production observability.
 
 ## New Lesson Template
 

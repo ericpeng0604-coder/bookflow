@@ -275,6 +275,10 @@ const resendFrom = emailEnabled
   ? required("RESEND_FROM_EMAIL", "Resend env")
   : optionalWhenDisabled("RESEND_FROM_EMAIL", "Resend env");
 const appUrl = required("APP_URL", "通知連結");
+const sentryDsn = env.NEXT_PUBLIC_SENTRY_DSN?.trim() || "";
+const sentryOrg = env.SENTRY_ORG?.trim() || "";
+const sentryProject = env.SENTRY_PROJECT?.trim() || "";
+const sentryAuthToken = env.SENTRY_AUTH_TOKEN?.trim() || "";
 
 if (resendKey && !resendKey.startsWith("re_")) {
   add("WARN", "Resend env", "RESEND_API_KEY 格式不像 Resend API key。", "確認使用的是 Resend 建立的 re_... key。");
@@ -291,6 +295,20 @@ if (appUrl && (!parsedAppUrl || !["http:", "https:"].includes(parsedAppUrl.proto
   add("FAIL", "通知 Email", "APP_URL 不是有效的 http/https URL。", "本機可用 http://localhost:3000；正式環境必須使用 https 網址。");
 } else if (parsedAppUrl && parsedAppUrl.hostname !== "localhost" && parsedAppUrl.protocol !== "https:") {
   add("FAIL", "通知 Email", "正式 APP_URL 必須使用 https。", "改成已部署網站的 https 網址。");
+}
+
+const parsedSentryDsn = sentryDsn ? parseUrl(sentryDsn) : null;
+if (!sentryDsn) {
+  add("WARN", "Monitoring", "NEXT_PUBLIC_SENTRY_DSN is not configured.", "Add the public DSN before relying on Sentry alerts.");
+} else if (!parsedSentryDsn || parsedSentryDsn.protocol !== "https:") {
+  add("FAIL", "Monitoring", "NEXT_PUBLIC_SENTRY_DSN must be a valid https DSN.");
+} else {
+  add("PASS", "Monitoring", "NEXT_PUBLIC_SENTRY_DSN is configured.");
+}
+if ((sentryOrg || sentryProject || sentryAuthToken) && !(sentryOrg && sentryProject && sentryAuthToken)) {
+  add("WARN", "Monitoring", "Set SENTRY_ORG, SENTRY_PROJECT, and SENTRY_AUTH_TOKEN together for source maps.");
+} else if (sentryOrg && sentryProject && sentryAuthToken) {
+  add("PASS", "Monitoring", "Sentry source map upload variables are configured.");
 }
 
 sourceContains(
