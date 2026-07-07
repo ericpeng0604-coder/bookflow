@@ -1004,6 +1004,26 @@ condition, not a later cleanup task. Run `npm run check:release-scope` before
 release verification, and move narrow production changes to a clean worktree
 before building, committing, or testing production observability.
 
+### LESSON-055: CI package-manager entrypoints must match the workflow runtime
+
+**Observed problem:** PR #80 failed its `Quality and build` check because the
+workflow installed dependencies with `npm ci`, then `npm run check:all` called
+`pnpm run ...`, but the GitHub runner had no `pnpm` binary available.
+
+**Cause:** The repository exposed mixed package-manager entrypoints at the
+script boundary. A workflow that intentionally used npm was forced back onto
+pnpm by `check:all`.
+
+**Detection:** When a CI job installs with `npm ci`, inspect any umbrella
+script it calls. If that script shells out to `pnpm`, `yarn`, or another tool
+that the workflow did not install, the job will fail before reaching the real
+product checks.
+
+**Prevention rule:** Keep top-level CI entrypoint scripts aligned with the
+workflow runtime. If a GitHub workflow uses `npm ci`, umbrella scripts like
+`check:all` must call `npm run ...` or direct local binaries instead of
+assuming `pnpm` is available.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

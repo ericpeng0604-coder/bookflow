@@ -61,7 +61,7 @@
     "check:release-scope": "node scripts/check-release-scope.mjs",
     "check:workflows": "node scripts/check-workflows.mjs",
     "check:project": "node scripts/run-project-checks.mjs",
-    "check:all": "pnpm run typecheck && pnpm run lint && pnpm run check:project && pnpm run build",
+    "check:all": "npm run typecheck && npm run lint && npm run check:project && npm run build",
     "verify": "node scripts/verify.mjs",
     "release:plan": "node scripts/release-plan.mjs",
     "release:plan:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-plan.mjs",
