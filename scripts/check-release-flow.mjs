@@ -54,10 +54,10 @@ for (const section of REQUIRED_HANDOFF_SECTIONS) {
 }
 
 const preflight = read("scripts/release-preflight.mjs");
-assert.match(preflight, /ai-collaboration\.mjs`? draft <title>/);
-assert.match(preflight, /packageManager/);
-assert.match(preflight, /package-lock\.json/);
-assert.match(preflight, /latest origin\/main/);
+assert.match(preflight, /check-ci/);
+assert.match(preflight, /release scope is mixed/);
+assert.match(preflight, /AI_HANDOFF\.md, \.ai\/state\.json, and a new \.ai\/history entry/);
+assert.match(preflight, /origin\/main/);
 
 const prStatus = read("scripts/release-pr-status.mjs");
 assert.match(prStatus, /--required/);
@@ -67,13 +67,12 @@ assert.match(prStatus, /Optional checks still pending; not blocking merge/);
 assert.match(prStatus, /Release gates passed/);
 
 const plan = read("scripts/release-plan.mjs");
-assert.match(plan, /printReleaseEnvironment/);
-assert.match(plan, /Suggested next step:/);
-assert.match(plan, /Deploy scope guard:/);
-assert.match(plan, /Environment guard:/);
-assert.match(plan, /release-pr-status\.mjs/);
+assert.match(plan, /Changed areas:/);
+assert.match(plan, /Minimum local evidence before PR:/);
+assert.match(plan, /check:workflows/);
+assert.match(plan, /release:watch-pr/);
 assert.match(plan, /\/api\/health\/release/);
-assert.match(plan, /release-smoke\.mjs/);
+assert.match(plan, /release:smoke/);
 
 const doctorOutput = runNode(["scripts/release-doctor.mjs"]);
 assert.match(doctorOutput, /Release environment:/);
@@ -89,13 +88,11 @@ assert.match(budgetOutput, /BookFlow context budget/);
 
 const workflow = read("docs/RELEASE_WORKFLOW.md");
 assert.match(workflow, /ai:budget/);
-assert.match(workflow, /release:doctor/);
-assert.match(workflow, /release:pr-status/);
+assert.match(workflow, /check:release-scope/);
+assert.match(workflow, /release:watch-pr/);
 assert.match(workflow, /clean worktree/);
-assert.match(workflow, /optional review bots/);
-assert.match(workflow, /gh pr view/);
-assert.match(workflow, /gh api/);
+assert.match(workflow, /gh pr checks --watch/);
 assert.match(workflow, /api\/health\/release/);
-assert.match(workflow, /Do not switch this\s+npm-lock project to pnpm/);
+assert.match(workflow, /Monitoring and backup expectations/);
 
 console.log("Release flow checks passed.");

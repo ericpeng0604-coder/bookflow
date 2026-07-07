@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 function supabaseStorageHostnames() {
@@ -21,6 +22,16 @@ function supabaseOrigins() {
   }
 }
 
+function sentryBrowserOrigin() {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  if (!dsn) return [] as string[];
+  try {
+    return [new URL(dsn).origin];
+  } catch {
+    return [] as string[];
+  }
+}
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -37,6 +48,7 @@ const contentSecurityPolicy = [
   "worker-src 'self' blob:",
   `connect-src 'self' ${[
     ...supabaseOrigins(),
+    ...sentryBrowserOrigin(),
     "https://tessdata.projectnaptha.com",
   ].join(" ")}`,
   "manifest-src 'self'",
@@ -76,4 +88,10 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  widenClientFileUpload: Boolean(process.env.SENTRY_AUTH_TOKEN),
+});

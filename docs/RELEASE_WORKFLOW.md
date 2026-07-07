@@ -18,6 +18,8 @@ changes. A release is complete only after every applicable stage has evidence.
 
 Do not describe an earlier state as a later one.
 
+Monitoring and backup expectations live in `docs/MONITORING.md`.
+
 ## GitHub configuration
 
 Create these GitHub Environments:
@@ -59,11 +61,8 @@ workflow is approved. Application rollback does not reverse database changes.
 ## Commands
 
 ```text
-npm run ai:budget
 npm run release:plan
-npm run release:doctor
-npm run dev:doctor
-npm run release:pr-status -- <pr> --wait
+npm run check:release-scope
 npm run release:preflight
 npm run check:all
 npm run check:workflows
@@ -73,9 +72,9 @@ RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> npm run release:
 `release:smoke` verifies the homepage, `/api/marketplace/count`, and
 `/api/health/release`.
 
-`ai:budget` is the lowest-cost triage helper for non-trivial tasks. It prints
-the changed areas, high-context files, deploy stop rules, and the smallest
-likely evidence path before the agent opens large files, logs, or dashboards.
+`check:release-scope` stops early when a narrow release is still sitting in a
+dirty checkout, especially when observability files are mixed with unrelated
+UI, SQL, workflow, or tooling changes.
 
 `release:preflight` runs after the release commit and handoff update are ready
 but before opening or merging the PR. It fails fast when a branch mixes commits
@@ -83,105 +82,55 @@ already applied to `main` with new commits, which can happen after a squash
 merge, and when substantive code changes are missing the required
 `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/` updates.
 
-`release:doctor` prints the local release environment: `node` and `npm`
-availability, lockfiles, `packageManager`, `node_modules`, and `.next` state.
-If this npm-lock project has `package-lock.json` but `npm` is unavailable, use
-the active or bundled Node runtime for repo scripts and an npm-created
-`node_modules` for full local typecheck, lint, and build. Do not switch this
-npm-lock project to pnpm, add `packageManager`, or rewrite lockfiles merely to
-make local release checks run.
-
-`dev:doctor` adds checkout-specific cleanup diagnostics for local preview work:
-it reports Node/Next processes for the current checkout and the `.next` cache
-state. If repeated local previews or stale cache state are making verification
-slow, run `npm run dev:clean` before starting a fresh preview. This command is
-manual so normal `npm run dev` does not unexpectedly stop another process.
-
-`release:pr-status` prints GitHub required checks plus the BookFlow release
-gates: AI handoff, Release Readiness, Quality and build, Workflow syntax,
-Staging Migration, and Vercel. With `--wait`, it polls at a compact interval and
-exits as soon as release gates pass, even if optional review bots are still
-pending.
-
 ## Low-token Codex path
 
-When Codex is preparing or verifying a release, start with `npm run ai:budget`
-or `npm run release:plan`. If the checkout is dirty and the task implies
-deploy, merge, or production confirmation, stop and move to a clean worktree
-from latest `origin/main` before substantial implementation or release work.
+When Codex is preparing or verifying a release, start with `npm run
+release:plan`. It prints a short summary of the current branch, changed areas,
+protected recovery-file risk, and the minimum gates required for the change.
+If the active checkout is dirty and the intended release is small, move it into
+a clean worktree before continuing. Then run `npm run check:release-scope`.
 Before opening or merging the PR, run `npm run release:preflight` so stale
-branch and handoff problems are caught locally instead of after GitHub checks.
-If `node`, `npm`, `typecheck`, `lint`, or `build` are not runnable in the
-chosen worktree, fix that environment path first instead of coding deeper and
-discovering the blocker later.
-
-Use `ai:budget` to identify whether the next step is a narrow code read, a
-runtime fix, a handoff update, or a clean-worktree release path. Use
-`release:plan` when the task is already on the release path and you need the
-minimum local and production gates.
-
+branch, mixed-scope, and handoff problems are caught locally instead of after
+GitHub checks.
 If `npm` is not available in the current shell, run the same helper directly
 with the active Node runtime:
 
 ```text
-node scripts/context-budget.mjs
 node scripts/release-plan.mjs
-node scripts/release-doctor.mjs
+node scripts/check-release-scope.mjs
 node scripts/release-preflight.mjs
 ```
 
-In Codex desktop on Windows, `node` and `npm` may not be on `PATH`. Use the
-bundled Node executable shown by the workspace dependency helper, then run the
-same script:
+In Codex desktop on Windows, `node` and `npm` may not be on `PATH`. Prefer the
+Codex-safe package scripts first:
 
 ```text
-<bundled-node.exe> scripts/context-budget.mjs
+pnpm run ai:budget:codex
+pnpm run release:plan:codex
+pnpm run release:preflight:codex
+pnpm run release:watch-pr:codex -- <pr-number-or-url>
+RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> pnpm run release:smoke:codex
+```
+
+If `pnpm` itself is not available, use the bundled Node executable shown by the
+workspace dependency helper, then run the same script directly:
+
+```text
 <bundled-node.exe> scripts/release-plan.mjs
-<bundled-node.exe> scripts/release-doctor.mjs
 <bundled-node.exe> scripts/release-preflight.mjs
+<bundled-node.exe> scripts/release-watch-pr.mjs <pr-number-or-url>
 ```
 
-Use these helpers to choose the next proof point before opening browser
-dashboards, large workflow logs, or repeated DOM snapshots. The low-token path
-reduces exploration; it does not remove required evidence. Before a PR or
-merge, still run the applicable local checks, workflow checks, staging
-migration, production migration, and `release:smoke` gates described above.
+Use the plan to choose the next proof point before opening browser dashboards,
+large workflow logs, or repeated DOM snapshots. The low-token path reduces
+exploration; it does not remove required evidence. Before a PR or merge, still
+run the applicable local checks, workflow checks, staging migration, production
+migration, and `release:smoke` gates described above.
 
-For substantive changes, keep the AI handoff trio in sync before opening a PR:
-
-```text
-node scripts/ai-collaboration.mjs draft "<task title>"
-node scripts/ai-collaboration.mjs check-ci origin/main HEAD
-```
-
-The generated draft and `.ai/templates/handoff.md` use the exact required
-sections. Do not invent alternate heading names; `release:preflight` will reject
-them before CI.
-
-After opening a PR, poll only required GitHub checks with the compact status
-helper:
-
-```text
-node scripts/release-pr-status.mjs <pr> --wait --interval 25 --timeout 600
-```
-
-The helper uses GitHub's required-check list plus BookFlow's release gates. If
-optional review bots such as CodeRabbit are still pending, list them as
-non-blocking and continue once all release gates pass.
-
-After the required PR checks pass, prefer remote state checks and remote merge
-over local branch switching in multi-worktree setups:
-
-```text
-gh api -X PUT repos/ericpeng0604-coder/bookflow/pulls/<pr>/merge -f merge_method=squash
-gh pr view <pr> --json state,mergedAt,mergeCommit
-```
-
-Use the merged SHA from GitHub, wait for
-`https://bookflow-green.vercel.app/api/health/release` to report that exact
-commit, then run `release:smoke`. Clean up the remote feature branch separately
-from any local worktree cleanup so a local `main` checkout collision does not
-look like a failed merge.
+When waiting for PR checks in Codex, use `release:watch-pr` instead of
+`gh pr checks --watch`. The helper only prints compact status changes and final
+failures, while `gh pr checks --watch` repeatedly dumps the full table and can
+consume a large amount of context without adding proof.
 
 ## Recovery changes
 

@@ -1,3 +1,13 @@
+# AI Handoff Archive
+
+- Task: ship sentry guardrails from isolated worktree
+- Actor: codex
+- Status: ready for verification
+- Base commit: `6312a52a27166d470dc3778b24eff804f39cc9ba`
+- Archived at: 2026-07-07T01:40:00.000Z
+
+---
+
 # BookFlow AI Handoff
 
 ## 任務目標
