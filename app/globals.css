@@ -1887,6 +1887,12 @@ footer,
   z-index: 2;
 }
 
+.market-switch { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid #d8e4de; border-radius: 999px; background: #f1f6f3; }
+.market-switch button { min-height: 36px; border: 0; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; background: transparent; color: #52665f; font-weight: 800; cursor: pointer; }
+.market-switch button.active { background: #227865; color: #fff; box-shadow: 0 4px 10px rgba(34, 120, 101, .18); }
+.theme-secondhand .market-switch button.active { background: #ff5a3d; color: #171717; }
+@media (max-width: 980px) { .market-switch { display: none; } }
+
 .home-page .hero-trust.hero-assurance {
   margin-top: 18px;
   display: flex;
@@ -1924,6 +1930,37 @@ footer,
 
   .home-page .hero-trust.hero-assurance span {
     white-space: normal;
+  }
+}
+
+.theme-secondhand .home-page .hero-art.hero-reference-art {
+  background-image: linear-gradient(90deg, rgba(247, 246, 241, .98) 0%, rgba(247, 246, 241, .82) 42%, rgba(247, 246, 241, .12) 72%), url("/secondhand-items-hero.png") !important;
+  background-position: 0 0, right center !important;
+  background-size: auto, cover !important;
+  filter: saturate(.9) contrast(.96) !important;
+}
+
+@media (max-width: 760px) {
+  .theme-secondhand .home-page .hero-art.hero-reference-art {
+    background-image: linear-gradient(180deg, rgba(247, 246, 241, .5) 0%, rgba(247, 246, 241, .94) 65%, rgba(247, 246, 241, 1) 100%), url("/secondhand-items-hero.png") !important;
+    background-position: center, center bottom !important;
+    background-size: auto, auto 62% !important;
+  }
+}
+
+/* Final secondhand hero override. */
+.theme-secondhand .home-page .hero-art.hero-reference-art {
+  background-image: linear-gradient(90deg, rgba(247, 246, 241, .98) 0%, rgba(247, 246, 241, .82) 42%, rgba(247, 246, 241, .12) 72%), url("/secondhand-items-hero.png") !important;
+  background-position: 0 0, right center !important;
+  background-size: auto, cover !important;
+  filter: saturate(.9) contrast(.96) !important;
+}
+
+@media (max-width: 760px) {
+  .theme-secondhand .home-page .hero-art.hero-reference-art {
+    background-image: linear-gradient(180deg, rgba(247, 246, 241, .5) 0%, rgba(247, 246, 241, .94) 65%, rgba(247, 246, 241, 1) 100%), url("/secondhand-items-hero.png") !important;
+    background-position: center, center bottom !important;
+    background-size: auto, auto 62% !important;
   }
 }
 
