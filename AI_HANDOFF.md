@@ -2,77 +2,63 @@
 
 ## 任務目標
 
-Implement six marketplace fixes: handoff notification routing, duplicate-order
-protection, desktop navigation visibility, mobile-safe OCR, price filtering,
-and a collapsible mobile chat list.
+Deploy the homepage update for the secondhand books/items market switch.
 
 ## 目前狀態與背景
 
-- Branch: `codex/six-mobile-marketplace-fixes`.
-- Base commit: `f7bec0732571da7d72fc6c034f1730ca3f63ea7f` (`origin/main`).
-- Feature commit: the six-fix implementation commit on this branch.
-- Staging migration must pass before production approval.
-- Production migration and production deployment remain pending.
+- Branch: `codex/secondhand-market-production`.
+- Base commit: `af354eb6fbcc682185df3359284dcf0753be208b` (`origin/main`).
+- Feature commit: `67af592`.
+- This release contains only homepage UI, accessibility check, and one image asset.
+- No database migration is required.
 - No protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
 
 ## 已完成
 
-- Added server-confirmed request loading and a unique active-request index.
-- Added OCR-only image compression while preserving original upload files.
-- Added non-destructive OCR merging for manually edited title/author/edition.
-- Added inclusive `NT$500 以上` catalog filtering and a mobile chat rail toggle.
+- Added a visible `二手書籍／二手物品` market switch.
+- Made homepage headings, search labels, CTAs, empty states, and mobile menu copy mode-aware.
+- Added the supplied secondhand-items hero image for the secondhand market.
+- Kept the book market hero separate from the secondhand-items hero.
 
 ## 驗證結果
 
-- Typecheck: passed.
-- ESLint: passed for changed files.
+- Home accessibility checks: passed (26/26).
 - Production build: passed (`EXIT_CODE=0`).
-- Six-fix, filter, OCR, image-search, and chat checks: passed.
-- Mobile browser automation: NOT VERIFIED; Chromium executable is unavailable.
-- Staging/production migration: pending separate database release approval.
+- Diff check: passed.
+- Vercel Preview: pending on the release PR.
+- Production deployment: pending PR merge and post-merge verification.
 
 ## 下一步
 
-1. Wait for PR CI and resolve only release-gate failures.
-2. Verify the migration in staging.
-3. Apply the migration to production through the separately approved path.
-4. Merge the PR and verify the Vercel production deployment commit.
-5. Run production smoke tests for release health and marketplace behavior.
+1. Wait for the release PR checks and resolve only release-gate failures.
+2. Merge the clean PR after required checks pass.
+3. Verify the Vercel production deployment commit and homepage market switch.
+4. Run production smoke checks for release health.
 
 ## 風險與注意事項
 
-- OCR input is compressed only for recognition; the original image remains the upload source.
-- A SQL file, green build, or preview deployment is not production proof.
-- Keep staging migration, production migration, and Vercel deployment evidence separate.
+- A Vercel Preview is not production proof.
+- Do not include unrelated local files or pnpm-generated files in the release.
+- Keep staging/database migration evidence separate; this UI release has no migration.
 
 ## 下一位 AI 工作指引
 
-1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry in
-   sync with the release commit.
-2. Verify GitHub checks before merging; do not treat a preview deployment as
-   production proof.
-3. Keep Supabase migration evidence separate from Vercel deployment evidence.
+1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry in sync with the release commit.
+2. Verify GitHub checks before merging; do not treat Preview as production.
+3. Preserve all protected recovery files.
 
 ## 變更檔案
 
 - `app/globals.css`
 - `components/marketplace-app.tsx`
-- `lib/marketplace/mappers.ts`
-- `lib/marketplace/queries.ts`
-- `lib/types.ts`
-- `package.json`
-- `scripts/check-chat-listing-order-ux.mjs`
-- `scripts/check-risk-warning.mjs`
-- `scripts/check-staging.mjs`
-- `scripts/run-project-checks.mjs`
-- `scripts/verify.mjs`
-- `supabase/migrations/20260714102652_trade_reviews_and_risk_warning.sql`
+- `public/secondhand-items-hero.png`
+- `scripts/check-home-accessibility.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260714-trade-risk-warning.md`
+- `.ai/history/20260714-secondhand-market-homepage-release.md`
 
 ## 相關 Commit
 
-- Base commit: `f7bec0732571da7d72fc6c034f1730ca3f63ea7f`.
-- Feature commit: the six-fix implementation commit on this branch.
+- Base commit: `af354eb6fbcc682185df3359284dcf0753be208b`.
+- Feature commit: `67af592`.
