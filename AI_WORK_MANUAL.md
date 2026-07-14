@@ -832,12 +832,12 @@ run (or equivalent `release:smoke` evidence) passed for that deployment.
 
 **Prevention rule:** When a release includes database-backed application
 changes, ship from the clean PR branch rather than the dirty working tree. Move
-the PR out of draft before waiting on checks. If no direct workflow-dispatch API
-is available, use the authenticated GitHub workflow page to trigger
-`Production Migration` with the exact confirmation string, wait for that run to
-succeed, then merge. Treat `Production Deployment Monitor` or `release:smoke`
-success as the final proof point when `/api/health/release` still shows the
-older commit during propagation.
+the PR out of draft before waiting on checks. Trigger `Production Migration`
+only through the authenticated GitHub workflow, select the approved migration
+ref, keep the required `production-database` Environment reviewer approval,
+wait for the migration to succeed, then merge. Treat `Production Deployment
+Monitor` or `release:smoke` success as the final proof point when
+`/api/health/release` still shows the older commit during propagation.
 
 ### LESSON-047: Codex checks need stable runtime and preview commands
 

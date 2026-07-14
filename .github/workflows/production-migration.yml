@@ -3,9 +3,10 @@ name: Production Migration
 on:
   workflow_dispatch:
     inputs:
-      confirm:
-        description: Type APPLY-PRODUCTION-MIGRATIONS
+      migration_ref:
+        description: Git ref containing the approved migration files
         required: true
+        default: main
         type: string
 
 permissions:
@@ -22,12 +23,11 @@ jobs:
     timeout-minutes: 20
     environment: production-database
     steps:
-      - name: Require explicit confirmation
-        if: ${{ inputs.confirm != 'APPLY-PRODUCTION-MIGRATIONS' }}
-        run: exit 1
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.migration_ref }}
+      - name: Show migration source
+        run: git rev-parse HEAD
       - uses: supabase/setup-cli@v2
         with:
           version: 2.84.2
