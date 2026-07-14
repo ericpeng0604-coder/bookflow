@@ -2,30 +2,25 @@
 
 ## 任務目標
 
-Deploy the homepage update for the secondhand books/items market switch.
+Deploy the homepage market-switch color update.
 
 ## 目前狀態與背景
 
-- Branch: `codex/secondhand-market-production`.
-- Base commit: `af354eb6fbcc682185df3359284dcf0753be208b` (`origin/main`).
-- Feature commit: `67af592`.
-- This release contains only homepage UI, accessibility check, and one image asset.
+- Branch: `codex/unify-market-switch-green`.
+- Base commit: `e1374ec335c744bb3b1ddf1b3b51c5380c2b2d89` (`origin/main`).
+- This release contains only one homepage CSS color update.
 - No database migration is required.
 - No protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
 
 ## 已完成
 
-- Added a visible `二手書籍／二手物品` market switch.
-- Made homepage headings, search labels, CTAs, empty states, and mobile menu copy mode-aware.
-- Added the supplied secondhand-items hero image for the secondhand market.
-- Kept the book market hero separate from the secondhand-items hero.
+- Unified the active `二手物品` market-switch button with the left `二手書籍` green.
 
 ## 驗證結果
 
-- Home accessibility checks: passed (26/26).
-- Production build: passed (`EXIT_CODE=0`).
 - Diff check: passed.
+- Production build: pending for this one-line CSS release.
 - Vercel Preview: pending on the release PR.
 - Production deployment: pending PR merge and post-merge verification.
 
@@ -51,9 +46,6 @@ Deploy the homepage update for the secondhand books/items market switch.
 ## 變更檔案
 
 - `app/globals.css`
-- `components/marketplace-app.tsx`
-- `public/secondhand-items-hero.png`
-- `scripts/check-home-accessibility.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
 - `.ai/history/20260714-secondhand-market-homepage-release.md`
