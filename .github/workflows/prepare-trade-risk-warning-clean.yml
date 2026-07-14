@@ -1,0 +1,95 @@
+name: Prepare trade risk warning clean branch
+
+on:
+  push:
+    branches:
+      - codex/trade-risk-warning-clean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-trade-risk-warning-clean
+  cancel-in-progress: false
+
+jobs:
+  prepare-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Rebuild branch from latest main and cherry-pick feature
+        run: |
+          set -euo pipefail
+          git fetch origin main codex/trade-risk-warning
+          git reset --hard origin/main
+          git cherry-pick -x f5b10805c35b4b7f61c16a70b122277535b9e2a7
+
+      - name: Verify release scope
+        run: |
+          set -euo pipefail
+          expected="$(mktemp)"
+          actual="$(mktemp)"
+          cat > "$expected" <<'EOF'
+          app/globals.css
+          components/marketplace-app.tsx
+          lib/marketplace/mappers.ts
+          lib/marketplace/queries.ts
+          lib/types.ts
+          package.json
+          scripts/check-chat-listing-order-ux.mjs
+          scripts/check-risk-warning.mjs
+          scripts/check-staging.mjs
+          scripts/run-project-checks.mjs
+          scripts/verify.mjs
+          supabase/migrations/20260714120000_trade_reviews_and_risk_warning.sql
+          EOF
+          sed -i 's/^          //' "$expected"
+          git diff --name-only origin/main...HEAD | sort > "$actual"
+          sort -o "$expected" "$expected"
+          echo "Changed files:"
+          cat "$actual"
+          diff -u "$expected" "$actual"
+          test "$(git rev-list --count origin/main..HEAD)" = "1"
+          git diff --check origin/main...HEAD
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Project checks
+        run: pnpm run check:project
+
+      - name: Risk warning checks
+        run: pnpm run check:risk-warning
+
+      - name: Push clean branch
+        run: git push --force-with-lease origin HEAD:codex/trade-risk-warning-clean
