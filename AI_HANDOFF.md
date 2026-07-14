@@ -2,96 +2,82 @@
 
 ## 任務目標
 
-Ship the isolated Sentry observability integration and release-scope guardrails
-from a clean worktree so production monitoring can be released without mixing in
-unrelated UI, SQL, or workflow edits from the dirty checkout.
+Release completed-trade reviews, moderator-only risk analysis, and manually
+approved positive trust badges without automatically blocking transactions.
 
 ## 目前狀態與背景
 
-- Branch: `codex/sentry-guardrails-isolated`.
-- Base commit: `6312a52a27166d470dc3778b24eff804f39cc9ba` (`origin/main`).
-- This release is scoped to Sentry instrumentation, monitoring docs, one
-  uptime smoke workflow, and early release-scope guardrails.
-- No database migration is included.
+- Branch: `codex/trade-risk-warning-clean`.
+- Base commit: `0f3919416ec56b16ab23469814dee308bb564045` (`origin/main`).
+- Feature commit: the single commit ahead of `origin/main` on this branch.
+- Staging migration is applied and schema/RLS/RPC checks passed.
+- Production migration and production deployment remain pending.
 - No protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
 
 ## 已完成
 
-- Added Next.js Sentry instrumentation files for server, edge, client, and
-  global error capture.
-- Added `docs/MONITORING.md` and a production uptime smoke workflow.
-- Updated health-check and release docs to include Sentry prerequisites.
-- Added `check-release-scope` plus release-plan/preflight guards so small
-  observability releases stop early when they start from a dirty mixed-scope
-  checkout.
-- Fixed a false positive in the new scope classifier so `.env.example` is not
-  misclassified as `other`.
-
-## 下一步
-
-1. Review the isolated diff and keep this branch limited to observability,
-   release guardrails, and the required AI handoff files.
-2. Commit the isolated change set.
-3. Run `node scripts/release-preflight.mjs`.
-4. Push and open a PR.
-5. After merge, wait for `/api/health/release` to report the merged commit.
-6. Only then trigger the production Sentry smoke or synthetic error and verify
-   the issue arrives in Sentry.
-
-## 變更檔案
-
-- `.env.example`
-- `next.config.ts`
-- `package.json`
-- `package-lock.json`
-- `scripts/setup-health-check.mjs`
-- `scripts/release-plan.mjs`
-- `scripts/release-preflight.mjs`
-- `scripts/check-release-scope.mjs`
-- `scripts/lib/release-scope.mjs`
-- `.github/workflows/production-uptime-smoke.yml`
-- `docs/MONITORING.md`
-- `docs/RELEASE_WORKFLOW.md`
-- `instrumentation.ts`
-- `instrumentation-client.ts`
-- `sentry.server.config.ts`
-- `sentry.edge.config.ts`
-- `app/global-error.tsx`
-- `AI_WORK_MANUAL.md`
-- `AI_HANDOFF.md`
-- `.ai/state.json`
-- `.ai/history/20260707-sentry-guardrails-isolated.md`
+- Added versioned `trade_reviews`, `risk_profiles`, `trust_badges`,
+  `risk_policy_settings`, and audit logging.
+- Added RLS and controlled RPCs for review submission, public approved badges,
+  moderator risk data, badge review, and policy management.
+- Added completed-trade review UI, public positive badges, and moderator risk
+  panel with policy controls.
+- Added regression checks and staging probes.
 
 ## 驗證結果
 
-- `node scripts/check-release-scope.mjs`: passed.
-- `node scripts/release-plan.mjs`: passed.
-- `node scripts/check-workflows.mjs`: passed.
-- `node node_modules/typescript/bin/tsc --noEmit --incremental false`: passed.
-- `node node_modules/next/dist/bin/next build`: passed.
-- `node scripts/setup-health-check.mjs --no-network`: failed as expected in the
-  clean worktree because local `.env.local` secrets and `NEXT_PUBLIC_SENTRY_DSN`
-  are not present there.
+- Typecheck: passed.
+- Lint: passed.
+- Production build: passed.
+- Project checks: `27/27` passed.
+- Risk-warning checks: `15/15` passed.
+- Staging migration: applied as
+  `20260714102652_trade_reviews_and_risk_warning`.
+- Staging tables, RLS, indexes, and RPC permissions: passed.
+
+## 下一步
+
+1. Wait for PR CI and resolve only release-gate failures.
+2. Verify staging migration workflow and preview deployment.
+3. Apply the same migration to production through the approved release path.
+4. Merge the PR and verify the Vercel production deployment commit.
+5. Run production smoke tests for the review, badge, and moderator flows.
 
 ## 風險與注意事項
 
-- The isolated worktree can build successfully, but production proof still
-  depends on commit -> PR -> merge -> deployed commit -> Sentry smoke.
-- Local setup-check failures here are environment completeness issues in the
-  clean worktree, not proof that Vercel production is misconfigured.
-- Keep this PR scoped; do not pull in the unrelated dirty-checkout edits.
+- Risk scores, report evidence, and negative states are not public.
+- High risk is moderator-only; transactions are not automatically blocked.
+- A SQL file, green build, or preview deployment is not production proof.
+- Keep production migration and Vercel deployment evidence separate.
 
 ## 下一位 AI 工作指引
 
-1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and
-   `.ai/history/20260707-sentry-guardrails-isolated.md` in sync.
-2. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` after the
-   commit exists and before opening the PR.
-3. Do not treat an env-only redeploy as proof that Sentry instrumentation is
-   live in production.
+1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry in
+   sync with the release commit.
+2. Verify GitHub checks before merging; do not treat a preview deployment as
+   production proof.
+3. Keep Supabase migration evidence separate from Vercel deployment evidence.
+
+## 變更檔案
+
+- `app/globals.css`
+- `components/marketplace-app.tsx`
+- `lib/marketplace/mappers.ts`
+- `lib/marketplace/queries.ts`
+- `lib/types.ts`
+- `package.json`
+- `scripts/check-chat-listing-order-ux.mjs`
+- `scripts/check-risk-warning.mjs`
+- `scripts/check-staging.mjs`
+- `scripts/run-project-checks.mjs`
+- `scripts/verify.mjs`
+- `supabase/migrations/20260714102652_trade_reviews_and_risk_warning.sql`
+- `AI_HANDOFF.md`
+- `.ai/state.json`
+- `.ai/history/20260714-trade-risk-warning.md`
 
 ## 相關 Commit
 
-- Base commit: `6312a52a27166d470dc3778b24eff804f39cc9ba`.
-- Current implementation commit before final commit: `not committed yet`.
+- Base commit: `0f3919416ec56b16ab23469814dee308bb564045`.
+- Feature commit: the single commit ahead of `origin/main` on this branch.

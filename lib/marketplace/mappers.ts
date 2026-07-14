@@ -15,6 +15,15 @@ import type {
   ContactMethod,
   Feedback,
   StudentVerification,
+  RiskEvidence,
+  RiskLevel,
+  RiskPolicy,
+  RiskProfile,
+  TradeReview,
+  TradeReviewTag,
+  TrustBadge,
+  TrustBadgeStatus,
+  TrustBadgeType,
   UserRole,
 } from "@/lib/types";
 
@@ -197,5 +206,96 @@ export function mapTradeContact(row: Record<string, unknown>): TradeContact {
     method: String(row.method) as TradeContact["method"],
     value: String(row.value),
     department: String(row.department),
+  };
+}
+
+function jsonArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [];
+}
+
+function mapRiskEvidence(row: Record<string, unknown>): RiskEvidence {
+  return {
+    id: String(row.id),
+    requestId: row.request_id ? String(row.request_id) : undefined,
+    reviewerId: row.reviewer_id ? String(row.reviewer_id) : undefined,
+    reviewerName: row.reviewer_name ? String(row.reviewer_name) : undefined,
+    targetType: row.target_type as RiskEvidence["targetType"],
+    targetId: row.target_id ? String(row.target_id) : undefined,
+    reason: row.reason as RiskEvidence["reason"],
+    details: row.details ? String(row.details) : undefined,
+    status: row.status as RiskEvidence["status"],
+    resolutionNote: row.resolution_note ? String(row.resolution_note) : undefined,
+    rating: row.rating === undefined ? undefined : Number(row.rating),
+    tags: Array.isArray(row.tags) ? row.tags.map(String) as TradeReviewTag[] : undefined,
+    comment: row.comment ? String(row.comment) : undefined,
+    createdAt: String(row.created_at),
+  };
+}
+
+export function mapTradeReview(row: Record<string, unknown>): TradeReview {
+  return {
+    id: String(row.id),
+    requestId: String(row.request_id),
+    reviewerId: String(row.reviewer_id),
+    reviewerName: String(row.reviewer_name || "使用者"),
+    revieweeId: String(row.reviewee_id),
+    rating: Number(row.rating || 0),
+    tags: Array.isArray(row.tags) ? row.tags.map(String) as TradeReviewTag[] : [],
+    comment: String(row.comment || ""),
+    createdAt: String(row.created_at),
+  };
+}
+
+export function mapTrustBadge(row: Record<string, unknown>): TrustBadge {
+  return {
+    userId: String(row.user_id),
+    badgeType: String(row.badge_type) as TrustBadgeType,
+    status: String(row.status || "approved") as TrustBadgeStatus,
+    label: String(row.label || (row.badge_type === "buyer" ? "推薦買家" : "優良賣家")),
+    reviewNote: String(row.review_note || ""),
+    updatedAt: String(row.updated_at || row.approved_at || ""),
+  };
+}
+
+export function mapRiskProfile(row: Record<string, unknown>): RiskProfile {
+  return {
+    userId: String(row.user_id),
+    userName: String(row.user_name || "使用者"),
+    userDepartment: String(row.user_department || ""),
+    completedTradeCount: Number(row.completed_trade_count || 0),
+    reviewCount: Number(row.review_count || 0),
+    averageRating: Number(row.average_rating || 0),
+    lowRatingCount: Number(row.low_rating_count || 0),
+    resolvedReportCount: Number(row.resolved_report_count || 0),
+    seriousReportCount: Number(row.serious_report_count || 0),
+    riskScore: Number(row.risk_score || 0),
+    riskLevel: String(row.risk_level || "low") as RiskLevel,
+    sellerBadgeEligible: Boolean(row.seller_badge_eligible),
+    buyerBadgeEligible: Boolean(row.buyer_badge_eligible),
+    sellerBadgeStatus: String(row.seller_badge_status || "pending") as TrustBadgeStatus,
+    buyerBadgeStatus: String(row.buyer_badge_status || "pending") as TrustBadgeStatus,
+    reviewEvidence: jsonArray(row.review_evidence).map(mapRiskEvidence),
+    reportEvidence: jsonArray(row.report_evidence).map(mapRiskEvidence),
+    computedAt: String(row.computed_at),
+  };
+}
+
+export function mapRiskPolicy(row: Record<string, unknown>): RiskPolicy {
+  return {
+    minCompletedTrades: Number(row.min_completed_trades || 0),
+    goodBadgeMinAverage: Number(row.good_badge_min_average || 0),
+    goodBadgeMaxSeriousReports: Number(row.good_badge_max_serious_reports || 0),
+    mediumRiskScore: Number(row.medium_risk_score || 0),
+    highRiskScore: Number(row.high_risk_score || 0),
+    oneStarPenalty: Number(row.one_star_penalty || 0),
+    twoStarPenalty: Number(row.two_star_penalty || 0),
+    threeStarPenalty: Number(row.three_star_penalty || 0),
+    fraudReportWeight: Number(row.fraud_report_weight || 0),
+    harassmentReportWeight: Number(row.harassment_report_weight || 0),
+    noShowReportWeight: Number(row.no_show_report_weight || 0),
+    misleadingReportWeight: Number(row.misleading_report_weight || 0),
+    duplicateReportWeight: Number(row.duplicate_report_weight || 0),
+    otherReportWeight: Number(row.other_report_weight || 0),
+    updatedAt: String(row.updated_at),
   };
 }

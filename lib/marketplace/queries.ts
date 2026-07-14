@@ -13,8 +13,11 @@ import {
   mapTradeContact,
   mapConversation,
   mapFeedback,
+  mapRiskPolicy,
+  mapRiskProfile,
+  mapTrustBadge,
 } from "@/lib/marketplace/mappers";
-import type { Book, Conversation, Feedback, Profile, PurchaseRequest, SellerLifecycle, StudentVerification, TradeContact } from "@/lib/types";
+import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskPolicy, RiskProfile, SellerLifecycle, StudentVerification, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 
@@ -285,6 +288,54 @@ export async function fetchFeedbackForModeration(client: SupabaseClient): Promis
   return (data ?? []).map((row: Record<string, unknown>) => mapFeedback(row));
 }
 
+export async function fetchPublicTrustBadges(client: SupabaseClient, userIds: string[]): Promise<TrustBadge[]> {
+  if (userIds.length === 0) return [];
+  const { data, error } = await client.rpc("get_public_trust_badges", { target_user_ids: userIds.slice(0, 100) });
+  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) => mapTrustBadge(row));
+}
+
+export async function fetchMyReviewStatus(client: SupabaseClient, requestId: string) {
+  const { data, error } = await client.rpc("get_my_review_status", { target_request_id: requestId });
+  if (error) throw error;
+  const row = data?.[0] as Record<string, unknown> | undefined;
+  return row ? {
+    reviewed: Boolean(row.reviewed),
+    revieweeId: String(row.reviewee_id),
+    revieweeName: String(row.reviewee_name || "使用者"),
+  } : null;
+}
+
+export async function submitTradeReview(
+  client: SupabaseClient,
+  requestId: string,
+  rating: number,
+  tags: TradeReviewTag[],
+  comment: string,
+) {
+  const { data, error } = await client.rpc("submit_trade_review", {
+    target_request_id: requestId,
+    review_rating: rating,
+    review_tags: tags,
+    review_comment: comment,
+  });
+  if (error) throw error;
+  return String(data);
+}
+
+export async function fetchRiskProfilesForModeration(client: SupabaseClient): Promise<RiskProfile[]> {
+  const { data, error } = await client.rpc("list_risk_profiles_for_moderation");
+  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) => mapRiskProfile(row));
+}
+
+export async function fetchRiskPolicy(client: SupabaseClient): Promise<RiskPolicy | null> {
+  const { data, error } = await client.rpc("get_risk_policy");
+  if (error) throw error;
+  const row = data?.[0] as Record<string, unknown> | undefined;
+  return row ? mapRiskPolicy(row) : null;
+}
+
 export async function fetchStudentVerificationsForReview(client: SupabaseClient): Promise<StudentVerification[]> {
   const { data, error } = await client.rpc("list_student_verifications_for_review");
   if (error) {
@@ -321,6 +372,7 @@ export type WorkspaceTabData = {
   sellerLifecycle?: SellerLifecycle | null;
   conversations?: Conversation[];
   favoriteIds?: string[];
+  trustBadges?: TrustBadge[];
 };
 
 export async function loadWorkspaceTabData(
@@ -346,7 +398,8 @@ export async function loadWorkspaceTabData(
       fetchProfilesByIds(client, [...new Set(profileIds)]),
       fetchBooksByIds(client, bookIds),
     ]);
-    return { conversations, requests, partyProfiles, requestBooks };
+    const trustBadges = await fetchPublicTrustBadges(client, [...new Set(profileIds)]);
+    return { conversations, requests, partyProfiles, requestBooks, trustBadges };
   }
 
   if (tab === "favorites") {
@@ -366,20 +419,27 @@ export async function loadWorkspaceTabData(
     fetchTradeContactsBatch(client, selectedIds),
     fetchBooksByIds(client, bookIds),
   ]);
-  return { requests, partyProfiles, contacts, requestBooks };
+  const badgeIds = [...new Set([
+    ...profileIds,
+    ...requestBooks.map((book) => book.sellerId),
+  ])];
+  const trustBadges = await fetchPublicTrustBadges(client, badgeIds);
+  return { requests, partyProfiles, contacts, requestBooks, trustBadges };
 }
 
 export async function loadModerationData(client: SupabaseClient, user: Profile) {
-  const [pendingReviews, hiddenBooks, reports, feedback, studentVerifications, adminProfiles] = await Promise.all([
+  const [pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskProfiles, riskPolicy, adminProfiles] = await Promise.all([
     fetchPendingReviews(client),
     fetchHiddenBooks(client),
     fetchModerationReports(client),
     fetchFeedbackForModeration(client),
     fetchStudentVerificationsForReview(client),
+    fetchRiskProfilesForModeration(client),
+    user.role === "admin" ? fetchRiskPolicy(client) : Promise.resolve(null),
     user.role === "admin" ? fetchAdminProfiles(client) : Promise.resolve([] as Profile[]),
   ]);
 
-  return { pendingReviews, hiddenBooks, reports, feedback, studentVerifications, adminProfiles };
+  return { pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskProfiles, riskPolicy, adminProfiles };
 }
 
 export function mergeProfiles(

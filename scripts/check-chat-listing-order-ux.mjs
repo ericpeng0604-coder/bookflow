@@ -11,7 +11,7 @@ const sellerCancelMigration = readFileSync(new URL("../supabase/migrations/20260
 
 const checks = [
   ["listing card uses department and course helper", /function cardContextLabel\(book: Book\)[\s\S]*listingContextLabel\(book\)/.test(app) && /cardContextLabel\(book\)/.test(app)],
-  ["chat tab loads purchase requests", /if \(tab === "chats"\)[\s\S]*fetchUserRequests\(client\)[\s\S]*return \{ conversations, requests, partyProfiles, requestBooks \}/.test(queries)],
+  ["chat tab loads purchase requests", /if \(tab === "chats"\)[\s\S]*fetchUserRequests\(client\)[\s\S]*return \{ conversations, requests, partyProfiles, requestBooks\b/.test(queries)],
   ["chat panel receives book and active request", /<TradeChatPanel[\s\S]*book=\{book\}[\s\S]*request=\{conversationRequest\}/.test(app)],
   ["chat context card links back to listing", app.includes('className="chat-context-card"') && app.includes("onOpenBook(book.id)")],
   ["seller can respond to request inside chat", app.includes("canRespondToRequest") && app.includes('respondFromChat("accepted")') && app.includes('respondFromChat("rejected")')],

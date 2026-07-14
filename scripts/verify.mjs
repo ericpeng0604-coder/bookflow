@@ -12,6 +12,7 @@ const checkScripts = [
   { name: "check:filters", path: "scripts/check-filters.mjs", stripTypes: false },
   { name: "check:lifecycle", path: "scripts/check-listing-lifecycle.mjs", stripTypes: false },
   { name: "check:trade", path: "scripts/check-trade-workflow.mjs", stripTypes: false },
+  { name: "check:risk-warning", path: "scripts/check-risk-warning.mjs", stripTypes: false },
   { name: "check:chat-state", path: "scripts/check-chat-switching.mjs", stripTypes: false },
   { name: "check:notifications", path: "scripts/check-notification-refresh.mjs", stripTypes: false },
   { name: "check:push", path: "scripts/check-browser-push.mjs", stripTypes: false },
