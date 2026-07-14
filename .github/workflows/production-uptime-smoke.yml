@@ -1,0 +1,35 @@
+name: Production Uptime Smoke
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-uptime-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Probe production health
+        env:
+          RELEASE_BASE_URL: https://bookflow-green.vercel.app
+        run: node scripts/release-smoke.mjs
+      - name: Write summary
+        if: ${{ success() }}
+        run: |
+          {
+            echo "## Production uptime"
+            echo ""
+            echo "- Homepage, marketplace count, and release health passed."
+          } >> "$GITHUB_STEP_SUMMARY"
