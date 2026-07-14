@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260714-six-marketplace-fixes",
-  "taskTitle": "release six marketplace fixes",
-  "baseCommit": "f7bec0732571da7d72fc6c034f1730ca3f63ea7f",
-  "updatedAt": "2026-07-14T13:30:00.000Z",
+  "taskId": "20260714-secondhand-market-homepage",
+  "taskTitle": "deploy secondhand market homepage update",
+  "baseCommit": "af354eb6fbcc682185df3359284dcf0753be208b",
+  "updatedAt": "2026-07-14T16:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260714-six-marketplace-fixes.md"
+  "historyFile": ".ai/history/20260714-secondhand-market-homepage-release.md"
 }

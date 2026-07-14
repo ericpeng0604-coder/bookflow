@@ -2635,7 +2635,7 @@ export function MarketplaceApp() {
     : null;
   const confirmationDue = Boolean(nextConfirmationAt && new Date(nextConfirmationAt).getTime() <= Date.now());
   const isSecondhandMode = listingType === "secondhand";
-  const activeMarketLabel = isSecondhandMode ? "二手物品" : "課本";
+  const activeMarketLabel = isSecondhandMode ? "二手物品" : "二手書籍";
   const hasMarketplaceFilters = Boolean(
     query.trim()
     || minPrice !== NO_MIN_PRICE
@@ -2834,7 +2834,11 @@ export function MarketplaceApp() {
           <span><b>虎科書流</b><small>HUST BOOKFLOW</small></span>
         </button>
         <nav>
-          <button type="button" className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
+          <div className="market-switch" role="group" aria-label="選擇市場">
+            <button type="button" className={!isSecondhandMode ? "active" : ""} aria-pressed={!isSecondhandMode} onClick={() => { switchListingType("book"); setView("home"); }}><BookOpen size={16} aria-hidden="true" />二手書籍</button>
+            <button type="button" className={isSecondhandMode ? "active" : ""} aria-pressed={isSecondhandMode} onClick={() => { switchListingType("secondhand"); setView("home"); }}><Sparkles size={16} aria-hidden="true" />二手物品</button>
+          </div>
+          <button type="button" className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isSecondhandMode ? "找二手物品" : "找二手書籍"}</button>
           <button type="button" onClick={() => requireActive(() => openListingForm(listingType))}>我要刊登</button>
           <button type="button" onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button type="button" className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>管理</button>}
@@ -2932,7 +2936,7 @@ export function MarketplaceApp() {
                 }}
               >
                 {isSecondhandMode ? <BookOpen size={18} /> : <Sparkles size={18} />}
-                {isSecondhandMode ? "回課本市場" : "逛二手物品"}
+                {isSecondhandMode ? "回二手書籍市場" : "逛二手物品"}
               </button>
               <button type="button"
                 className={view === "home" ? "active" : ""}
@@ -2941,7 +2945,7 @@ export function MarketplaceApp() {
                   setMobileMenuOpen(false);
                 }}
               >
-                {isSecondhandMode ? "逛二手物品" : "找課本"}
+                {isSecondhandMode ? "逛二手物品" : "找二手書籍"}
               </button>
               <button type="button"
                 onClick={() => {
@@ -3022,8 +3026,8 @@ export function MarketplaceApp() {
             <div className="hero-art hero-reference-art" aria-hidden="true" />
             <div className="hero-copy hero-search-panel">
               <div className="hero-message">
-                <h1 id="home-hero-title">Good Books,<br />Next Chapter.</h1>
-                <p>在虎科找到需要的書，也讓用過的書繼續被需要。</p>
+                <h1 id="home-hero-title">{isSecondhandMode ? <>Good Finds,<br />Next Chapter.</> : <>Used Books,<br />New Chapter.</>}</h1>
+                <p>{isSecondhandMode ? "在虎科找到適合你的二手物品，也讓閒置好物繼續被需要。" : "在虎科找到需要的二手書，也讓讀過的故事繼續流動。"}</p>
               </div>
               <form
                 className="hero-search"
@@ -3038,39 +3042,41 @@ export function MarketplaceApp() {
                     id="hero-search-input"
                     value={query}
                     onChange={(event) => updateMarketplaceQuery(event.target.value)}
-                    placeholder="搜尋書名、課程或老師..."
+                    placeholder={isSecondhandMode ? "搜尋物品名稱、類別或描述..." : "搜尋二手書名、課程或老師..."}
                   />
                   <button
                     type="submit"
                     className="hero-search-arrow"
-                    aria-label="依目前輸入開始找書"
+                    aria-label={isSecondhandMode ? "依目前輸入開始找二手物品" : "依目前輸入開始找二手書籍"}
                   >
                     <ArrowRight size={18} aria-hidden="true" />
                   </button>
                 </label>
-                <button
-                  type="button"
-                  className="image-search-trigger"
-                  disabled={imageSearchBusy}
-                  aria-busy={imageSearchBusy}
-                  onClick={openImageSearchPicker}
-                >
-                  <ImagePlus size={18} aria-hidden="true" />
-                  {imageSearchBusy ? "辨識中" : "用照片找書"}
-                </button>
-                <button type="submit">開始找書</button>
+                {!isSecondhandMode && (
+                  <button
+                    type="button"
+                    className="image-search-trigger"
+                    disabled={imageSearchBusy}
+                    aria-busy={imageSearchBusy}
+                    onClick={openImageSearchPicker}
+                  >
+                    <ImagePlus size={18} aria-hidden="true" />
+                    {imageSearchBusy ? "辨識中" : "用照片找二手書"}
+                  </button>
+                )}
+                <button type="submit">{isSecondhandMode ? "開始找二手物品" : "開始找二手書"}</button>
               </form>
               <div className="hero-trust hero-assurance" aria-label="平台特色">
                 <span><ShieldCheck size={17} aria-hidden="true" />校園面交更安心</span>
                 <span><MessageCircle size={17} aria-hidden="true" />接受後依賣家設定分享聯絡方式</span>
-                <button type="button" onClick={openCourseSearchGuide}><GraduationCap size={17} aria-hidden="true" />依課程快速找到課本</button>
+                {isSecondhandMode ? <span><Sparkles size={17} aria-hidden="true" />探索校園二手好物</span> : <button type="button" onClick={openCourseSearchGuide}><GraduationCap size={17} aria-hidden="true" />依課程快速找到二手書</button>}
               </div>
             </div>
           </section>
 
           <section className="market" id="market" aria-labelledby="home-market-title">
             <div className="section-heading">
-              <div><span className="section-kicker">LATEST LISTINGS</span><h2 id="home-market-title">最近上架的課本</h2></div>
+              <div><span className="section-kicker">LATEST LISTINGS</span><h2 id="home-market-title">最近上架的{activeMarketLabel}</h2></div>
               <button
                 type="button"
                 className="sell-cta"
@@ -3109,7 +3115,7 @@ export function MarketplaceApp() {
                   onClick={openImageSearchPicker}
                 >
                   <ImagePlus size={17} aria-hidden="true" />
-                  {imageSearchBusy ? "辨識中" : "照片搜書"}
+                  {imageSearchBusy ? "辨識中" : "照片搜二手書"}
                 </button>
               )}
               {listingType === "book" ? (
