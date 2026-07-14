@@ -18,11 +18,11 @@ const checks = [
     "mobile hero search arrow",
     homeBlock.includes('className="hero-search-arrow"')
       && homeBlock.includes("aria-label={isSecondhandMode ?")
-      && homeBlock.includes("依目前輸入開始找課本")
+      && homeBlock.includes("依目前輸入開始找二手書籍")
       && globalCss.includes(".hero-search-arrow"),
   ],
-  ["course search guide entry", homeBlock.includes("openCourseSearchGuide") && homeBlock.includes("依課程快速找到課本") && homeBlock.includes('className="course-search-guide"')],
-  ["concise hero message", homeBlock.includes('className="hero-message"') && homeBlock.includes("Good Books,")],
+  ["course search guide entry", homeBlock.includes("openCourseSearchGuide") && homeBlock.includes("依課程快速找到二手書") && homeBlock.includes('className="course-search-guide"')],
+  ["market switch and dynamic hero message", app.includes('className="market-switch"') && homeBlock.includes("Used Books,") && homeBlock.includes("Good Finds,")],
   ["hero section labelled", homeBlock.includes('aria-labelledby="home-hero-title"')],
   ["market section labelled", homeBlock.includes('aria-labelledby="home-market-title"') && homeBlock.includes('id="market"')],
   ["filter query label", homeBlock.includes('htmlFor="home-filter-query"')],
