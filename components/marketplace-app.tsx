@@ -81,6 +81,9 @@ import {
   fetchImageSearchCandidates,
   fetchMarketplacePage,
   fetchProfilesByIds,
+  fetchMyReviewStatus,
+  fetchPublicTrustBadges,
+  submitTradeReview,
   fetchUnreadNotificationCount,
   loadModerationData,
   loadWorkspaceTabData,
@@ -116,6 +119,10 @@ import type {
   StudentVerification,
   TradeContact,
   TradeMessage,
+  TradeReviewTag,
+  TrustBadge,
+  RiskPolicy,
+  RiskProfile,
   ListingType,
   UserRole,
 } from "@/lib/types";
@@ -145,7 +152,7 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   day: "numeric",
 });
 
-type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | "feedback" | null;
+type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | "feedback" | "tradeReview" | null;
 
 type Store = {
   books: Book[];
@@ -569,6 +576,11 @@ export function MarketplaceApp() {
   const [contacts, setContacts] = useState<Record<string, TradeContact>>({});
   const [reports, setReports] = useState<Report[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [trustBadges, setTrustBadges] = useState<TrustBadge[]>([]);
+  const [riskProfiles, setRiskProfiles] = useState<RiskProfile[]>([]);
+  const [riskPolicy, setRiskPolicy] = useState<RiskPolicy | null>(null);
+  const [reviewRequest, setReviewRequest] = useState<PurchaseRequest | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<{ reviewed: boolean; revieweeId: string; revieweeName: string } | null>(null);
   const [studentVerifications, setStudentVerifications] = useState<StudentVerification[]>([]);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; label: string } | null>(null);
   const [marketplaceBooks, setMarketplaceBooks] = useState<Book[]>([]);
@@ -605,6 +617,7 @@ export function MarketplaceApp() {
   const imageSearchInputRef = useRef<HTMLInputElement>(null);
   const imageSearchRequestRef = useRef(0);
   const marketplaceCursorRef = useRef<{ createdAt: string; id: string } | null>(null);
+  const badgeLookupRef = useRef<Set<string>>(new Set());
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
   const debouncedQuery = useDebouncedValue(query, 300);
@@ -754,6 +767,11 @@ export function MarketplaceApp() {
           }));
         }
         if (workspace.contacts) setContacts(workspace.contacts);
+        if (workspace.trustBadges) {
+          setTrustBadges((previous) => [
+            ...new Map([...previous, ...workspace.trustBadges!].map((badge) => [`${badge.userId}:${badge.badgeType}`, badge])).values(),
+          ]);
+        }
         if (workspace.sellerLifecycle !== undefined) setSellerLifecycle(workspace.sellerLifecycle);
         if (workspace.conversations) setConversations(workspace.conversations);
         if (workspace.favoriteIds) setFavoriteIds(new Set(workspace.favoriteIds));
@@ -784,6 +802,8 @@ export function MarketplaceApp() {
         setReports(data.reports);
         setFeedback(data.feedback);
         setStudentVerifications(data.studentVerifications);
+        setRiskProfiles(data.riskProfiles);
+        setRiskPolicy(data.riskPolicy);
         if (data.adminProfiles.length > 0) {
           setStore((previous) => ({
             ...previous,
@@ -1183,6 +1203,7 @@ export function MarketplaceApp() {
     ?? requestBooks.find((book) => book.id === selectedId)
     ?? store.books.find((book) => book.id === selectedId)
     ?? null;
+  const selectedSellerId = selectedBook?.sellerId ?? null;
   const selectedBookActiveRequest = currentUser && selectedBook
     ? store.requests.find((request) =>
       request.bookId === selectedBook.id
@@ -1191,6 +1212,8 @@ export function MarketplaceApp() {
     )
     : null;
   const profile = (id: string) => store.profiles.find((item) => item.id === id);
+  const badgeFor = (userId: string, badgeType: "seller" | "buyer") =>
+    trustBadges.find((badge) => badge.userId === userId && badge.badgeType === badgeType && badge.status === "approved");
 
   useEffect(() => {
     if (!supabase || !selectedBook || view !== "book") return;
@@ -1232,6 +1255,17 @@ export function MarketplaceApp() {
     setBookDetailMissing(false);
     setDetailMenuOpen(false);
   }
+
+  useEffect(() => {
+    if (!supabase || !selectedSellerId || view !== "book" || badgeLookupRef.current.has(selectedSellerId)) return;
+    badgeLookupRef.current.add(selectedSellerId);
+    void fetchPublicTrustBadges(supabase, [selectedSellerId])
+      .then((badges) => setTrustBadges((previous) => [
+        ...previous.filter((badge) => !badges.some((item) => item.userId === badge.userId && item.badgeType === badge.badgeType)),
+        ...badges,
+      ]))
+      .catch(() => badgeLookupRef.current.delete(selectedSellerId));
+  }, [selectedSellerId, view]);
 
   function openBook(id: string) {
     const target = filteredBooks.find((book) => book.id === id)
@@ -2018,6 +2052,45 @@ export function MarketplaceApp() {
     setToast("交易已完成");
   }
 
+  async function openTradeReview(request: PurchaseRequest) {
+    if (!supabase || !currentUser || request.status !== "completed") return;
+    try {
+      const status = await fetchMyReviewStatus(supabase, request.id);
+      if (!status || status.reviewed) {
+        setToast("這筆交易已完成評價");
+        return;
+      }
+      setReviewRequest(request);
+      setReviewStatus(status);
+      setModal("tradeReview");
+    } catch (error) {
+      setToast(`無法載入評價狀態：${error instanceof Error ? error.message : "請稍後再試"}`);
+    }
+  }
+
+  async function handleTradeReviewSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !reviewRequest) return;
+    const form = new FormData(event.currentTarget);
+    const rating = Number(form.get("rating") || 0);
+    const tags = form.getAll("tags").map(String) as TradeReviewTag[];
+    const comment = String(form.get("comment") || "").trim();
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      setToast("請選擇 1 到 5 顆星");
+      return;
+    }
+    try {
+      await submitTradeReview(supabase, reviewRequest.id, rating, tags, comment);
+      setModal(null);
+      setReviewRequest(null);
+      setReviewStatus(null);
+      await reloadAfterUserMutation();
+      setToast("評價已送出，謝謝你的回饋");
+    } catch (error) {
+      setToast(`評價送出失敗：${error instanceof Error ? error.message : "請稍後再試"}`);
+    }
+  }
+
   async function deleteBook(bookId: string) {
     if (currentUser?.accountStatus === "suspended") {
       setToast("你的帳號目前為唯讀模式，不能修改刊登");
@@ -2274,6 +2347,62 @@ export function MarketplaceApp() {
       setReportTarget({ type, id, label });
       setModal("report");
     });
+  }
+
+  async function reviewTrustBadge(userId: string, badgeType: "seller" | "buyer", decision: "approve" | "reject" | "revoke") {
+    if (!supabase || !currentUser) return;
+    const note = await actionDialog.ask({
+      title: decision === "approve" ? "核准信任徽章" : "撤下信任徽章",
+      message: "請留下本次人工審核備註，供管理員追蹤。",
+      inputLabel: "審核備註",
+      confirmLabel: decision === "approve" ? "核准公開" : "確認撤下",
+      danger: decision !== "approve",
+    });
+    if (note === null) return;
+    const { error } = await supabase.rpc("review_trust_badge", {
+      target_user_id: userId,
+      target_badge_type: badgeType,
+      decision,
+      note: note.trim(),
+    });
+    if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
+      setToast(`徽章審核失敗：${error.message}`);
+      return;
+    }
+    await loadModerationPanel(currentUser);
+    setToast(decision === "approve" ? "徽章已核准公開" : "徽章已撤下");
+  }
+
+  async function saveRiskPolicy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !currentUser || currentUser.role !== "admin" || !riskPolicy) return;
+    const form = new FormData(event.currentTarget);
+    const number = (name: string, fallback: number) => Number(form.get(name) || fallback);
+    const values = {
+      new_min_completed_trades: number("minCompletedTrades", riskPolicy.minCompletedTrades),
+      new_good_badge_min_average: number("goodBadgeMinAverage", riskPolicy.goodBadgeMinAverage),
+      new_good_badge_max_serious_reports: number("goodBadgeMaxSeriousReports", riskPolicy.goodBadgeMaxSeriousReports),
+      new_medium_risk_score: number("mediumRiskScore", riskPolicy.mediumRiskScore),
+      new_high_risk_score: number("highRiskScore", riskPolicy.highRiskScore),
+      new_one_star_penalty: riskPolicy.oneStarPenalty,
+      new_two_star_penalty: riskPolicy.twoStarPenalty,
+      new_three_star_penalty: riskPolicy.threeStarPenalty,
+      new_fraud_report_weight: riskPolicy.fraudReportWeight,
+      new_harassment_report_weight: riskPolicy.harassmentReportWeight,
+      new_no_show_report_weight: riskPolicy.noShowReportWeight,
+      new_misleading_report_weight: riskPolicy.misleadingReportWeight,
+      new_duplicate_report_weight: riskPolicy.duplicateReportWeight,
+      new_other_report_weight: riskPolicy.otherReportWeight,
+    };
+    const { error } = await supabase.rpc("update_risk_policy", values);
+    if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
+      setToast(`風險門檻更新失敗：${error.message}`);
+      return;
+    }
+    await loadModerationPanel(currentUser);
+    setToast("風險門檻已更新");
   }
 
   async function resolveReport(reportId: string, action: "dismiss" | "resolve" | "hide_book" | "suspend_user") {
@@ -3149,7 +3278,9 @@ export function MarketplaceApp() {
               <div className="description"><h3>賣家說明</h3><p>{selectedBook.description}</p></div>
               <div className="seller-row">
                 <span className="avatar">{profile(selectedBook.sellerId)?.name.slice(0, 1) || "賣"}</span>
-                <div><small>賣家</small><b>{profile(selectedBook.sellerId)?.name || "賣家"}</b><span>{profile(selectedBook.sellerId)?.department || ""}</span></div>
+                <div><small>賣家</small><b>{profile(selectedBook.sellerId)?.name || "賣家"}</b><span>{profile(selectedBook.sellerId)?.department || ""}</span>
+                  {badgeFor(selectedBook.sellerId, "seller") && <em className="trust-badge"><ShieldCheck size={13} />優良賣家</em>}
+                </div>
               </div>
               <div className="detail-action-row">
                 {currentUser?.id === selectedBook.sellerId ? (
@@ -3450,6 +3581,9 @@ export function MarketplaceApp() {
                       {request.status === "awaiting_confirmation" && (
                         <button type="button" className="accept" onClick={() => void buyerConfirmTrade(request.id)}><CheckCheck size={16} />確認收到</button>
                       )}
+                      {request.status === "completed" && (
+                        <button type="button" className="review-action" onClick={() => void openTradeReview(request)}><ShieldCheck size={16} />評價交易</button>
+                      )}
                     </div>
                     <small>{timeAgo(request.createdAt)}</small>
                   </div>
@@ -3471,6 +3605,7 @@ export function MarketplaceApp() {
                     <span className="avatar">{buyer?.name.slice(0, 1)}</span>
                     <div className="request-main">
                       <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
+                      {badgeFor(request.buyerId, "buyer") && <span className="trust-badge inline"><ShieldCheck size={13} />推薦買家</span>}
                       <h3>{buyer?.name} 想買《{book.title}》</h3>
                       {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
                       {["reserved", "awaiting_confirmation"].includes(request.status) && <div className="contact-note">聯絡請使用獨立的「聊聊」頁籤。</div>}
@@ -3493,6 +3628,9 @@ export function MarketplaceApp() {
                           <button type="button" className="accept" onClick={() => void sellerConfirmHandoff(request.id)}><CheckCheck size={16} />已完成面交</button>
                           <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消保留</button>
                         </>
+                      )}
+                      {request.status === "completed" && (
+                        <button type="button" className="review-action" onClick={() => void openTradeReview(request)}><ShieldCheck size={16} />評價交易</button>
                       )}
                     </div>
                     {buyer && request.status === "pending" && (
@@ -3564,6 +3702,55 @@ export function MarketplaceApp() {
             </div>
             <div className="admin-count">{pendingReports.length + pendingReviews.length + pendingFeedback.length + studentVerifications.length} 筆待處理</div>
           </div>
+
+          <section className="risk-panel" aria-labelledby="risk-panel-title">
+            <div className="risk-panel-head">
+              <div>
+                <span className="section-kicker">TRUST & SAFETY</span>
+                <h2 id="risk-panel-title">交易風險預警</h2>
+                <p>只供管理員查看原始評價、已處理檢舉與公開徽章資格。</p>
+              </div>
+              <strong>{riskProfiles.length} 位使用者</strong>
+            </div>
+            {currentUser.role === "admin" && riskPolicy && (
+              <form className="risk-policy-form" onSubmit={saveRiskPolicy}>
+                <label>最少完成交易<input name="minCompletedTrades" type="number" min="1" max="1000" defaultValue={riskPolicy.minCompletedTrades} /></label>
+                <label>優良最低平均<input name="goodBadgeMinAverage" type="number" min="1" max="5" step="0.1" defaultValue={riskPolicy.goodBadgeMinAverage} /></label>
+                <label>優良最多嚴重檢舉<input name="goodBadgeMaxSeriousReports" type="number" min="0" max="1000" defaultValue={riskPolicy.goodBadgeMaxSeriousReports} /></label>
+                <label>中風險分數<input name="mediumRiskScore" type="number" min="1" defaultValue={riskPolicy.mediumRiskScore} /></label>
+                <label>高風險分數<input name="highRiskScore" type="number" min="1" defaultValue={riskPolicy.highRiskScore} /></label>
+                <div className="risk-actions"><button type="submit" className="primary">儲存風險門檻</button></div>
+              </form>
+            )}
+            <div className="risk-profile-list">
+              {riskProfiles.map((risk) => (
+                <article className="risk-profile-card" key={risk.userId}>
+                  <header><div><h3>{risk.userName}</h3><small>{risk.userDepartment || "未填系所"}</small></div><span className={"risk-level " + risk.riskLevel}>{risk.riskLevel === "high" ? "高風險" : risk.riskLevel === "medium" ? "中風險" : "低風險"} · {risk.riskScore}</span></header>
+                  <div className="risk-summary-grid">
+                    <div><small>完成交易</small><b>{risk.completedTradeCount}</b></div>
+                    <div><small>平均評分</small><b>{risk.reviewCount ? risk.averageRating.toFixed(2) : "尚無"}</b></div>
+                    <div><small>已解決檢舉</small><b>{risk.resolvedReportCount}</b></div>
+                    <div><small>嚴重檢舉</small><b>{risk.seriousReportCount}</b></div>
+                  </div>
+                  <div className="risk-evidence">評價證據 {risk.reviewEvidence.length} 筆 · 檢舉證據 {risk.reportEvidence.length} 筆 · 更新於 {timeAgo(risk.computedAt)}</div>
+                  {(risk.reviewEvidence.length > 0 || risk.reportEvidence.length > 0) && (
+                    <details className="risk-evidence">
+                      <summary>查看證據明細</summary>
+                      {risk.reviewEvidence.map((evidence) => <p key={evidence.id}>評價 {evidence.rating} 星 · {evidence.reviewerName || "使用者"} · {evidence.comment || "無文字評論"}</p>)}
+                      {risk.reportEvidence.map((evidence) => <p key={evidence.id}>檢舉 {evidence.reason || "其他"} · {evidence.status} · {evidence.details || "無補充說明"}</p>)}
+                    </details>
+                  )}
+                  <div className="risk-actions">
+                    {risk.sellerBadgeEligible && risk.sellerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(risk.userId, "seller", "approve")}><ShieldCheck size={16} />核准優良賣家</button>}
+                    {risk.sellerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(risk.userId, "seller", "revoke")}><EyeOff size={16} />撤下賣家徽章</button>}
+                    {risk.buyerBadgeEligible && risk.buyerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(risk.userId, "buyer", "approve")}><ShieldCheck size={16} />核准推薦買家</button>}
+                    {risk.buyerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(risk.userId, "buyer", "revoke")}><EyeOff size={16} />撤下買家徽章</button>}
+                  </div>
+                </article>
+              ))}
+              {riskProfiles.length === 0 && <EmptyDashboard text="目前沒有可分析的交易風險資料" />}
+            </div>
+          </section>
 
           <h2 className="admin-section-title">網站問題回報</h2>
           <div className="reports-list">
@@ -3791,6 +3978,13 @@ export function MarketplaceApp() {
           target={reportTarget}
           onClose={() => { setModal(null); setReportTarget(null); }}
           onSubmit={submitReport}
+        />
+      )}
+      {modal === "tradeReview" && reviewRequest && reviewStatus && (
+        <TradeReviewModal
+          revieweeName={reviewStatus.revieweeName}
+          onClose={() => { setModal(null); setReviewRequest(null); setReviewStatus(null); }}
+          onSubmit={handleTradeReviewSubmit}
         />
       )}
       {modal === "feedback" && currentUser && (
@@ -5285,6 +5479,52 @@ function RequestModal({
           {request ? "儲存訂單修改" : "確認下訂"}
         </button>
         <p className="form-note">下訂後仍需等待賣家選定，不代表交易完成；若時間地點還沒談好，先用聊聊確認最穩妥。</p>
+      </form>
+    </ModalShell>
+  );
+}
+
+function TradeReviewModal({
+  revieweeName,
+  onClose,
+  onSubmit,
+}: {
+  revieweeName: string;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const tags: Array<[TradeReviewTag, string]> = [
+    ["item_as_described", "物品符合描述"],
+    ["punctual", "準時守約"],
+    ["clear_communication", "溝通清楚"],
+    ["no_show", "未依約出現"],
+    ["misleading", "資訊不符"],
+  ];
+  return (
+    <ModalShell title="評價這次交易" subtitle={"分享你與 " + revieweeName + " 的交易體驗"} onClose={onClose}>
+      <form className="form trade-review-form" onSubmit={onSubmit}>
+        <fieldset>
+          <legend>整體評分</legend>
+          <div className="rating-options">
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <label key={rating}>
+                <input type="radio" name="rating" value={rating} required />
+                <span aria-hidden="true">{Array.from({ length: rating }, () => "★").join("")}</span>
+                <small>{rating} 星</small>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>交易標籤（可複選）</legend>
+          <div className="review-tag-options">
+            {tags.map(([value, label]) => (
+              <label key={value}><input type="checkbox" name="tags" value={value} />{label}</label>
+            ))}
+          </div>
+        </fieldset>
+        <label>補充說明（選填）<textarea name="comment" maxLength={500} placeholder="只會提供給管理員作為風險審核依據" /></label>
+        <div className="modal-actions"><button type="button" className="secondary-action" onClick={onClose}>取消</button><button type="submit" className="primary">送出評價</button></div>
       </form>
     </ModalShell>
   );
