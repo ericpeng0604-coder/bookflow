@@ -34,6 +34,7 @@
     "setup:check": "node scripts/setup-health-check.mjs",
     "load-test:marketplace": "node scripts/load-test-marketplace.mjs",
     "check:filters": "node scripts/check-filters.mjs",
+    "check:six-fixes": "node scripts/check-six-fixes.mjs",
     "check:listing-ui": "node scripts/check-listing-navigation-ui.mjs",
     "check:mobile-ocr": "node scripts/check-mobile-book-ocr.mjs",
     "check:book-ocr-ai": "node --experimental-strip-types scripts/check-book-ocr-ai.mjs",
