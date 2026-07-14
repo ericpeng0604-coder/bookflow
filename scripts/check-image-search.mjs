@@ -104,8 +104,9 @@ const projectChecks = readFileSync(new URL("./run-project-checks.mjs", import.me
 assert.match(app, /buildImageSearchPlan/, "marketplace app must use the image search plan helper");
 assert.match(app, /fetchImageSearchCandidates/, "image search must fetch multiple site-local candidates");
 assert.match(app, /rankImageSearchResults/, "image search must rank local demo results with the shared helper");
-assert.match(app, /recognizeBookCover\(file/, "image search must start with browser-side book-cover OCR");
-assert.match(app, /recognizeBookCoverWithAi\(supabase, file, primaryResult\.text\)/, "weak OCR may use the existing authenticated AI fallback");
+assert.match(app, /recognizeBookCover\((?:file|ocrFile)/, "image search must start with browser-side book-cover OCR");
+assert.match(app, /recognizeBookCoverWithAi\(supabase, (?:file|ocrFile), primaryResult\.text\)/, "weak OCR may use the existing authenticated AI fallback");
+assert.match(app, /compressBookOcrImage\(file\)/, "image search must compress the OCR copy before recognition");
 assert.match(app, /setListingType\("book"\)/, "image search must target the book marketplace");
 assert.match(app, /setImageSearchActive\(true\)/, "image search must enter a dedicated ranked-result mode");
 assert.match(app, /setImageSearchActive\(false\)/, "manual search and filter reset must be able to exit image mode");

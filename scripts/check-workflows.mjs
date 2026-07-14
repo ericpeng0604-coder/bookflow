@@ -50,7 +50,12 @@ assert.match(staging, /STAGING_DATABASE_URL/);
 assert.match(staging, /npm run staging:check/);
 assert.match(productionMigration, /environment:\s*production-database/);
 assert.match(productionMigration, /PRODUCTION_DATABASE_URL/);
-assert.match(productionMigration, /APPLY-PRODUCTION-MIGRATIONS/);
+assert.match(productionMigration, /workflow_dispatch/);
+assert.match(productionMigration, /migration_ref:/);
+assert.match(productionMigration, /ref:\s*\$\{\{ inputs\.migration_ref \}\}/);
+assert.match(productionMigration, /supabase db push/);
+assert.doesNotMatch(productionMigration, /confirm:/);
+assert.doesNotMatch(productionMigration, /Require explicit confirmation/);
 assert.match(productionMonitor, /node scripts\/release-smoke\.mjs/);
 assert.doesNotMatch(
   productionMonitor,

@@ -25,6 +25,8 @@ for (const [label, source] of [
 
 assert.match(filtersSource, /departments\[0\]/, "filters.ts should use departments[0] sentinel");
 assert.match(filtersSource, /NO_MAX_PRICE/, "filters.ts should define NO_MAX_PRICE sentinel");
+assert.match(filtersSource, /NO_MIN_PRICE/, "filters.ts should define NO_MIN_PRICE sentinel");
+assert.match(filtersSource, /parseMinPriceFilter/, "filters.ts should parse minimum prices");
 
 const departmentMatch = demoDataSource.match(/export const departments = \[\s*\n\s*"([^"]+)"/);
 assert.ok(departmentMatch, "Could not read departments[0] from demo-data.ts");
@@ -43,6 +45,7 @@ function parseMaxPriceFilter(maxPrice) {
 function buildMarketplaceFilters(department, maxPrice, query) {
   return {
     department: isAllDepartments(department) ? null : department,
+    minPrice: null,
     maxPrice: parseMaxPriceFilter(maxPrice),
     query: query.trim() || null,
   };
@@ -52,11 +55,13 @@ assert.equal(isAllDepartments(allDepartmentsLabel), true);
 assert.equal(isAllDepartments("資訊工程系"), false);
 assert.deepEqual(buildMarketplaceFilters(allDepartmentsLabel, "", "  "), {
   department: null,
+  minPrice: null,
   maxPrice: null,
   query: null,
 });
 assert.deepEqual(buildMarketplaceFilters("資訊工程系", "500", "微積分"), {
   department: "資訊工程系",
+  minPrice: null,
   maxPrice: 500,
   query: "微積分",
 });

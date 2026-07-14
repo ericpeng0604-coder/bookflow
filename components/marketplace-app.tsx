@@ -44,6 +44,7 @@ import {
 import {
   BOOK_IMAGE_CACHE_CONTROL,
   compressBookImage,
+  compressBookOcrImage,
   extractStoragePath,
 } from "@/lib/marketplace/image-upload";
 import {
@@ -51,7 +52,7 @@ import {
   legacyFavoritesNeedSync,
   readFavoriteIds,
 } from "@/lib/marketplace/favorites";
-import { ALL_ITEM_CATEGORIES, isAllDepartments, NO_MAX_PRICE, buildMarketplaceFilters } from "@/lib/marketplace/filters";
+import { ALL_ITEM_CATEGORIES, isAllDepartments, MIN_PRICE_500, NO_MAX_PRICE, NO_MIN_PRICE, buildMarketplaceFilters } from "@/lib/marketplace/filters";
 import {
   type BrowserPushState,
   browserPushState,
@@ -450,6 +451,7 @@ function matchesLocalMarketplaceBook(
     listingType: ListingType;
     itemCategory: string;
     department: string;
+    minPrice: string;
     maxPrice: string;
     searchTokens: string[];
   },
@@ -461,6 +463,7 @@ function matchesLocalMarketplaceBook(
   if ((book.listingType || "book") !== options.listingType) return false;
   if (options.listingType !== "book" && options.itemCategory !== ALL_ITEM_CATEGORIES && book.itemCategory !== options.itemCategory) return false;
   if (options.listingType === "book" && !isAllDepartments(options.department) && book.department !== options.department) return false;
+  if (options.minPrice && book.price < Number(options.minPrice)) return false;
   if (options.maxPrice && book.price > Number(options.maxPrice)) return false;
   if (options.searchTokens.length === 0) return true;
 
@@ -562,6 +565,7 @@ export function MarketplaceApp() {
   const [listingType, setListingType] = useState<ListingType>("book");
   const [itemCategory, setItemCategory] = useState(ALL_ITEM_CATEGORIES);
   const [department, setDepartment] = useState(departments[0]);
+  const [minPrice, setMinPrice] = useState(NO_MIN_PRICE);
   const [maxPrice, setMaxPrice] = useState(NO_MAX_PRICE);
   const [modal, setModal] = useState<Modal>(null);
   const [listingFormType, setListingFormType] = useState<ListingType>("book");
@@ -607,6 +611,9 @@ export function MarketplaceApp() {
   const [hiddenBooks, setHiddenBooks] = useState<Book[]>([]);
   const [sellerLifecycle, setSellerLifecycle] = useState<SellerLifecycle | null>(null);
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
+  const [activeRequestCheckState, setActiveRequestCheckState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [activeRequestCheckKey, setActiveRequestCheckKey] = useState<string | null>(null);
+  const [chatListCollapsed, setChatListCollapsed] = useState(false);
   const [lifecycleSaving, setLifecycleSaving] = useState(false);
   const [pushState, setPushState] = useState<BrowserPushState>("disabled");
   const [pushSaving, setPushSaving] = useState(false);
@@ -662,8 +669,8 @@ export function MarketplaceApp() {
   }, []);
 
   const marketplaceFilters = useMemo(
-    () => buildMarketplaceFilters(listingType, itemCategory, department, maxPrice, debouncedQuery),
-    [listingType, itemCategory, department, maxPrice, debouncedQuery],
+    () => buildMarketplaceFilters(listingType, itemCategory, department, maxPrice, debouncedQuery, minPrice),
+    [listingType, itemCategory, department, maxPrice, minPrice, debouncedQuery],
   );
 
   useEffect(() => () => {
@@ -725,6 +732,7 @@ export function MarketplaceApp() {
           listingType: marketplaceFilters.listingType,
           itemCategory: marketplaceFilters.itemCategory,
           department: marketplaceFilters.department,
+          minPrice: marketplaceFilters.minPrice,
           maxPrice: marketplaceFilters.maxPrice,
           query: marketplaceFilters.query,
         }),
@@ -924,6 +932,7 @@ export function MarketplaceApp() {
     marketplaceFilters.listingType,
     marketplaceFilters.itemCategory,
     marketplaceFilters.department,
+    marketplaceFilters.minPrice,
     marketplaceFilters.maxPrice,
     marketplaceFilters.query,
     imageSearchActive,
@@ -1191,11 +1200,12 @@ export function MarketplaceApp() {
         listingType,
         itemCategory,
         department,
+        minPrice,
         maxPrice,
         searchTokens,
       }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [department, imageSearchActive, itemCategory, listingType, maxPrice, query, store.books, marketplaceBooks]);
+  }, [department, imageSearchActive, itemCategory, listingType, maxPrice, minPrice, query, store.books, marketplaceBooks]);
 
   const selectedBook = detailBook
     ?? filteredBooks.find((book) => book.id === selectedId)
@@ -1229,26 +1239,44 @@ export function MarketplaceApp() {
   }, [selectedBook, view, store.profiles]);
 
   useEffect(() => {
-    if (!supabase || !currentUser || !selectedBook || view !== "book") return;
-    if (selectedBook.sellerId === currentUser.id) return;
-    if (selectedBookActiveRequest) return;
+    const requestCheckKey = currentUser && selectedBook && selectedBook.sellerId !== currentUser.id && view === "book"
+      ? `${selectedBook.id}:${currentUser.id}`
+      : null;
+    if (!supabase || !currentUser || !selectedBook || view !== "book" || selectedBook.sellerId === currentUser.id) {
+      setActiveRequestCheckKey(null);
+      setActiveRequestCheckState("idle");
+      return;
+    }
+    if (selectedBookActiveRequest) {
+      setActiveRequestCheckKey(requestCheckKey);
+      setActiveRequestCheckState("ready");
+      return;
+    }
+    if (activeRequestCheckKey === requestCheckKey && activeRequestCheckState !== "idle") return;
+    setActiveRequestCheckKey(requestCheckKey);
+    setActiveRequestCheckState("loading");
     let active = true;
     void fetchActiveRequestForBook(supabase, selectedBook.id, currentUser.id)
       .then((request) => {
-        if (!active || !request) return;
-        setStore((previous) => ({
-          ...previous,
-          requests: [
-            request,
-            ...previous.requests.filter((item) => item.id !== request.id),
-          ],
-        }));
+        if (!active) return;
+        if (request) {
+          setStore((previous) => ({
+            ...previous,
+            requests: [
+              request,
+              ...previous.requests.filter((item) => item.id !== request.id),
+            ],
+          }));
+        }
+        setActiveRequestCheckState("ready");
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setActiveRequestCheckState("error");
+      });
     return () => {
       active = false;
     };
-  }, [currentUser, selectedBook, selectedBookActiveRequest, view]);
+  }, [activeRequestCheckKey, activeRequestCheckState, currentUser, selectedBook, selectedBookActiveRequest, view]);
 
   function clearBookDetailRouteState() {
     setDetailBook(null);
@@ -2527,6 +2555,10 @@ export function MarketplaceApp() {
       openDashboardTab("requests");
       return;
     }
+    if (notification.type === "handoff_confirmation") {
+      openDashboardTab("requests");
+      return;
+    }
     if (notification.type === "book_approved" || notification.type === "book_rejected" || notification.type === "book_hidden") {
       openDashboardTab("listings");
       return;
@@ -2606,12 +2638,14 @@ export function MarketplaceApp() {
   const activeMarketLabel = isSecondhandMode ? "二手物品" : "課本";
   const hasMarketplaceFilters = Boolean(
     query.trim()
+    || minPrice !== NO_MIN_PRICE
     || maxPrice !== NO_MAX_PRICE
     || (isSecondhandMode ? itemCategory !== ALL_ITEM_CATEGORIES : !isAllDepartments(department)),
   );
 
   function clearMarketplaceFilters() {
     setQuery("");
+    setMinPrice(NO_MIN_PRICE);
     setMaxPrice(NO_MAX_PRICE);
     setDepartment(departments[0]);
     setItemCategory(ALL_ITEM_CATEGORIES);
@@ -2656,7 +2690,8 @@ export function MarketplaceApp() {
 
     try {
       const { recognizeBookCover } = await import("@/lib/marketplace/free-ocr");
-      const primaryResult = await recognizeBookCover(file, (stage, progress) => {
+      const ocrFile = await compressBookOcrImage(file);
+      const primaryResult = await recognizeBookCover(ocrFile, (stage, progress) => {
         if (requestId !== imageSearchRequestRef.current) return;
         const percent = Math.max(1, Math.round((progress ?? 0) * 100));
         if (stage === "preparing") {
@@ -2684,7 +2719,7 @@ export function MarketplaceApp() {
         setImageSearchMessage("正在提高辨識準確度...");
         try {
           const { recognizeBookCoverWithAi } = await import("@/lib/marketplace/book-ocr-ai");
-          const aiResult = await recognizeBookCoverWithAi(supabase, file, primaryResult.text);
+          const aiResult = await recognizeBookCoverWithAi(supabase, ocrFile, primaryResult.text);
           if (requestId !== imageSearchRequestRef.current) return;
           const aiPlan = buildImageSearchPlan(aiResult.draft);
           if (aiPlan.displayQuery) {
@@ -2712,6 +2747,7 @@ export function MarketplaceApp() {
       setListingType("book");
       setItemCategory(ALL_ITEM_CATEGORIES);
       setDepartment(departments[0]);
+      setMinPrice(NO_MIN_PRICE);
       setMaxPrice(NO_MAX_PRICE);
 
       let rankedBooks: Book[] = [];
@@ -2721,6 +2757,7 @@ export function MarketplaceApp() {
           listingType: "book",
           itemCategory: null,
           department: null,
+          minPrice: null,
           maxPrice: null,
         }, finalPlan);
         if (requestId !== imageSearchRequestRef.current) return;
@@ -3106,14 +3143,18 @@ export function MarketplaceApp() {
                 <span className="visually-hidden">最高價格</span>
                 <select
                   id="home-filter-price"
-                  value={maxPrice}
-                  onChange={(event) => setMaxPrice(event.target.value)}
+                  value={minPrice === MIN_PRICE_500 ? MIN_PRICE_500 : maxPrice}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setMinPrice(value === MIN_PRICE_500 ? MIN_PRICE_500 : NO_MIN_PRICE);
+                    setMaxPrice(value === MIN_PRICE_500 ? NO_MAX_PRICE : value);
+                  }}
                   aria-label="最高價格"
                 >
                   <option value="">不限價格</option>
                   <option value="300">NT$300 以下</option>
                   <option value="500">NT$500 以下</option>
-                  <option value="800">NT$800 以下</option>
+                  <option value={MIN_PRICE_500}>NT$500 以上</option>
                 </select>
                 <ChevronDown size={16} aria-hidden="true" />
               </label>
@@ -3296,13 +3337,22 @@ export function MarketplaceApp() {
                     </button>
                     <button type="button"
                       className="primary wide"
-                      disabled={Boolean(selectedBookActiveRequest) || selectedBook.status !== "available" || currentUser?.accountStatus === "suspended"}
+                      disabled={Boolean(selectedBookActiveRequest)
+                        || (currentUser && currentUser.id !== selectedBook.sellerId && activeRequestCheckState !== "ready")
+                        || selectedBook.status !== "available"
+                        || currentUser?.accountStatus === "suspended"}
                       onClick={() => {
                         if (selectedBookActiveRequest) return;
                         requireActive(() => setModal("request"));
                       }}
                     >
-                      <Check size={18} />{selectedBookActiveRequest ? `已下訂：${requestLabels[selectedBookActiveRequest.status]}` : selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
+                      <Check size={18} />{selectedBookActiveRequest
+                        ? `已下訂：${requestLabels[selectedBookActiveRequest.status]}`
+                        : activeRequestCheckState === "loading"
+                          ? "確認中..."
+                          : activeRequestCheckState === "error"
+                            ? "暫時無法確認"
+                            : selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
                     </button>
                   </div>
                 )}
@@ -3472,8 +3522,20 @@ export function MarketplaceApp() {
           )}
 
           {dashboardTab === "chats" && (
-            <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""}`}>
-              <div className="conversation-list">
+            <>
+              <div className="conversation-toolbar">
+                <button
+                  type="button"
+                  className="chat-list-toggle"
+                  aria-expanded={!chatListCollapsed}
+                  aria-controls="conversation-list"
+                  onClick={() => setChatListCollapsed((collapsed) => !collapsed)}
+                >
+                  <Menu size={16} />{chatListCollapsed ? "顯示聊天列表" : "隱藏聊天列表"}
+                </button>
+              </div>
+            <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""} ${chatListCollapsed ? "chat-list-collapsed" : ""}`}>
+              <div className="conversation-list" id="conversation-list">
                 {conversations.map((conversation) => {
                   const book = knownBooks.find((item) => item.id === conversation.bookId);
                   const otherId = conversation.buyerId === currentUser.id
@@ -3537,6 +3599,7 @@ export function MarketplaceApp() {
                 )}
               </div>
             </div>
+            </>
           )}
 
           {dashboardTab === "requests" && (
@@ -5063,7 +5126,8 @@ function BookFormModal({
     setOcrMessage("正在準備照片...");
     try {
       const { recognizeBookCover } = await import("@/lib/marketplace/free-ocr");
-      const primaryResult = await recognizeBookCover(imageFile, (stage, progress) => {
+      const ocrImageFile = await compressBookOcrImage(imageFile);
+      const primaryResult = await recognizeBookCover(ocrImageFile, (stage, progress) => {
         const percent = Math.max(1, Math.round((progress ?? 0) * 100));
         if (stage === "preparing") {
           setOcrProgress(8);
@@ -5081,7 +5145,7 @@ function BookFormModal({
       if (requestId !== ocrRequestRef.current) return;
       setOcrProgress(84);
       const referenceResult = ocrReferenceFile
-        ? await recognizeBookCover(ocrReferenceFile)
+        ? await recognizeBookCover(await compressBookOcrImage(ocrReferenceFile))
         : null;
       if (requestId !== ocrRequestRef.current) return;
       setOcrProgress(88);
@@ -5126,26 +5190,31 @@ function BookFormModal({
         setOcrMessage("正在提高辨識準確度...");
         try {
           const { recognizeBookCoverWithAi } = await import("@/lib/marketplace/book-ocr-ai");
-          const aiResult = await recognizeBookCoverWithAi(supabase, imageFile, localText);
+          const aiResult = await recognizeBookCoverWithAi(supabase, ocrImageFile, localText);
           if (requestId !== ocrRequestRef.current) return;
-          if (aiResult.draft.title) {
-            ocrDraft = {
-              title: aiResult.draft.title,
-              author: aiResult.draft.author,
-              edition: aiResult.draft.edition,
-            };
-          }
+          ocrDraft = {
+            ...ocrDraft,
+            ...Object.fromEntries(
+              Object.entries(aiResult.draft).filter(([, field]) => Boolean(field)),
+            ),
+          };
           setOcrProgress(96);
         } catch (aiError) {
           aiFallbackError = aiError instanceof Error ? aiError.message : "暫時無法提高辨識準確度";
         }
       }
-      setDraft((previous) => ({
-        ...previous,
-        title: previous.title.trim() ? previous.title : ocrDraft.title || previous.title,
-        author: previous.author.trim() ? previous.author : ocrDraft.author || previous.author,
-        edition: previous.edition.trim() ? previous.edition : ocrDraft.edition || previous.edition,
-      }));
+      setDraft((previous) => {
+        const next = { ...previous };
+        for (const field of ["title", "author", "edition"] as const) {
+          const recognized = ocrDraft[field]?.trim() || "";
+          const current = previous[field].trim();
+          const previousAuto = ocrOriginalDraft?.[field]?.trim() || "";
+          if (recognized && (!current || (previousAuto && current === previousAuto))) {
+            next[field] = recognized;
+          }
+        }
+        return next;
+      });
       setOcrOriginalDraft(ocrDraft);
       setOcrProgress(100);
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition

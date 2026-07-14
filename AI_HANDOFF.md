@@ -2,54 +2,49 @@
 
 ## 任務目標
 
-Release completed-trade reviews, moderator-only risk analysis, and manually
-approved positive trust badges without automatically blocking transactions.
+Implement six marketplace fixes: handoff notification routing, duplicate-order
+protection, desktop navigation visibility, mobile-safe OCR, price filtering,
+and a collapsible mobile chat list.
 
 ## 目前狀態與背景
 
-- Branch: `codex/trade-risk-warning-clean`.
-- Base commit: `0f3919416ec56b16ab23469814dee308bb564045` (`origin/main`).
-- Feature commit: the single commit ahead of `origin/main` on this branch.
-- Staging migration is applied and schema/RLS/RPC checks passed.
+- Branch: `codex/six-mobile-marketplace-fixes`.
+- Base commit: `f7bec0732571da7d72fc6c034f1730ca3f63ea7f` (`origin/main`).
+- Feature commit: the six-fix implementation commit on this branch.
+- Staging migration must pass before production approval.
 - Production migration and production deployment remain pending.
 - No protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
 
 ## 已完成
 
-- Added versioned `trade_reviews`, `risk_profiles`, `trust_badges`,
-  `risk_policy_settings`, and audit logging.
-- Added RLS and controlled RPCs for review submission, public approved badges,
-  moderator risk data, badge review, and policy management.
-- Added completed-trade review UI, public positive badges, and moderator risk
-  panel with policy controls.
-- Added regression checks and staging probes.
+- Added server-confirmed request loading and a unique active-request index.
+- Added OCR-only image compression while preserving original upload files.
+- Added non-destructive OCR merging for manually edited title/author/edition.
+- Added inclusive `NT$500 以上` catalog filtering and a mobile chat rail toggle.
 
 ## 驗證結果
 
 - Typecheck: passed.
-- Lint: passed.
-- Production build: passed.
-- Project checks: `27/27` passed.
-- Risk-warning checks: `15/15` passed.
-- Staging migration: applied as
-  `20260714102652_trade_reviews_and_risk_warning`.
-- Staging tables, RLS, indexes, and RPC permissions: passed.
+- ESLint: passed for changed files.
+- Production build: passed (`EXIT_CODE=0`).
+- Six-fix, filter, OCR, image-search, and chat checks: passed.
+- Mobile browser automation: NOT VERIFIED; Chromium executable is unavailable.
+- Staging/production migration: pending separate database release approval.
 
 ## 下一步
 
 1. Wait for PR CI and resolve only release-gate failures.
-2. Verify staging migration workflow and preview deployment.
-3. Apply the same migration to production through the approved release path.
+2. Verify the migration in staging.
+3. Apply the migration to production through the separately approved path.
 4. Merge the PR and verify the Vercel production deployment commit.
-5. Run production smoke tests for the review, badge, and moderator flows.
+5. Run production smoke tests for release health and marketplace behavior.
 
 ## 風險與注意事項
 
-- Risk scores, report evidence, and negative states are not public.
-- High risk is moderator-only; transactions are not automatically blocked.
+- OCR input is compressed only for recognition; the original image remains the upload source.
 - A SQL file, green build, or preview deployment is not production proof.
-- Keep production migration and Vercel deployment evidence separate.
+- Keep staging migration, production migration, and Vercel deployment evidence separate.
 
 ## 下一位 AI 工作指引
 
@@ -79,5 +74,5 @@ approved positive trust badges without automatically blocking transactions.
 
 ## 相關 Commit
 
-- Base commit: `0f3919416ec56b16ab23469814dee308bb564045`.
-- Feature commit: the single commit ahead of `origin/main` on this branch.
+- Base commit: `f7bec0732571da7d72fc6c034f1730ca3f63ea7f`.
+- Feature commit: the six-fix implementation commit on this branch.

@@ -130,7 +130,8 @@ assert.doesNotMatch(
   /previous\.publisher\.trim\(\) \? previous\.publisher : ocrDraft\.publisher/,
   "OCR must not populate metadata fields removed from the listing form",
 );
-assert.match(app, /previous\.title\.trim\(\) \? previous\.title/, "OCR must preserve user-entered titles");
+assert.match(app, /const current = previous\[field\]\.trim\(\)/, "OCR must inspect current user-entered fields before merging");
+assert.match(app, /previousAuto/, "OCR must distinguish prior automatic results from manual edits");
 assert.match(app, /ocr-privacy-note/, "the UI must disclose temporary cloud processing");
 const hardeningMigration = readFileSync(
   new URL("../supabase/migrations/20260622090000_site_quality_hardening.sql", import.meta.url),

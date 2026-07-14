@@ -223,6 +223,8 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .detail-primary-actions { flex: 1; display: grid; grid-template-columns: .7fr 1.3fr; gap: 9px; }
 .detail-primary-actions .chat-toggle { margin-top: 0; justify-content: center; }
 .conversation-layout { display: grid; grid-template-columns: minmax(240px, 330px) 1fr; gap: 14px; min-height: 520px; }
+.conversation-toolbar { display: none; }
+.chat-list-toggle { border: 1px solid #cfe0d9; background: #f4faf7; color: var(--green); border-radius: 8px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .conversation-list, .conversation-panel { border: 1px solid var(--line); border-radius: 12px; background: white; overflow: hidden; }
 .conversation-list { display: flex; flex-direction: column; }
 .conversation-item { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: white; padding: 12px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; text-align: left; cursor: pointer; }
@@ -650,6 +652,10 @@ footer { position: relative; border-top: 1px solid var(--line); padding: 35px ma
   .dashboard-tabs button { white-space: nowrap; }
   .listing-row, .request-row { align-items: flex-start; flex-wrap: wrap; }
   .conversation-layout { grid-template-columns: 1fr; }
+  .conversation-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .conversation-layout.chat-list-collapsed { grid-template-columns: 1fr; }
+  .conversation-layout.chat-list-collapsed .conversation-list { display: none; }
+  .conversation-layout.conversation-open.chat-list-collapsed { grid-template-columns: 1fr; }
   .conversation-list { max-height: 250px; overflow-y: auto; }
   .conversation-layout.conversation-open { grid-template-columns: minmax(118px, 34vw) minmax(0, 1fr); gap: 8px; }
   .conversation-layout.conversation-open .conversation-list { max-height: 560px; border-radius: 10px; overflow-y: auto; }
@@ -1310,7 +1316,7 @@ footer,
 }
 
 .mobile-menu {
-  display: none;
+  display: grid !important;
 }
 
 .header-post-button {

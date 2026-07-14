@@ -8,6 +8,7 @@ type CountFilters = {
   listingType: string;
   itemCategory: string | null;
   department: string | null;
+  minPrice: number | null;
   maxPrice: number | null;
   query: string | null;
 };
@@ -16,6 +17,7 @@ type CountRequestBody = {
   listingType?: unknown;
   itemCategory?: unknown;
   department?: unknown;
+  minPrice?: unknown;
   maxPrice?: unknown;
   query?: unknown;
 };
@@ -32,6 +34,11 @@ function normalizedFilters(body: CountRequestBody): CountFilters {
   const rawQuery = textField(body.query).slice(0, 80);
   const query = (listingType === "book" ? normalizeTaiwanTextbookQuery(rawQuery) : rawQuery) || null;
   const rawMaxPrice = body.maxPrice;
+  const rawMinPrice = body.minPrice;
+  const parsedMinPrice =
+    typeof rawMinPrice === "number" || typeof rawMinPrice === "string"
+      ? Number(rawMinPrice)
+      : null;
   const parsedMaxPrice =
     typeof rawMaxPrice === "number" || typeof rawMaxPrice === "string"
       ? Number(rawMaxPrice)
@@ -40,6 +47,7 @@ function normalizedFilters(body: CountRequestBody): CountFilters {
     listingType,
     itemCategory: listingType === "secondhand" ? itemCategory : null,
     department,
+    minPrice: parsedMinPrice !== null && Number.isFinite(parsedMinPrice) ? parsedMinPrice : null,
     maxPrice: parsedMaxPrice !== null && Number.isFinite(parsedMaxPrice) ? parsedMaxPrice : null,
     query,
   };
@@ -61,6 +69,7 @@ async function requestCount(filters: CountFilters) {
       p_listing_type: filters.listingType,
       p_item_category: filters.itemCategory,
       p_department: filters.department,
+      p_min_price: filters.minPrice,
       p_max_price: filters.maxPrice,
       p_query: filters.query,
     }),

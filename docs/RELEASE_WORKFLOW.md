@@ -11,7 +11,7 @@ changes. A release is complete only after every applicable stage has evidence.
 3. **Staging verified**: versioned migrations are applied to the independent
    staging Supabase project and RPC/RLS probes pass.
 4. **Production database applied**: the protected `Production Migration`
-   workflow completes after a separate approval.
+   workflow applies the approved migration ref after a separate approval.
 5. **Production deployed**: Vercel reports the merged `main` commit as deployed.
 6. **Production verified**: homepage, marketplace count, release health, and the
    expected commit pass the Production Deployment Monitor.
@@ -57,6 +57,9 @@ supabase migration repair --status applied 20260614000000
 
 Database changes must pass the Staging Migration workflow before the production
 workflow is approved. Application rollback does not reverse database changes.
+The production migration workflow checks out an explicit approved
+`migration_ref`; use the PR branch or commit when the migration must run before
+the PR is merged.
 
 ## Commands
 

@@ -109,6 +109,10 @@ export function compressBookImage(file: File) {
   return compressImage(file, { maxWidth: MAX_WIDTH, targetBytes: TARGET_BYTES, outputName: "book-cover" });
 }
 
+export function compressBookOcrImage(file: File) {
+  return compressImage(file, { maxWidth: 1400, targetBytes: 1_200 * 1024, outputName: "book-ocr" });
+}
+
 export function extractStoragePath(publicUrl: string, bucket = "book-images") {
   const marker = `/storage/v1/object/public/${bucket}/`;
   const index = publicUrl.indexOf(marker);
