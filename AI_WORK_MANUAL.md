@@ -1004,6 +1004,24 @@ condition, not a later cleanup task. Run `npm run check:release-scope` before
 release verification, and move narrow production changes to a clean worktree
 before building, committing, or testing production observability.
 
+### LESSON-057: Do not generate a second lockfile during verification
+
+**Observed problem:** Running a pnpm verification command in a checkout that
+tracks `package-lock.json` but has no tracked `pnpm-lock.yaml` created an
+untracked lockfile and made the clean worktree check fail.
+
+**Cause:** Package-manager metadata was treated as proof that a second lockfile
+was intended, without first checking the repository's tracked lockfile
+convention.
+
+**Detection:** Before package-manager verification, inspect the tracked
+lockfiles and `packageManager` field. After the command, check `git status` for
+new generated lockfiles.
+
+**Prevention rule:** Use the repository's existing lockfile convention for
+verification. Do not commit a newly generated lockfile unless the user
+explicitly authorizes changing the package-manager setup.
+
 ## New Lesson Template
 
 ### LESSON-055: Hosting metadata must be rechecked before remote provisioning
