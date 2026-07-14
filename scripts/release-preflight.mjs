@@ -2,6 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import process from "node:process";
+import { analyzeReleaseScope, formatReleaseScopeStop } from "./lib/release-scope.mjs";
 
 const baseRef = process.env.RELEASE_BASE_REF || "origin/main";
 
@@ -55,6 +56,7 @@ const branch = git(["branch", "--show-current"]) || "(detached)";
 const head = git(["rev-parse", "HEAD"]);
 const status = lines(git(["status", "--porcelain=v1"]));
 const changedInPr = lines(git(["diff", "--name-only", `${baseRef}...HEAD`]));
+const scope = analyzeReleaseScope(baseRef);
 const cherry = lines(git(["cherry", "-v", baseRef, "HEAD"]));
 const alreadyApplied = cherry.filter((line) => line.startsWith("- "));
 const unapplied = cherry.filter((line) => line.startsWith("+ "));
@@ -66,6 +68,12 @@ console.log(`Working tree: ${status.length ? `${status.length} uncommitted/untra
 console.log(`PR files vs ${baseRef}: ${changedInPr.length}`);
 console.log(`Unapplied commits: ${unapplied.length}`);
 console.log(`Already-applied commits: ${alreadyApplied.length}`);
+
+if (scope.riskyMixedScope) {
+  fail("release scope is mixed. Move the intended change into a clean worktree or fresh branch before opening or merging a PR.");
+  console.log("");
+  console.log(formatReleaseScopeStop(scope));
+}
 
 if (alreadyApplied.length && unapplied.length) {
   fail(

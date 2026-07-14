@@ -19,8 +19,11 @@ Never add that trailer to an unrelated commit.
 
 ## Project Lessons
 
-Before starting work, read `AI_WORK_MANUAL.md` and apply its recorded lessons,
-quality gates, and incident-prevention rules.
+Before starting work, search `AI_WORK_MANUAL.md` by task-relevant keywords and
+read only the matching sections needed for the task. Apply those recorded
+lessons, quality gates, and incident-prevention rules. Prefer a focused read
+of roughly 1,000-3,000 tokens over loading the entire manual; expand the scope
+only when the focused search finds a concrete reason.
 
 When a mistake, failed assumption, escaped defect, unsafe action, or recurring
 workflow problem is discovered:

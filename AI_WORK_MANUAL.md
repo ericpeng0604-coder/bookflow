@@ -811,7 +811,228 @@ when the shell PATH is incomplete. Only start a browser after the focused
 checks pass, and treat that browser step as confirmation of the changed
 interaction rather than the primary way to rediscover application state.
 
+### LESSON-046: Production release proof must follow the protected workflow path
+
+**Observed problem:** A marketplace release was ready to ship, but deployment
+could not finish from the dirty local checkout alone because the real gating
+steps were outside the code diff: the PR was still a draft, `Production
+Migration` required a protected manual dispatch, and Vercel reported success
+before direct health probes immediately reflected the new commit.
+
+**Cause:** Release completion was treated as a git or build task instead of an
+end-to-end workflow that includes PR state, protected GitHub Actions, database
+migration approval, deployment propagation, and the repository's own smoke
+evidence.
+
+**Detection:** Before claiming a BookFlow release is deployed, verify all of
+these in order: the shipping PR is not draft, required PR workflows are green,
+database releases have a completed `Production Migration` run, the merge commit
+has a successful Vercel status, and the latest `Production Deployment Monitor`
+run (or equivalent `release:smoke` evidence) passed for that deployment.
+
+**Prevention rule:** When a release includes database-backed application
+changes, ship from the clean PR branch rather than the dirty working tree. Move
+the PR out of draft before waiting on checks. If no direct workflow-dispatch API
+is available, use the authenticated GitHub workflow page to trigger
+`Production Migration` with the exact confirmation string, wait for that run to
+succeed, then merge. Treat `Production Deployment Monitor` or `release:smoke`
+success as the final proof point when `/api/health/release` still shows the
+older commit during propagation.
+
+### LESSON-047: Codex checks need stable runtime and preview commands
+
+**Observed problem:** Local verification lost time because `node` was not on
+the shell PATH, a guessed `typecheck:codex` script did not exist, `pnpm run dev
+-- --hostname ...` passed Next flags as a project directory, and a stuck local
+preview left `.next` in a state that blocked a later production build.
+
+**Cause:** Runtime fallback, type checking, preview startup, and stale-process
+cleanup were handled as ad hoc shell fixes instead of repository scripts with
+known argument shapes.
+
+**Detection:** Watch for `node is not recognized`, missing `:*codex` scripts,
+Next reporting an invalid project directory named like a flag, `next dev`
+staying on `Starting...`, or `next build` timing out while Node/Next processes
+for this checkout are still running.
+
+**Prevention rule:** In Codex or any shell that may not have Node on PATH, use
+the repository `:codex` scripts: `pnpm run typecheck:codex`, `pnpm run
+build:codex`, `pnpm run dev:doctor:codex`, `pnpm run dev:clean:codex`,
+`pnpm run start:codex`, and targeted check variants such as `pnpm run
+check:chat-listing-order-ux:codex`. Before rerunning a build after a stuck
+preview, run `pnpm run dev:clean:codex` so `.next` is not shared with stale
+Next processes. Because `dev:clean:codex` removes `.next`, run `pnpm run
+build:codex` again before `pnpm run start:codex`.
+
+### LESSON-048: Memory and project lookups need a low-output first pass
+
+**Observed problem:** A memory inspection request consumed excessive context
+because the investigation expanded from a narrow question into broad recursive
+memory scans, full manual reads, and rollout-summary inspection before the
+first pass had identified concrete high-risk entries.
+
+**Cause:** Precision evidence gathering was started too early. The agent used
+large source reads and broad keyword scans as the default lookup mechanism
+instead of first building a small candidate list.
+
+**Detection:** Watch for full reads of `MEMORY.md`, rollout summaries, raw
+session logs, `AI_WORK_MANUAL.md`, browser DOM snapshots, or large source files
+when the user only asked for a narrow inspection or creation task.
+
+**Prevention rule:** Start lookup-heavy tasks with `pnpm run ai:lookup -- ...`
+or `pnpm run ai:lookup:codex -- ...` and inspect only the returned candidate
+line windows. Use `--deep` only after the first pass shows a concrete need for
+rollout history. Do not reduce token usage by skipping required checks,
+security review, deployment proof, or evidence needed for a reliable
+conclusion.
+
+### LESSON-049: Repeated mistakes need autonomous prevention
+
+**Observed problem:** The user had to repeatedly remind agents to turn errors,
+token waste, unsafe recall, and workflow friction into durable improvements
+instead of one-off explanations.
+
+**Cause:** Agents fixed the immediate symptom but waited for explicit follow-up
+before adding the check, helper, redaction, lesson, or workflow guard that would
+prevent the same issue from recurring.
+
+**Detection:** Watch for any real mistake, failed assumption, repeated blocker,
+escaped defect, sensitive-detail exposure, token-heavy rediscovery loop, or
+workflow step that required user correction.
+
+**Prevention rule:** Do not wait for the user to ask for prevention. Fix the
+immediate issue, identify the root cause, add the smallest durable guard, and
+verify that guard. Use `pnpm run ai:improve -- "problem"` or
+`pnpm run ai:improve:codex -- "problem"` for a low-output self-improvement
+brief, then implement the recommended script, check, manual lesson, redaction,
+or regression test when it fits the issue. Keep the guard scoped and do not
+replace required product checks or release proof with a checklist.
+
+### LESSON-050: PR check waiting must be low-output
+
+**Observed problem:** A deployment consumed excessive context because
+`gh pr checks --watch --interval 10` repeatedly printed the full check table
+while waiting for GitHub Actions, Vercel, CodeRabbit, staging migration, and
+release readiness to complete.
+
+**Cause:** The agent used an interactive watch command as if it were a compact
+status poller. The command was operationally correct, but its repeated full
+output did not add evidence beyond the final pass/fail state.
+
+**Detection:** Watch for commands such as `gh pr checks --watch`, dashboard
+polling loops, or repeated full workflow tables during release work. If the
+same pending/pass rows appear more than once, the wait path is too noisy.
+
+**Prevention rule:** Use `pnpm run release:watch-pr -- <pr-number-or-url>` or
+`pnpm run release:watch-pr:codex -- <pr-number-or-url>` to wait for PR checks.
+It prints compact status changes and final failures only. Do not use
+`gh pr checks --watch` in Codex unless the low-output helper is unavailable and
+the user explicitly accepts the extra context cost.
+
+### LESSON-051: Mobile chat switching must preserve the page viewport
+
+**Observed problem:** Tapping a conversation in the mobile chat rail could move
+the whole page to the bottom while opening the selected chat.
+
+**Cause:** The chat switch preserved outer-page scroll only for desktop-width
+layouts, while the mobile open-chat layout also changes height and loads a
+scrollable message panel.
+
+**Detection:** On a narrow viewport, scroll the dashboard so the chat rail is
+visible, tap between conversations in the left rail, and verify the browser
+viewport stays in place while only the message log scrolls.
+
+**Prevention rule:** Conversation-list switching must explicitly preserve and
+restore the outer page scroll on all viewport widths. Message-loading auto
+scroll may target only the chat log, not the browser page.
+
+### LESSON-052: Migrations must reference the real schema
+
+**Observed problem:** A purchase-request migration called
+`public.marketplace_listings`, but the project stores listings in
+`public.books`, causing order submission to fail at runtime.
+
+**Cause:** A new migration used an assumed table name instead of matching the
+existing schema and RPC implementation.
+
+**Detection:** Search new SQL for tables not present in `supabase/schema.sql`
+or established migrations, and run the related feature structure check before
+release.
+
+**Prevention rule:** Database migrations must reuse the repository's canonical
+tables and eligibility predicates. Add a feature check for any new SQL path that
+touches order creation or listing availability.
+
+### LESSON-053: Production observability proof needs code-shipping proof first
+
+**Observed problem:** Sentry smoke verification was attempted after adding the
+production DSN in Vercel, but before the Sentry integration code itself had
+been shipped to the production deployment.
+
+**Cause:** Environment-variable rollout and application-code rollout were
+treated as if they moved together. A production redeploy of the old `main`
+commit was incorrectly used as a proxy for shipping the new observability code.
+
+**Detection:** Before testing a new monitoring, analytics, or feature flag
+integration in production, compare the local commit containing the integration
+with the commit currently reported by Vercel or `/api/health/release`. If the
+production commit does not contain the new code, any smoke result is premature.
+
+**Prevention rule:** For observability changes, verify shipping order
+explicitly: commit merged to `main`, production deployment updated to that
+commit, required environment variables present, then trigger the production
+smoke or synthetic error. Never treat an env-only redeploy as proof that new
+client or server instrumentation is live.
+
+### LESSON-054: Small release scopes must leave dirty checkouts early
+
+**Observed problem:** A Sentry rollout started in a checkout that already mixed
+unrelated UI, SQL, workflow, and tooling edits, so later verification kept
+re-separating intended release files from unrelated local work.
+
+**Cause:** Scope isolation happened too late. The agent kept moving forward in
+the active dirty checkout instead of moving the narrow change to a clean
+worktree before verification, commit selection, and production rollout.
+
+**Detection:** Before adding release-only or observability-only changes, inspect
+the working tree areas. If the checkout already spans multiple substantive
+areas such as runtime, database, workflows, and tooling, stop and isolate the
+target change in a clean worktree or fresh branch.
+
+**Prevention rule:** Treat "small change in a dirty checkout" as an early stop
+condition, not a later cleanup task. Run `npm run check:release-scope` before
+release verification, and move narrow production changes to a clean worktree
+before building, committing, or testing production observability.
+
 ## New Lesson Template
+
+### LESSON-055: Hosting metadata must be rechecked before remote provisioning
+
+**Observed problem:** A local Sites hosting record appeared or changed while a separate workflow was preparing a new Sites project, leaving two different project identifiers for the same source tree.
+
+**Cause:** Remote provisioning was started from an earlier filesystem snapshot without a final conflict check against the hosting metadata.
+
+**Detection:** Immediately before creating, saving, or deploying a hosted site, reread `.openai/hosting.json` and stop if its project identifier differs from the active deployment target.
+
+**Prevention rule:** Treat a changed hosting record as a concurrent-work conflict. Do not overwrite it or deploy either target until the user chooses the intended project.
+
+### LESSON-056: Async detail checks must not depend on their own status
+
+**Observed problem:** The book detail purchase button stayed at `確認中...`
+for every book after the active-request lookup started.
+
+**Cause:** The effect both changed its loading state and listed that state in
+its dependencies. React cleaned up the in-flight request during the rerender,
+so the completion callback was ignored.
+
+**Detection:** If an async effect sets a state value that also appears in its
+dependency list, inspect whether cleanup invalidates the request immediately;
+verify loading transitions to success or error even when the query returns no
+row.
+
+**Prevention rule:** Key async detail lookups by stable entity identifiers,
+exclude self-updated status from the dependency list, and add a bounded timeout
+with an explicit retry path.
 
 ### LESSON-NNN: Short title
 

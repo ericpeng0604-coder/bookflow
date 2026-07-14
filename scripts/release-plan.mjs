@@ -2,6 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import process from "node:process";
+import { analyzeReleaseScope, formatReleaseScopeStop } from "./lib/release-scope.mjs";
 
 function git(args) {
   return execFileSync("git", args, { encoding: "utf8" }).trim();
@@ -25,6 +26,7 @@ const head = git(["rev-parse", "HEAD"]);
 const changedTracked = lines(git(["diff", "--name-only", "HEAD"]));
 const untracked = lines(git(["ls-files", "--others", "--exclude-standard"]));
 const changedFiles = unique([...changedTracked, ...untracked]);
+const scope = analyzeReleaseScope();
 
 const protectedRecoveryFiles = [
   ".github/workflows/rollback-production.yml",
@@ -50,11 +52,18 @@ const touchedPackage = changedFiles.filter((file) =>
 const isCodexRuntime = process.execPath.toLowerCase().includes("codex-runtimes");
 const packageRunner = isCodexRuntime ? "pnpm run" : "pnpm run";
 const smokeScript = isCodexRuntime ? "release:smoke:codex" : "release:smoke";
+const watchPrScript = isCodexRuntime ? "release:watch-pr:codex" : "release:watch-pr";
 
 console.log("BookFlow release plan (low-output)");
 console.log(`Branch: ${branch}`);
 console.log(`HEAD: ${head}`);
 console.log(`Working tree: ${status.length ? `${status.length} changed entries` : "clean"}`);
+
+if (scope.riskyMixedScope) {
+  console.log("");
+  console.log(formatReleaseScopeStop(scope));
+  process.exitCode = 1;
+}
 
 if (!changedFiles.length) {
   console.log("\nNo local file changes detected.");
@@ -98,6 +107,12 @@ if (touchedMigrations.length) {
 console.log("\nProduction proof after merge:");
 console.log(`  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> ${packageRunner} ${smokeScript}`);
 console.log("  Use /api/health/release for the deployed commit before opening large dashboards.");
+if (scope.hasObservability) {
+  console.log("  For Sentry or analytics changes, do not run production smoke until that endpoint reports the merged observability commit.");
+}
+console.log("\nPR check waiting:");
+console.log(`  ${packageRunner} ${watchPrScript} -- <pr-number-or-url>`);
+console.log("  Do not use `gh pr checks --watch` in Codex; it repeats the full check table and burns context.");
 if (isCodexRuntime) {
   console.log("  Codex Windows PATH note: use the :codex scripts when plain node is unavailable.");
 }

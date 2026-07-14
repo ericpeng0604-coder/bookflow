@@ -38,7 +38,11 @@ $processes | ConvertTo-Json -Depth 3
 
 function stopProcesses(processes) {
   for (const processInfo of processes) {
-    runPowerShell(`Stop-Process -Id ${Number(processInfo.ProcessId)} -Force -ErrorAction SilentlyContinue`);
+    try {
+      runPowerShell(`Stop-Process -Id ${Number(processInfo.ProcessId)} -Force -ErrorAction SilentlyContinue`);
+    } catch {
+      // The process can exit between discovery and cleanup.
+    }
   }
 }
 
@@ -77,7 +81,7 @@ if (cleanCache && existsSync(nextDir)) {
   if (!resolvedNext.startsWith(resolvedRepo + path.sep)) {
     throw new Error(`Refusing to delete outside repo: ${resolvedNext}`);
   }
-  rmSync(resolvedNext, { recursive: true, force: true });
+  rmSync(resolvedNext, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
   console.log("Removed .next cache.");
 } else if (existsSync(nextDir)) {
   const stats = statSync(nextDir);

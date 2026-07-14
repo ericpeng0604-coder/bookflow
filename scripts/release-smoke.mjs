@@ -16,12 +16,13 @@ if (
   throw new Error("RELEASE_BASE_URL must be https, except for local smoke tests.");
 }
 
-async function probe(path, validate) {
+async function probe(path, validate, init = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${baseUrl}${path}`, {
-      headers: { "cache-control": "no-cache" },
+      ...init,
+      headers: { "cache-control": "no-cache", ...init.headers },
       signal: controller.signal,
     });
     const body = await response.text();
@@ -46,6 +47,10 @@ await probe("/api/marketplace/count", async (body) => {
   if (!Number.isInteger(data.count) || typeof data.approximate !== "boolean") {
     throw new Error("Marketplace count response has an unexpected shape.");
   }
+}, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: "{}",
 });
 
 await probe("/api/health/release", async (body) => {
