@@ -15,6 +15,7 @@ import type {
   ContactMethod,
   Feedback,
   StudentVerification,
+  StudentVerificationSummary,
   RiskEvidence,
   RiskLevel,
   RiskPolicy,
@@ -31,6 +32,7 @@ export function mapBook(row: Record<string, unknown>): Book {
   return {
     id: String(row.id),
     sellerId: String(row.seller_id),
+    sellerVerified: Boolean(row.seller_verified),
     listingType: String(row.listing_type || "book") as Book["listingType"],
     itemCategory: String(row.item_category || "book"),
     title: String(row.title),
@@ -161,9 +163,31 @@ export function mapStudentVerification(row: Record<string, unknown>): StudentVer
     qualityFlags: typeof row.quality_flags === "object" && row.quality_flags !== null
       ? row.quality_flags as Record<string, unknown>
       : {},
+    programType: row.program_type === "two_year" || row.program_type === "four_year"
+      ? row.program_type
+      : null,
+    admissionYear: row.admission_year ? Number(row.admission_year) : null,
+    departmentCode: String(row.department_code || ""),
+    classCode: String(row.class_code || ""),
     status: String(row.status || "pending") as StudentVerification["status"],
     reviewNote: String(row.review_note || ""),
     reviewedBy: row.reviewed_by ? String(row.reviewed_by) : null,
+    reviewedAt: row.reviewed_at ? String(row.reviewed_at) : null,
+    createdAt: String(row.created_at),
+  };
+}
+
+export function mapStudentVerificationSummary(row: Record<string, unknown>): StudentVerificationSummary {
+  return {
+    id: String(row.id),
+    status: String(row.status || "pending") as StudentVerification["status"],
+    programType: row.program_type === "two_year" || row.program_type === "four_year"
+      ? row.program_type
+      : null,
+    admissionYear: row.admission_year ? Number(row.admission_year) : null,
+    departmentCode: String(row.department_code || ""),
+    classCode: String(row.class_code || ""),
+    reviewNote: String(row.review_note || ""),
     reviewedAt: row.reviewed_at ? String(row.reviewed_at) : null,
     createdAt: String(row.created_at),
   };

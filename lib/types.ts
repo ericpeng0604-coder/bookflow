@@ -56,6 +56,7 @@ export type Profile = {
 export type Book = {
   id: string;
   sellerId: string;
+  sellerVerified: boolean;
   listingType: ListingType;
   itemCategory: string;
   title: string;
@@ -209,9 +210,25 @@ export type StudentVerification = {
   imagePath: string;
   ocrText: string;
   qualityFlags: Record<string, unknown>;
+  programType: "two_year" | "four_year" | null;
+  admissionYear: number | null;
+  departmentCode: string;
+  classCode: string;
   status: StudentVerificationStatus;
   reviewNote: string;
   reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+};
+
+export type StudentVerificationSummary = {
+  id: string;
+  status: StudentVerificationStatus;
+  programType: "two_year" | "four_year" | null;
+  admissionYear: number | null;
+  departmentCode: string;
+  classCode: string;
+  reviewNote: string;
   reviewedAt: string | null;
   createdAt: string;
 };

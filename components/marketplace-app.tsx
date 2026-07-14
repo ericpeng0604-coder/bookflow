@@ -61,6 +61,7 @@ import {
   dispatchBrowserPush,
   enableBrowserPush,
 } from "@/lib/marketplace/browser-push";
+import { findStudentIdCandidates, isStudentIdYearEligible, type StudentIdDetails } from "@/lib/marketplace/student-id";
 import type {
   StudentVerificationFlags,
   BookOcrDraft,
@@ -118,6 +119,7 @@ import type {
   ReviewStatus,
   SellerLifecycle,
   StudentVerification,
+  StudentVerificationSummary,
   TradeContact,
   TradeMessage,
   TradeReviewTag,
@@ -292,6 +294,7 @@ const blankBook: Omit<
   Book,
   | "id"
   | "sellerId"
+  | "sellerVerified"
   | "createdAt"
   | "status"
   | "reviewStatus"
@@ -586,6 +589,7 @@ export function MarketplaceApp() {
   const [reviewRequest, setReviewRequest] = useState<PurchaseRequest | null>(null);
   const [reviewStatus, setReviewStatus] = useState<{ reviewed: boolean; revieweeId: string; revieweeName: string } | null>(null);
   const [studentVerifications, setStudentVerifications] = useState<StudentVerification[]>([]);
+  const [myStudentVerification, setMyStudentVerification] = useState<StudentVerificationSummary | null>(null);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; label: string } | null>(null);
   const [marketplaceBooks, setMarketplaceBooks] = useState<Book[]>([]);
   const [marketplaceCount, setMarketplaceCount] = useState(0);
@@ -623,7 +627,7 @@ export function MarketplaceApp() {
   const adminOtpRequestedRef = useRef<string | null>(null);
   const imageSearchInputRef = useRef<HTMLInputElement>(null);
   const imageSearchRequestRef = useRef(0);
-  const marketplaceCursorRef = useRef<{ createdAt: string; id: string } | null>(null);
+  const marketplaceCursorRef = useRef<{ sellerVerified: boolean; createdAt: string; id: string } | null>(null);
   const badgeLookupRef = useRef<Set<string>>(new Set());
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
@@ -781,6 +785,7 @@ export function MarketplaceApp() {
           ]);
         }
         if (workspace.sellerLifecycle !== undefined) setSellerLifecycle(workspace.sellerLifecycle);
+        if (workspace.studentVerification !== undefined) setMyStudentVerification(workspace.studentVerification);
         if (workspace.conversations) setConversations(workspace.conversations);
         if (workspace.favoriteIds) setFavoriteIds(new Set(workspace.favoriteIds));
       } catch (error) {
@@ -792,7 +797,7 @@ export function MarketplaceApp() {
   }, []);
 
   const loadDashboardWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
-    const tabs = tab === "requests" || tab === "received" || tab === "chats"
+    const tabs = tab === "requests" || tab === "received" || tab === "chats" || tab === "studentVerification"
       ? [tab]
       : [tab, "requests" as const];
     await Promise.all(tabs.map((targetTab) => loadUserWorkspace(user, targetTab)));
@@ -1476,7 +1481,7 @@ export function MarketplaceApp() {
     return null;
   }
 
-  async function submitStudentVerification(file: File, ocrText: string, qualityFlags: StudentVerificationFlags) {
+  async function submitStudentVerification(file: File, ocrText: string, qualityFlags: StudentVerificationFlags, studentNumber: string) {
     if (!supabase || !currentUser) return "目前無法上傳學生證";
     if (currentUser.accountStatus === "suspended") return "你的帳號目前為唯讀模式，不能送出學生證審核";
 
@@ -1491,12 +1496,16 @@ export function MarketplaceApp() {
       });
     if (uploadError) return `學生證上傳失敗：${uploadError.message}`;
 
-    const { error } = await supabase.rpc("submit_student_verification", {
+    const { error: rawError } = await supabase.rpc("submit_student_verification", {
       image_path: path,
       ocr_text: ocrText,
       quality_flags: qualityFlags,
+      student_number: studentNumber,
     });
-    if (error) return `送出學生證審核失敗：${error.message}`;
+    if (rawError) {
+      await supabase.storage.from("student-verifications").remove([path]);
+      return `學生證提交失敗：${rawError.message}`;
+    }
 
     setToast("學生證已送出，管理員會人工審核");
     return null;
@@ -1511,6 +1520,7 @@ export function MarketplaceApp() {
     setContacts({});
     setPendingReviews([]);
     setHiddenBooks([]);
+    setMyStudentVerification(null);
     setDetailBook(null);
     setNotificationOpen(false);
     setMobileMenuOpen(false);
@@ -1718,6 +1728,7 @@ export function MarketplaceApp() {
                 ...payload,
                 id: crypto.randomUUID(),
                 sellerId: currentUser.id,
+                sellerVerified: false,
                 status: "available",
                 reviewStatus: "pending",
                 reviewNote: "",
@@ -3206,6 +3217,7 @@ export function MarketplaceApp() {
                   >
                     <div className="card-image">
                       <Image src={book.imageUrl} alt="" width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
+                      {book.sellerVerified && <span className="verified-seller-badge"><ShieldCheck size={13} />已驗證賣家</span>}
                       <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
                     </div>
                     <div className="card-body">
@@ -3326,6 +3338,7 @@ export function MarketplaceApp() {
               <div className="seller-row">
                 <span className="avatar">{profile(selectedBook.sellerId)?.name.slice(0, 1) || "賣"}</span>
                 <div><small>賣家</small><b>{profile(selectedBook.sellerId)?.name || "賣家"}</b><span>{profile(selectedBook.sellerId)?.department || ""}</span>
+                  {selectedBook.sellerVerified && <em className="trust-badge"><ShieldCheck size={13} />已驗證學生賣家</em>}
                   {badgeFor(selectedBook.sellerId, "seller") && <em className="trust-badge"><ShieldCheck size={13} />優良賣家</em>}
                 </div>
               </div>
@@ -3453,6 +3466,7 @@ export function MarketplaceApp() {
             </div>
           )}
           <div className="dashboard-tabs">
+            <button type="button" className={dashboardTab === "studentVerification" ? "active" : ""} onClick={() => setDashboardTab("studentVerification")}>學生身分驗證</button>
             <button type="button" className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
             <button type="button" className={dashboardTab === "chats" ? "active" : ""} onClick={() => setDashboardTab("chats")}>
               聊聊 <span>{conversations.reduce((sum, item) => sum + item.unreadCount, 0)}</span>
@@ -3461,6 +3475,13 @@ export function MarketplaceApp() {
             <button type="button" className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
             <button type="button" className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
           </div>
+
+          {dashboardTab === "studentVerification" && (
+            <StudentVerificationPanel
+              status={myStudentVerification}
+              onSubmit={submitStudentVerification}
+            />
+          )}
 
           {dashboardTab === "listings" && (
             <div className="dashboard-list">
@@ -3998,7 +4019,6 @@ export function MarketplaceApp() {
           profile={currentUser}
           onClose={() => setModal(null)}
           onSubmit={saveProfile}
-          onSubmitStudentVerification={submitStudentVerification}
           onDeleteAccount={deleteAccount}
         />
       )}
@@ -4292,6 +4312,155 @@ function AdminOtpModal({
   );
 }
 
+function StudentVerificationPanel({
+  status,
+  onSubmit,
+}: {
+  status: StudentVerificationSummary | null;
+  onSubmit: (file: File, ocrText: string, qualityFlags: StudentVerificationFlags, studentNumber: string) => Promise<string | null>;
+}) {
+  const [studentIdFile, setStudentIdFile] = useState<File | null>(null);
+  const [studentIdOcrText, setStudentIdOcrText] = useState("");
+  const [studentIdFlags, setStudentIdFlags] = useState<StudentVerificationFlags | null>(null);
+  const [studentIdDetails, setStudentIdDetails] = useState<StudentIdDetails | null>(null);
+  const [studentIdPreview, setStudentIdPreview] = useState("");
+  const [studentIdBusy, setStudentIdBusy] = useState(false);
+  const [studentIdConsent, setStudentIdConsent] = useState(false);
+  const [error, setError] = useState("");
+  const [localPending, setLocalPending] = useState(false);
+
+  useEffect(() => () => {
+    if (studentIdPreview.startsWith("blob:")) URL.revokeObjectURL(studentIdPreview);
+  }, [studentIdPreview]);
+
+  const approvedAndCurrent = status?.status === "approved"
+    && status.admissionYear !== null
+    && isStudentIdYearEligible(status.admissionYear);
+  const blocked = localPending || status?.status === "pending" || approvedAndCurrent;
+
+  async function selectStudentIdImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    setStudentIdFile(file);
+    setStudentIdOcrText("");
+    setStudentIdFlags(null);
+    setStudentIdDetails(null);
+    setError("");
+    if (!file) {
+      setStudentIdPreview("");
+      return;
+    }
+
+    setStudentIdPreview(URL.createObjectURL(file));
+    setStudentIdBusy(true);
+    try {
+      const { imageQualityFlags, recognizeImageText } = await import("@/lib/marketplace/free-ocr");
+      const ocrText = await recognizeImageText(file);
+      const details = findStudentIdCandidates(ocrText)[0] ?? null;
+      setStudentIdOcrText(ocrText);
+      setStudentIdFlags(await imageQualityFlags(file, ocrText));
+      setStudentIdDetails(details);
+      if (!details) {
+        setError("OCR 找不到符合近五年規則的學號，請重新拍攝並確保學生證上的 8 碼學號清楚可見。");
+      }
+    } catch (ocrError) {
+      const { imageQualityFlags } = await import("@/lib/marketplace/free-ocr");
+      setStudentIdFlags(await imageQualityFlags(file, ""));
+      setError(ocrError instanceof Error ? ocrError.message : "OCR 讀取失敗，請重新上傳清楚的學生證照片。");
+    } finally {
+      setStudentIdBusy(false);
+    }
+  }
+
+  async function submitStudentId() {
+    const file = studentIdFile;
+    const details = studentIdDetails;
+    if (!file || !details) {
+      setError("請重新上傳能被 OCR 辨識出學號的學生證照片。");
+      return;
+    }
+    if (!studentIdConsent) {
+      setError("請先同意學生證僅供平台驗證使用。");
+      return;
+    }
+
+    setStudentIdBusy(true);
+    setError("");
+    const flags: StudentVerificationFlags = studentIdFlags
+      ?? await import("@/lib/marketplace/free-ocr")
+        .then(({ imageQualityFlags }) => imageQualityFlags(file, studentIdOcrText));
+    const message = await onSubmit(file, studentIdOcrText, flags, details.value);
+    if (message) {
+      setError(message);
+    } else {
+      setLocalPending(true);
+      setStudentIdFile(null);
+      setStudentIdOcrText("");
+      setStudentIdFlags(null);
+      setStudentIdDetails(null);
+      setStudentIdPreview("");
+      setStudentIdConsent(false);
+    }
+    setStudentIdBusy(false);
+  }
+
+  return (
+    <div className="dashboard-list">
+      <section className="student-verification-box" aria-labelledby="student-verification-title">
+        <div>
+          <b id="student-verification-title">學生身分驗證</b>
+          <span>驗證不是強制的；通過審核後，你的商品會優先顯示給買家。</span>
+        </div>
+        {status?.status === "pending" || localPending ? (
+          <div className="readonly-notice"><Clock3 size={18} /><div><b>等待管理員審核</b><span>管理員會核對學生證圖片，請不要重複提交。</span></div></div>
+        ) : status?.status === "approved" && approvedAndCurrent ? (
+          <div className="readonly-notice"><ShieldCheck size={18} /><div><b>學生身分已驗證</b><span>你的商品目前享有已驗證賣家優先排序。</span></div></div>
+        ) : status?.status === "rejected" ? (
+          <p className="form-error">上次驗證未通過{status.reviewNote ? `：${status.reviewNote}` : "，請重新上傳清楚的學生證照片。"}</p>
+        ) : status?.status === "approved" ? (
+          <p className="form-note">原驗證已超過目前五年範圍，請提交最新學生證以恢復優先排序。</p>
+        ) : null}
+        {!blocked && (
+          <>
+            <label className="student-id-upload">
+              <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="上傳學生證圖片" onChange={(event) => void selectStudentIdImage(event)} />
+              <ImagePlus size={20} />
+              <span>{studentIdFile?.name || "選擇學生證圖片"}</span>
+            </label>
+            {studentIdPreview && (
+              <div className="student-id-preview">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={studentIdPreview} alt="學生證預覽" />
+              </div>
+            )}
+            {studentIdFlags && (
+              <div className="ocr-flags">
+                {studentVerificationFlagLabels(studentIdFlags!).map((label) => <span key={label}>{label}</span>)}
+              </div>
+            )}
+            {studentIdDetails && (
+              <div className="student-id-result">
+                <b>OCR 已辨識學號</b>
+                <span>{studentIdDetails.programLabel} · 民國 {studentIdDetails.admissionYear} 年 · 系所 {studentIdDetails.departmentCode} · {studentIdDetails.classLabel}</span>
+              </div>
+            )}
+            {studentIdOcrText && <textarea className="ocr-text" readOnly value={studentIdOcrText} aria-label="學生證 OCR 結果" />}
+            <label className="student-id-consent">
+              <input type="checkbox" checked={studentIdConsent} onChange={(event) => setStudentIdConsent(event.target.checked)} />
+              <span>我同意學生證圖片與 OCR 結果僅供身分驗證，審核完成後清除敏感內容。</span>
+            </label>
+            {error && <p className="form-error">{error}</p>}
+            <button className="secondary-action wide" type="button" disabled={studentIdBusy || !studentIdFile || !studentIdDetails || !studentIdConsent} onClick={() => void submitStudentId()}>
+              {studentIdBusy ? "OCR 處理中..." : "送交學生身分審核"}
+            </button>
+            {!studentIdDetails && studentIdFile && !studentIdBusy && <p className="form-note">找不到有效學號時不能送出，請重新拍攝學生證。</p>}
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function StudentVerificationCard({
   verification,
   onReview,
@@ -4338,6 +4507,12 @@ function StudentVerificationCard({
         </div>
         <h3>{verification.userName}</h3>
         <div className="ocr-flags">
+          {verification.programType && <span>{verification.programType === "four_year" ? "四技" : "二技"}</span>}
+          {verification.admissionYear && <span>民國 {verification.admissionYear} 年</span>}
+          {verification.departmentCode && <span>系所 {verification.departmentCode}</span>}
+          {verification.classCode && <span>{verification.classCode} 班</span>}
+        </div>
+        <div className="ocr-flags">
           {flagLabels.map((label) => <span key={label}>{label}</span>)}
         </div>
         <textarea className="ocr-text" readOnly value={verification.ocrText || "OCR 未讀到可用文字，請直接人工檢查圖片。"} aria-label="學生證 OCR 文字" />
@@ -4354,31 +4529,19 @@ function ProfileModal({
   profile,
   onClose,
   onSubmit,
-  onSubmitStudentVerification,
   onDeleteAccount,
 }: {
   profile: Profile;
   onClose: () => void;
   onSubmit: (name: string, department: string) => Promise<string | null>;
-  onSubmitStudentVerification: (file: File, ocrText: string, qualityFlags: StudentVerificationFlags) => Promise<string | null>;
   onDeleteAccount: () => Promise<string | null>;
 }) {
   const [name, setName] = useState(profile.name);
   const [department, setDepartment] = useState(profile.department);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [studentIdFile, setStudentIdFile] = useState<File | null>(null);
-  const [studentIdOcrText, setStudentIdOcrText] = useState("");
-  const [studentIdFlags, setStudentIdFlags] = useState<StudentVerificationFlags | null>(null);
-  const [studentIdPreview, setStudentIdPreview] = useState("");
-  const [studentIdBusy, setStudentIdBusy] = useState(false);
-  const [studentIdConsent, setStudentIdConsent] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const actionDialog = useActionDialog();
-
-  useEffect(() => () => {
-    if (studentIdPreview.startsWith("blob:")) URL.revokeObjectURL(studentIdPreview);
-  }, [studentIdPreview]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4387,61 +4550,6 @@ function ProfileModal({
     const message = await onSubmit(name, department);
     if (message) setError(message);
     setSaving(false);
-  }
-
-  async function selectStudentIdImage(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    setStudentIdFile(file);
-    setStudentIdOcrText("");
-    setStudentIdFlags(null);
-    if (!file) {
-      setStudentIdPreview("");
-      return;
-    }
-    setStudentIdPreview(URL.createObjectURL(file));
-    setStudentIdBusy(true);
-    setError("");
-    try {
-      const { imageQualityFlags, recognizeImageText } = await import("@/lib/marketplace/free-ocr");
-      const ocrText = await recognizeImageText(file);
-      const flags = await imageQualityFlags(file, ocrText);
-      setStudentIdOcrText(ocrText);
-      setStudentIdFlags(flags);
-    } catch (ocrError) {
-      const { imageQualityFlags } = await import("@/lib/marketplace/free-ocr");
-      const flags = await imageQualityFlags(file, "");
-      setStudentIdFlags(flags);
-      setError(ocrError instanceof Error ? ocrError.message : "學生證 OCR 失敗，仍可送交人工審核");
-    } finally {
-      setStudentIdBusy(false);
-    }
-  }
-
-  async function submitStudentId() {
-    if (!studentIdFile) {
-      setError("請先選擇學生證圖片");
-      return;
-    }
-    if (!studentIdConsent) {
-      setError("請先同意學生證資料處理與保存政策");
-      return;
-    }
-    setStudentIdBusy(true);
-    setError("");
-    const fallbackFlags: StudentVerificationFlags = studentIdFlags
-      ? studentIdFlags
-      : await import("@/lib/marketplace/free-ocr")
-        .then(({ imageQualityFlags }) => imageQualityFlags(studentIdFile, studentIdOcrText));
-    const message = await onSubmitStudentVerification(studentIdFile, studentIdOcrText, fallbackFlags);
-    if (message) setError(message);
-    else {
-      setStudentIdFile(null);
-      setStudentIdOcrText("");
-      setStudentIdFlags(null);
-      setStudentIdPreview("");
-      setStudentIdConsent(false);
-    }
-    setStudentIdBusy(false);
   }
 
   async function requestAccountDeletion() {
@@ -4493,40 +4601,6 @@ function ProfileModal({
           {saving ? "儲存中..." : "儲存個人資料"}
         </button>
       </form>
-      <div className="student-verification-box">
-        <div>
-          <b>學生證人工審核</b>
-          <span>免費 OCR 只會幫管理員標記線索，最後仍由人工通過或拒絕。</span>
-        </div>
-        <label className="student-id-upload">
-          <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="選擇學生證圖片" onChange={(event) => void selectStudentIdImage(event)} />
-          <ImagePlus size={20} />
-          <span>{studentIdFile ? studentIdFile.name : "選擇學生證圖片"}</span>
-        </label>
-        {studentIdPreview && (
-          <div className="student-id-preview">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={studentIdPreview} alt="學生證預覽" />
-          </div>
-        )}
-        {studentIdFlags && (
-          <div className="ocr-flags">
-            {studentVerificationFlagLabels(studentIdFlags).map((label) => <span key={label}>{label}</span>)}
-          </div>
-        )}
-        {studentIdOcrText && <textarea className="ocr-text" readOnly value={studentIdOcrText} aria-label="學生證 OCR 文字" />}
-        <label className="student-id-consent">
-          <input
-            type="checkbox"
-            checked={studentIdConsent}
-            onChange={(event) => setStudentIdConsent(event.target.checked)}
-          />
-          <span>我同意學生證圖片僅供人工資格審核；審核完成後立即刪除敏感圖片與 OCR 文字，審核紀錄最多保留 30 天。</span>
-        </label>
-        <button className="secondary-action wide" type="button" disabled={studentIdBusy || !studentIdFile || !studentIdConsent} onClick={() => void submitStudentId()}>
-          {studentIdBusy ? "處理中..." : "送交學生證審核"}
-        </button>
-      </div>
       <div className="account-deletion-box">
         <div>
           <b>刪除帳號與個人資料</b>

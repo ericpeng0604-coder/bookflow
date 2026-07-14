@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260715-market-switch-green",
-  "taskTitle": "deploy market switch green color update",
-  "baseCommit": "e1374ec335c744bb3b1ddf1b3b51c5380c2b2d89",
-  "updatedAt": "2026-07-15T12:05:00.000Z",
+  "taskId": "20260715-student-verification",
+  "taskTitle": "deploy student seller verification",
+  "baseCommit": "5289f6634542742111cd7bbb7f3fad482e5a276d",
+  "updatedAt": "2026-07-15T15:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260715-market-switch-green-release.md"
+  "historyFile": ".ai/history/20260715-student-verification-release.md"
 }

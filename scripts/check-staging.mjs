@@ -33,6 +33,7 @@ if (!auth.ok) throw new Error(`Staging Auth API returned HTTP ${auth.status}.`);
 const rpcProbes = [
   { name: "is_verified_admin", body: {} },
   { name: "list_books_page", body: {} },
+  { name: "get_public_student_verification_status", body: { target_user_ids: [] } },
   {
     name: "hide_closed_conversation",
     body: { target_conversation_id: "00000000-0000-0000-0000-000000000000" },
@@ -109,6 +110,7 @@ for (const table of [
   "risk_profiles",
   "risk_policy_settings",
   "risk_audit_logs",
+  "student_verifications",
 ]) {
   const serviceResponse = await request(`/rest/v1/${table}?select=*&limit=0`, serviceKey);
   if (!serviceResponse.ok) {

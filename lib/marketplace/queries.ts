@@ -10,6 +10,7 @@ import {
   mapReport,
   mapRequest,
   mapStudentVerification,
+  mapStudentVerificationSummary,
   mapTradeContact,
   mapConversation,
   mapFeedback,
@@ -17,12 +18,13 @@ import {
   mapRiskProfile,
   mapTrustBadge,
 } from "@/lib/marketplace/mappers";
-import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskPolicy, RiskProfile, SellerLifecycle, StudentVerification, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
+import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskPolicy, RiskProfile, SellerLifecycle, StudentVerification, StudentVerificationSummary, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 
 export type { MarketplaceFilters } from "@/lib/marketplace/filters";
 export type MarketplaceCursor = {
+  sellerVerified: boolean;
   createdAt: string;
   id: string;
 } | null;
@@ -36,6 +38,7 @@ export type MarketplacePageResult = {
 function marketplaceRpcParams(filters: MarketplaceFilters, limit: number, cursor: MarketplaceCursor) {
   return {
     p_limit: limit + 1,
+    p_cursor_verified: cursor?.sellerVerified ?? null,
     p_cursor_created: cursor?.createdAt ?? null,
     p_cursor_id: cursor?.id ?? null,
     p_listing_type: filters.listingType,
@@ -66,8 +69,28 @@ export async function fetchMarketplacePage(
   return {
     books,
     hasMore,
-    nextCursor: lastBook ? { createdAt: lastBook.createdAt, id: lastBook.id } : null,
+    nextCursor: lastBook
+      ? { sellerVerified: lastBook.sellerVerified, createdAt: lastBook.createdAt, id: lastBook.id }
+      : null,
   };
+}
+
+async function addSellerVerificationFlags(client: SupabaseClient, books: Book[]) {
+  if (books.length === 0) return books;
+  const sellerIds = [...new Set(books.map((book) => book.sellerId))];
+  const { data, error } = await client.rpc("get_public_student_verification_status", {
+    target_user_ids: sellerIds,
+  });
+  if (error) {
+    if (["PGRST202", "42883"].includes(error.code || "")) return books;
+    throw error;
+  }
+  const verifiedIds = new Set(
+    (data ?? [])
+      .filter((row: Record<string, unknown>) => Boolean(row.seller_verified))
+      .map((row: Record<string, unknown>) => String(row.user_id)),
+  );
+  return books.map((book) => ({ ...book, sellerVerified: verifiedIds.has(book.sellerId) }));
 }
 
 export async function fetchImageSearchCandidates(
@@ -95,20 +118,23 @@ export async function fetchImageSearchCandidates(
     }
   }
 
-  return rankImageSearchResults([...booksById.values()], plan).slice(0, MARKETPLACE_PAGE_SIZE);
+  return rankImageSearchResults([...booksById.values()], plan)
+    .sort((left, right) => Number(right.book.sellerVerified) - Number(left.book.sellerVerified))
+    .slice(0, MARKETPLACE_PAGE_SIZE);
 }
 
 export async function fetchBookById(client: SupabaseClient, bookId: string) {
   const { data, error } = await client.from("books").select("*").eq("id", bookId).maybeSingle();
   if (error) throw error;
-  return data ? mapBook(data) : null;
+  if (!data) return null;
+  return (await addSellerVerificationFlags(client, [mapBook(data)]))[0] ?? null;
 }
 
 export async function fetchBooksByIds(client: SupabaseClient, bookIds: string[]) {
   if (bookIds.length === 0) return [] as Book[];
   const { data, error } = await client.from("books").select("*").in("id", bookIds);
   if (error) throw error;
-  return (data ?? []).map((row) => mapBook(row));
+  return addSellerVerificationFlags(client, (data ?? []).map((row) => mapBook(row)));
 }
 
 export async function fetchProfilesByIds(client: SupabaseClient, profileIds: string[]) {
@@ -121,7 +147,10 @@ export async function fetchProfilesByIds(client: SupabaseClient, profileIds: str
 export async function fetchMyBooks(client: SupabaseClient) {
   const { data, error } = await client.rpc("list_my_books");
   if (error) throw error;
-  const books: Book[] = (data ?? []).map((row: Record<string, unknown>) => mapBook(row));
+  const books: Book[] = await addSellerVerificationFlags(
+    client,
+    (data ?? []).map((row: Record<string, unknown>) => mapBook(row)),
+  );
   if (books.length === 0) return books;
 
   const { data: preferences, error: preferenceError } = await client
@@ -346,6 +375,21 @@ export async function fetchStudentVerificationsForReview(client: SupabaseClient)
   return (data ?? []).map((row: Record<string, unknown>) => mapStudentVerification(row));
 }
 
+export async function fetchMyStudentVerification(client: SupabaseClient): Promise<StudentVerificationSummary | null> {
+  const { data: authData, error: authError } = await client.auth.getUser();
+  if (authError) throw authError;
+  if (!authData.user) return null;
+  const { data, error } = await client
+    .from("student_verifications")
+    .select("id,status,program_type,admission_year,department_code,class_code,review_note,reviewed_at,created_at")
+    .eq("user_id", authData.user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapStudentVerificationSummary(data) : null;
+}
+
 export async function fetchTradeContactsBatch(client: SupabaseClient, requestIds: string[]) {
   if (requestIds.length === 0) return {} as Record<string, TradeContact>;
 
@@ -374,12 +418,16 @@ export type WorkspaceTabData = {
   conversations?: Conversation[];
   favoriteIds?: string[];
   trustBadges?: TrustBadge[];
+  studentVerification?: StudentVerificationSummary | null;
 };
 
 export async function loadWorkspaceTabData(
   client: SupabaseClient,
-  tab: "listings" | "chats" | "requests" | "received" | "favorites",
+  tab: "listings" | "chats" | "requests" | "received" | "favorites" | "studentVerification",
 ): Promise<WorkspaceTabData> {
+  if (tab === "studentVerification") {
+    return { studentVerification: await fetchMyStudentVerification(client) };
+  }
   if (tab === "listings") {
     const [myBooks, sellerLifecycle] = await Promise.all([
       fetchMyBooks(client),

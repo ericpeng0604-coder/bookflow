@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Conversation, ListingType, Profile } from "@/lib/types";
 
 export type MarketplaceView = "home" | "book" | "dashboard" | "admin";
-export type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites";
+export type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites" | "studentVerification";
 
-const dashboardTabs = new Set<DashboardTab>(["listings", "chats", "requests", "received", "favorites"]);
+const dashboardTabs = new Set<DashboardTab>(["listings", "chats", "requests", "received", "favorites", "studentVerification"]);
 
 type RouteHandlers = {
   onListingTypeChange: (listingType: ListingType) => void;
