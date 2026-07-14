@@ -110,6 +110,7 @@ assert.match(app, /setListingType\("book"\)/, "image search must target the book
 assert.match(app, /setImageSearchActive\(true\)/, "image search must enter a dedicated ranked-result mode");
 assert.match(app, /setImageSearchActive\(false\)/, "manual search and filter reset must be able to exit image mode");
 assert.match(app, /updateMarketplaceQuery\(event\.target\.value\)/, "manual query edits must leave image-search sorting mode");
+assert.doesNotMatch(app, /setQuery\(finalPlan\.displayQuery\)/, "image search must not write OCR text into the normal search box");
 assert.match(app, /正在比對站內刊登/, "UI must disclose that photo search is site-local");
 assert.match(app, /站內找到 \{imageSearchResultCount\} 筆相近結果/, "UI must show the image-search result count");
 assert.match(app, /className="visually-hidden"[\s\S]*accept="image\/jpeg,image\/png,image\/webp"/, "image search file input must use the shared hidden utility");

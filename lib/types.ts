@@ -103,6 +103,8 @@ export type PurchaseRequest = {
   bookId: string;
   buyerId: string;
   message: string;
+  preferredMeetupLocation: string;
+  preferredMeetupTime: string;
   status: RequestStatus;
   titleSnapshot: string;
   priceSnapshot: number;

@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  ArrowRight,
   Bell,
   Ban,
   BookOpen,
@@ -12,6 +13,7 @@ import {
   Ellipsis,
   GraduationCap,
   Heart,
+  HelpCircle,
   EyeOff,
   Flag,
   ImagePlus,
@@ -69,6 +71,7 @@ import {
   uploadChatImages,
 } from "@/lib/marketplace/trade-chat";
 import {
+  fetchActiveRequestForBook,
   fetchBookById,
   fetchFavoriteIds,
   fetchImageSearchCandidates,
@@ -115,9 +118,11 @@ import type {
 
 const STORAGE_KEY = "bookflow-market-v1";
 const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
+const LAST_CHAT_KEY = "bookflow-last-chat-v1";
 const IMAGE_SEARCH_MAX_FILE_BYTES = 5 * 1024 * 1024;
 const IMAGE_SEARCH_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
+const lastChatStorageKey = (userId: string) => `${LAST_CHAT_KEY}:${userId}`;
 const listingDepartmentStorageKey = (userId: string) => `bookflow-last-book-department-v1:${userId}`;
 const listingDraftStorageKey = (
   userId: string,
@@ -126,7 +131,7 @@ const listingDraftStorageKey = (
 ) => `bookflow-listing-draft-v1:${userId}:${bookId || `new-${listingType}`}`;
 
 type View = "home" | "book" | "dashboard" | "admin";
-type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites";
+type DashboardTab = "listings" | "chats" | "requests" | "received" | "tracking" | "favorites";
 type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | "feedback" | null;
 
 type Store = {
@@ -198,6 +203,8 @@ const CHAT_PHRASES = [
 ];
 
 const HIDDEN_REQUEST_MESSAGES = new Set(["通用語句提供選擇"]);
+const REQUEST_COORDINATION_MAX_LENGTH = 120;
+const REQUEST_LOOKUP_TIMEOUT_MS = 8000;
 
 const statusLabels: Record<BookStatus, string> = {
   available: "販售中",
@@ -215,6 +222,46 @@ const requestLabels: Record<RequestStatus, string> = {
   cancelled: "已取消",
   expired: "已失效",
 };
+
+function sellerRequestNextStep(request: PurchaseRequest) {
+  if (request.status === "reserved") {
+    return hasRequestCoordination(request)
+      ? "你已選定買家，可先核對對方填寫的面交時間與地點，再用聊聊確認細節。"
+      : "你已選定買家，但對方還沒填好面交時間或地點；可先用聊聊確認，再安排面交。";
+  }
+  if (request.status === "awaiting_confirmation") return "你已確認面交，正在等待買家確認收到。";
+  if (request.status === "completed") return "這筆交易已完成，紀錄與聊天室仍可用來回查。";
+  if (request.status === "pending" || request.status === "waitlisted") return "尚未選定買家，確認前可先用聊聊溝通。";
+  return "";
+}
+
+function orderTrackingNote(request: PurchaseRequest, role: "buyer" | "seller") {
+  if (request.status === "pending" || request.status === "waitlisted") {
+    return role === "seller" ? "等待你選定是否保留給這位買家。" : "等待賣家確認是否保留給你。";
+  }
+  if (request.status === "reserved") {
+    return role === "seller" ? "已選定買家，接著安排面交並在完成後回來確認。" : "賣家已保留給你，請安排面交。";
+  }
+  if (request.status === "awaiting_confirmation") {
+    return role === "seller" ? "你已確認面交，等待買家按下確認收到。" : "賣家已確認面交，請在收到後完成確認。";
+  }
+  if (request.status === "completed") return "交易已完成，訂單與聊天室仍保留供回查。";
+  if (request.status === "cancelled") return "這筆交易已取消。";
+  if (request.status === "expired") return "這筆交易已失效。";
+  if (request.status === "rejected") return role === "seller" ? "你已婉拒這筆請求。" : "這筆請求未被選定。";
+  return "";
+}
+
+function hasRequestCoordination(request: Pick<PurchaseRequest, "preferredMeetupLocation" | "preferredMeetupTime">) {
+  return Boolean(request.preferredMeetupLocation.trim() || request.preferredMeetupTime.trim());
+}
+
+function requestCoordinationLines(request: Pick<PurchaseRequest, "preferredMeetupLocation" | "preferredMeetupTime">) {
+  return [
+    request.preferredMeetupLocation.trim() ? `希望地點：${request.preferredMeetupLocation.trim()}` : "",
+    request.preferredMeetupTime.trim() ? `希望時間：${request.preferredMeetupTime.trim()}` : "",
+  ].filter(Boolean);
+}
 
 const reviewLabels: Record<ReviewStatus, string> = {
   pending: "待審核",
@@ -441,6 +488,12 @@ export function MarketplaceApp() {
   const [pushState, setPushState] = useState<BrowserPushState>("disabled");
   const [pushSaving, setPushSaving] = useState(false);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [showCourseSearchGuide, setShowCourseSearchGuide] = useState(false);
+  const [requestLookup, setRequestLookup] = useState<{
+    key: string | null;
+    status: "idle" | "loading" | "ready" | "error";
+  }>({ key: null, status: "idle" });
+  const [requestLookupRetry, setRequestLookupRetry] = useState(0);
   const bookSavingRef = useRef(false);
   const adminOtpRequestedRef = useRef<string | null>(null);
   const imageSearchInputRef = useRef<HTMLInputElement>(null);
@@ -521,14 +574,18 @@ export function MarketplaceApp() {
 
   const loadMarketplaceCount = useCallback(async () => {
     if (imageSearchActive) return;
-    const params = new URLSearchParams();
-    params.set("listingType", marketplaceFilters.listingType);
-    if (marketplaceFilters.itemCategory) params.set("itemCategory", marketplaceFilters.itemCategory);
-    if (marketplaceFilters.department) params.set("department", marketplaceFilters.department);
-    if (marketplaceFilters.maxPrice !== null) params.set("maxPrice", String(marketplaceFilters.maxPrice));
-    if (marketplaceFilters.query) params.set("query", marketplaceFilters.query);
     try {
-      const response = await fetch(`/api/marketplace/count?${params.toString()}`);
+      const response = await fetch("/api/marketplace/count", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingType: marketplaceFilters.listingType,
+          itemCategory: marketplaceFilters.itemCategory,
+          department: marketplaceFilters.department,
+          maxPrice: marketplaceFilters.maxPrice,
+          query: marketplaceFilters.query,
+        }),
+      });
       if (!response.ok) throw new Error("count unavailable");
       const result = await response.json() as { count: number | null };
       if (result.count !== null) setMarketplaceCount(result.count);
@@ -579,7 +636,7 @@ export function MarketplaceApp() {
   }, []);
 
   const loadDashboardWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
-    const tabs = tab === "requests" || tab === "received" || tab === "chats"
+    const tabs = tab === "requests" || tab === "received" || tab === "tracking" || tab === "chats"
       ? [tab]
       : [tab, "requests" as const];
     await Promise.all(tabs.map((targetTab) => loadUserWorkspace(user, targetTab)));
@@ -864,7 +921,7 @@ export function MarketplaceApp() {
     }
     if (targetView === "dashboard" && store.currentUser) {
       setView("dashboard");
-      if (["listings", "chats", "requests", "received", "favorites"].includes(targetTab || "")) {
+      if (["listings", "chats", "requests", "received", "tracking", "favorites"].includes(targetTab || "")) {
         setDashboardTab(targetTab as DashboardTab);
       }
       if (targetConversation) {
@@ -897,6 +954,13 @@ export function MarketplaceApp() {
         setSelectedId(targetBook);
         setDetailBook(null);
         setView("book");
+      } else if (params.get("view") === "dashboard" && store.currentUser) {
+        const targetTab = params.get("tab");
+        setView("dashboard");
+        if (["listings", "chats", "requests", "received", "tracking", "favorites"].includes(targetTab || "")) {
+          setDashboardTab(targetTab as DashboardTab);
+        }
+        setExpandedConversationId(params.get("conversation"));
       } else if (params.get("view") !== "dashboard") {
         setSelectedId(null);
         setDetailBook(null);
@@ -905,7 +969,27 @@ export function MarketplaceApp() {
     };
     window.addEventListener("popstate", restorePublicNavigation);
     return () => window.removeEventListener("popstate", restorePublicNavigation);
-  }, [ready]);
+  }, [ready, store.currentUser]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const params = new URLSearchParams();
+    params.set("market", listingType);
+    if (view === "book" && selectedId) {
+      params.set("view", "book");
+      params.set("book", selectedId);
+    } else if (view === "dashboard" && store.currentUser) {
+      params.set("view", "dashboard");
+      params.set("tab", dashboardTab);
+      if (dashboardTab === "chats" && expandedConversationId) {
+        params.set("conversation", expandedConversationId);
+      }
+    }
+    const nextUrl = `/?${params.toString()}`;
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+      window.history.replaceState({}, "", nextUrl);
+    }
+  }, [dashboardTab, expandedConversationId, listingType, ready, selectedId, store.currentUser, view]);
 
   useEffect(() => {
     if (!supabase || view !== "admin" || !store.currentUser) return;
@@ -927,6 +1011,13 @@ export function MarketplaceApp() {
     document.addEventListener("visibilitychange", refreshDashboardWhenVisible);
     return () => document.removeEventListener("visibilitychange", refreshDashboardWhenVisible);
   }, [dashboardTab, loadDashboardWorkspace, store.currentUser, view]);
+
+  useEffect(() => {
+    if (view !== "dashboard" || dashboardTab !== "chats" || expandedConversationId || !store.currentUser) return;
+    const lastChatId = window.localStorage.getItem(lastChatStorageKey(store.currentUser.id));
+    if (!lastChatId || !conversations.some((conversation) => conversation.id === lastChatId)) return;
+    setExpandedConversationId(lastChatId);
+  }, [conversations, dashboardTab, expandedConversationId, store.currentUser, view]);
 
   useEffect(() => {
     if (!supabase || !selectedId || view !== "book") return;
@@ -1092,9 +1183,19 @@ export function MarketplaceApp() {
     ? store.requests.find((request) =>
       request.bookId === selectedBook.id
       && request.buyerId === currentUser.id
-      && ["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status)
+      && ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status)
     )
     : null;
+  const currentUserId = currentUser?.id ?? null;
+  const selectedBookId = selectedBook?.id ?? null;
+  const selectedBookSellerId = selectedBook?.sellerId ?? null;
+  const activeRequestId = selectedBookActiveRequest?.id ?? null;
+  const requestLookupKey = currentUserId && selectedBookId
+    && selectedBookSellerId !== currentUserId
+    && view === "book"
+    ? `${selectedBookId}:${currentUserId}`
+    : null;
+  const requestLookupStatus = requestLookup.key === requestLookupKey ? requestLookup.status : "idle";
   const profile = (id: string) => store.profiles.find((item) => item.id === id);
 
   useEffect(() => {
@@ -1109,6 +1210,43 @@ export function MarketplaceApp() {
       })
       .catch(() => undefined);
   }, [selectedBook, view, store.profiles]);
+
+  useEffect(() => {
+    if (!supabase || !currentUserId || !selectedBookId || !selectedBookSellerId || view !== "book" || selectedBookSellerId === currentUserId) {
+      setRequestLookup({ key: null, status: "idle" });
+      return;
+    }
+    if (activeRequestId) {
+      setRequestLookup({ key: requestLookupKey, status: "ready" });
+      return;
+    }
+    let active = true;
+    const timeoutId = window.setTimeout(() => {
+      if (active) setRequestLookup({ key: requestLookupKey, status: "error" });
+    }, REQUEST_LOOKUP_TIMEOUT_MS);
+    setRequestLookup({ key: requestLookupKey, status: "loading" });
+    void fetchActiveRequestForBook(supabase, selectedBookId, currentUserId)
+      .then((request) => {
+        if (!active) return;
+        if (request) {
+          setStore((previous) => ({
+            ...previous,
+            requests: [
+              request,
+              ...previous.requests.filter((item) => item.id !== request.id),
+            ],
+          }));
+        }
+        setRequestLookup({ key: requestLookupKey, status: "ready" });
+      })
+      .catch(() => {
+        if (active) setRequestLookup({ key: requestLookupKey, status: "error" });
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeRequestId, currentUserId, requestLookupKey, requestLookupRetry, selectedBookId, selectedBookSellerId, view]);
 
   function openBook(id: string) {
     const target = filteredBooks.find((book) => book.id === id)
@@ -1628,7 +1766,14 @@ export function MarketplaceApp() {
       setToast("你的帳號目前為唯讀模式，不能送出購買意願");
       return;
     }
-    const message = String(new FormData(event.currentTarget).get("message") || "").trim();
+    const formData = new FormData(event.currentTarget);
+    const message = String(formData.get("message") || "").trim();
+    const preferredMeetupLocation = String(formData.get("preferredMeetupLocation") || "")
+      .trim()
+      .slice(0, REQUEST_COORDINATION_MAX_LENGTH);
+    const preferredMeetupTime = String(formData.get("preferredMeetupTime") || "")
+      .trim()
+      .slice(0, REQUEST_COORDINATION_MAX_LENGTH);
     const duplicate = store.requests.find(
       (request) =>
         request.bookId === selectedBook.id &&
@@ -1637,10 +1782,12 @@ export function MarketplaceApp() {
     );
     if (supabase) {
       let existingMessage = duplicate?.message;
+      let existingMeetupLocation = duplicate?.preferredMeetupLocation;
+      let existingMeetupTime = duplicate?.preferredMeetupTime;
       if (!duplicate) {
         const { data: existing, error: existingError } = await supabase
           .from("purchase_requests")
-          .select("id,message,status")
+          .select("id,message,status,preferred_meetup_location,preferred_meetup_time")
           .eq("book_id", selectedBook.id)
           .eq("buyer_id", currentUser.id)
           .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation"])
@@ -1650,8 +1797,14 @@ export function MarketplaceApp() {
           return;
         }
         existingMessage = existing ? String(existing.message || "") : undefined;
+        existingMeetupLocation = existing ? String(existing.preferred_meetup_location || "") : undefined;
+        existingMeetupTime = existing ? String(existing.preferred_meetup_time || "") : undefined;
       }
-      if (existingMessage?.trim() === message) {
+      if (
+        existingMessage?.trim() === message
+        && String(existingMeetupLocation || "").trim() === preferredMeetupLocation
+        && String(existingMeetupTime || "").trim() === preferredMeetupTime
+      ) {
         setModal(null);
         setEditingRequest(null);
         setToast("已送出購買意願");
@@ -1660,6 +1813,8 @@ export function MarketplaceApp() {
       const { error } = await supabase.rpc("create_purchase_request", {
         target_book_id: selectedBook.id,
         request_message: message,
+        preferred_meetup_location: preferredMeetupLocation,
+        preferred_meetup_time: preferredMeetupTime,
       });
       if (error) {
         setToast(error.code === "23505" ? "你已送出過購買意願" : `送出失敗：${error.message}`);
@@ -1673,7 +1828,11 @@ export function MarketplaceApp() {
       return;
     }
     if (duplicate) {
-      if (duplicate.message.trim() === message) {
+      if (
+        duplicate.message.trim() === message
+        && duplicate.preferredMeetupLocation.trim() === preferredMeetupLocation
+        && duplicate.preferredMeetupTime.trim() === preferredMeetupTime
+      ) {
         setModal(null);
         setEditingRequest(null);
         setToast("已送出購買意願");
@@ -1683,7 +1842,13 @@ export function MarketplaceApp() {
         ...previous,
         requests: previous.requests.map((request) =>
           request.id === duplicate.id
-            ? { ...request, message, updatedAt: new Date().toISOString() }
+            ? {
+              ...request,
+              message,
+              preferredMeetupLocation,
+              preferredMeetupTime,
+              updatedAt: new Date().toISOString(),
+            }
             : request,
         ),
       }));
@@ -1701,6 +1866,8 @@ export function MarketplaceApp() {
           bookId: selectedBook.id,
           buyerId: currentUser.id,
           message,
+          preferredMeetupLocation,
+          preferredMeetupTime,
           status: "pending",
           titleSnapshot: selectedBook.title,
           priceSnapshot: selectedBook.price,
@@ -1798,13 +1965,24 @@ export function MarketplaceApp() {
       setToast("你的帳號目前為唯讀模式，不能操作交易");
       return;
     }
+    const targetRequest = store.requests.find((request) => request.id === requestId);
+    const targetBook = targetRequest
+      ? [...myBooks, ...requestBooks, ...marketplaceBooks, ...store.books].find((book) => book.id === targetRequest.bookId)
+      : null;
+    const sellerCancellingReservation = Boolean(
+      targetRequest
+      && targetBook?.sellerId === currentUser.id
+      && ["reserved", "awaiting_confirmation"].includes(targetRequest.status),
+    );
     const reason = await actionDialog.ask({
-      title: "取消購買意願",
-      message: "取消後這筆交易會結束，聊天室與交易紀錄仍會依平台政策保留供雙方查閱。",
+      title: sellerCancellingReservation ? "取消保留" : "取消購買意願",
+      message: sellerCancellingReservation
+        ? "取消保留後課本會恢復可購買狀態，候補買家會回到等待處理；聊天室與交易紀錄仍會保留供雙方查閱。"
+        : "取消後這筆交易會結束，聊天室與交易紀錄仍會依平台政策保留供雙方查閱。",
       inputLabel: "取消原因",
       inputPlaceholder: "請至少輸入 2 個字",
       minLength: 2,
-      confirmLabel: "確認取消",
+      confirmLabel: sellerCancellingReservation ? "確認取消保留" : "確認取消",
       danger: true,
     });
     if (!reason?.trim()) return;
@@ -1819,7 +1997,7 @@ export function MarketplaceApp() {
       }
       await reloadAfterUserMutation();
       void dispatchNotificationDeliveries();
-      setToast("購買意願已取消");
+      setToast(sellerCancellingReservation ? "保留已取消" : "購買意願已取消");
       return;
     }
     setStore((previous) => ({
@@ -1858,8 +2036,25 @@ export function MarketplaceApp() {
     void openConversation(String(data));
   }
 
-  async function openConversation(conversationId: string) {
+  function restorePageScroll(position: { x: number; y: number }) {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: position.y, left: position.x, behavior: "auto" });
+      window.requestAnimationFrame(() => window.scrollTo({ top: position.y, left: position.x, behavior: "auto" }));
+      window.setTimeout(() => window.scrollTo({ top: position.y, left: position.x, behavior: "auto" }), 120);
+    });
+  }
+
+  async function openConversation(conversationId: string, options: { preservePageScroll?: boolean } = {}) {
+    const preserveScroll = typeof window !== "undefined" && options.preservePageScroll
+      ? { x: window.scrollX, y: window.scrollY }
+      : null;
     setExpandedConversationId(conversationId);
+    if (preserveScroll) {
+      restorePageScroll(preserveScroll);
+    }
+    if (currentUser) {
+      window.localStorage.setItem(lastChatStorageKey(currentUser.id), conversationId);
+    }
     setConversations((previous) => previous.map((conversation) =>
       conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation,
     ));
@@ -2358,6 +2553,15 @@ export function MarketplaceApp() {
       )
     : [];
   const activeReceivedRequestCount = receivedRequests.filter((request) => request.status !== "expired").length;
+  const trackedOrders = currentUser
+    ? [
+      ...myRequests.map((request) => ({ request, role: "buyer" as const })),
+      ...receivedRequests.map((request) => ({ request, role: "seller" as const })),
+    ]
+      .filter(({ request }) => request.status !== "rejected")
+      .filter((item, index, items) => items.findIndex((candidate) => candidate.request.id === item.request.id && candidate.role === item.role) === index)
+    : [];
+  const activeTrackedOrderCount = trackedOrders.filter(({ request }) => !["cancelled", "expired"].includes(request.status)).length;
   const isModerator = currentUser?.accountStatus === "active"
     && (currentUser.role === "admin" || currentUser.role === "moderator");
   const pendingReports = reports.filter((report) => report.status === "pending");
@@ -2386,6 +2590,14 @@ export function MarketplaceApp() {
     setImageSearchResultCount(null);
     setImageSearchMessage("");
     setImageSearchProgress(0);
+  }
+
+  function openCourseSearchGuide() {
+    setShowCourseSearchGuide(true);
+    setImageSearchActive(false);
+    setImageSearchResultCount(null);
+    document.getElementById("market")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => document.getElementById("home-filter-query")?.focus(), 350);
   }
 
   function openImageSearchPicker() {
@@ -2511,7 +2723,6 @@ export function MarketplaceApp() {
         setMarketplaceCursor(null);
       }
 
-      setQuery(finalPlan.displayQuery);
       setImageSearchQuery(finalPlan.displayQuery);
       setImageSearchActive(true);
       setImageSearchResultCount(rankedBooks.length);
@@ -2563,7 +2774,7 @@ export function MarketplaceApp() {
           <span><b>虎科書流</b><small>HUST BOOKFLOW</small></span>
         </button>
         <nav>
-          <button type="button" className={view === "home" ? "active" : ""} onClick={() => setView("home")}>找課本</button>
+           <button type="button" className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isSecondhandMode ? "找二手物品" : "找課本"}</button>
           <button type="button" onClick={() => requireActive(() => openListingForm(listingType))}>我要刊登</button>
           <button type="button" onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button type="button" className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>管理</button>}
@@ -2751,8 +2962,10 @@ export function MarketplaceApp() {
             <div className="hero-art hero-reference-art" aria-hidden="true" />
             <div className="hero-copy hero-search-panel">
               <div className="hero-message">
-                <h1 id="home-hero-title">Good Books,<br />Next Chapter.</h1>
-                <p>在虎科找到需要的書，也讓用過的書繼續被需要。</p>
+                <h1 id="home-hero-title">
+                  {isSecondhandMode ? <>Good Finds,<br />Next Chapter.</> : <>Good Books,<br />Next Chapter.</>}
+                </h1>
+                <p>{isSecondhandMode ? "在虎科找到適合你的二手物品，也讓閒置好物繼續被需要。" : "在虎科找到需要的書，也讓用過的書繼續被需要。"}</p>
               </div>
               <form
                 className="hero-search"
@@ -2767,32 +2980,45 @@ export function MarketplaceApp() {
                     id="hero-search-input"
                     value={query}
                     onChange={(event) => updateMarketplaceQuery(event.target.value)}
-                    placeholder="搜尋書名、課程或老師..."
+                    placeholder={isSecondhandMode ? "搜尋物品名稱、類別或描述..." : "搜尋書名、課程或老師..."}
                   />
+                  <button
+                    type="submit"
+                    className="hero-search-arrow"
+                    aria-label={isSecondhandMode ? "依目前輸入開始找二手物品" : "依目前輸入開始找課本"}
+                  >
+                    <ArrowRight size={18} aria-hidden="true" />
+                  </button>
                 </label>
-                <button
-                  type="button"
-                  className="image-search-trigger"
-                  disabled={imageSearchBusy}
-                  aria-busy={imageSearchBusy}
-                  onClick={openImageSearchPicker}
-                >
-                  <ImagePlus size={18} aria-hidden="true" />
-                  {imageSearchBusy ? "辨識中" : "用照片找書"}
-                </button>
-                <button type="submit">開始找書</button>
+                {!isSecondhandMode && (
+                  <button
+                    type="button"
+                    className="image-search-trigger"
+                    disabled={imageSearchBusy}
+                    aria-busy={imageSearchBusy}
+                    onClick={openImageSearchPicker}
+                  >
+                    <ImagePlus size={18} aria-hidden="true" />
+                    {imageSearchBusy ? "辨識中" : "用照片找書"}
+                  </button>
+                )}
+                <button type="submit">{isSecondhandMode ? "開始找二手物品" : "開始找課本"}</button>
               </form>
               <div className="hero-trust hero-assurance" aria-label="平台特色">
                 <span><ShieldCheck size={17} aria-hidden="true" />校園面交更安心</span>
                 <span><MessageCircle size={17} aria-hidden="true" />接受後依賣家設定分享聯絡方式</span>
-                <span><GraduationCap size={17} aria-hidden="true" />依課程快速找到課本</span>
+                {isSecondhandMode ? (
+                  <span><Sparkles size={17} aria-hidden="true" />探索校園二手好物</span>
+                ) : (
+                  <button type="button" onClick={openCourseSearchGuide}><GraduationCap size={17} aria-hidden="true" />依課程快速找到課本</button>
+                )}
               </div>
             </div>
           </section>
 
           <section className="market" id="market" aria-labelledby="home-market-title">
             <div className="section-heading">
-              <div><span className="section-kicker">LATEST LISTINGS</span><h2 id="home-market-title">最近上架的課本</h2></div>
+               <div><span className="section-kicker">LATEST LISTINGS</span><h2 id="home-market-title">最近上架的{isSecondhandMode ? "二手物品" : "課本"}</h2></div>
               <button
                 type="button"
                 className="sell-cta"
@@ -2804,6 +3030,13 @@ export function MarketplaceApp() {
               </button>
             </div>
             <form className="filters" aria-label={isSecondhandMode ? "篩選二手物品" : "篩選課本"} onSubmit={(event) => event.preventDefault()}>
+              {showCourseSearchGuide && !isSecondhandMode && (
+                <div className="course-search-guide" role="status">
+                  <GraduationCap size={17} aria-hidden="true" />
+                  <span>在這裡輸入課堂名稱、老師或書名；也可以先選科系，再縮小課本範圍。</span>
+                  <button type="button" aria-label="關閉課堂搜尋提示" onClick={() => setShowCourseSearchGuide(false)}><X size={14} /></button>
+                </div>
+              )}
               <label className="filter-search" htmlFor="home-filter-query">
                 <span className="visually-hidden">搜尋</span>
                 <Search size={20} aria-hidden="true" />
@@ -2828,7 +3061,7 @@ export function MarketplaceApp() {
                 </button>
               )}
               {listingType === "book" ? (
-                <label htmlFor="home-filter-department">
+                <label className="select-filter" htmlFor="home-filter-department">
                   <span className="visually-hidden">科系</span>
                   <select
                     id="home-filter-department"
@@ -2841,7 +3074,7 @@ export function MarketplaceApp() {
                   <ChevronDown size={16} aria-hidden="true" />
                 </label>
               ) : (
-                <label htmlFor="home-filter-category">
+                <label className="select-filter" htmlFor="home-filter-category">
                   <span className="visually-hidden">分類</span>
                   <select
                     id="home-filter-category"
@@ -2854,7 +3087,7 @@ export function MarketplaceApp() {
                   <ChevronDown size={16} aria-hidden="true" />
                 </label>
               )}
-              <label className="price-filter" htmlFor="home-filter-price">
+              <label className="price-filter select-filter" htmlFor="home-filter-price">
                 <span className="visually-hidden">最高價格</span>
                 <select
                   id="home-filter-price"
@@ -3007,6 +3240,18 @@ export function MarketplaceApp() {
                 </div>
               )}
               <strong className="detail-price">{money(selectedBook.price)}</strong>
+              {currentUser?.id !== selectedBook.sellerId && (
+                <button
+                  type="button"
+                  className={`detail-favorite-button ${favoriteIds.has(selectedBook.id) ? "active" : ""}`}
+                  aria-pressed={favoriteIds.has(selectedBook.id)}
+                  aria-label={favoriteIds.has(selectedBook.id) ? `取消收藏《${selectedBook.title}》` : `收藏《${selectedBook.title}》`}
+                  onClick={(event) => toggleFavorite(selectedBook.id, event)}
+                >
+                  <Heart size={18} fill={favoriteIds.has(selectedBook.id) ? "currentColor" : "none"} aria-hidden="true" />
+                  {favoriteIds.has(selectedBook.id) ? "已收藏" : "收藏"}
+                </button>
+              )}
               <div className="detail-facts">
                 <div><small>{selectedBook.listingType === "secondhand" ? "物況" : "書況"}</small><b>{selectedBook.condition}</b></div>
                 {selectedBook.listingType === "book" && visibleBookField(selectedBook.teacher) && <div><small>授課老師</small><b>{visibleBookField(selectedBook.teacher)}</b></div>}
@@ -3034,13 +3279,26 @@ export function MarketplaceApp() {
                     </button>
                     <button type="button"
                       className="primary wide"
-                      disabled={Boolean(selectedBookActiveRequest) || selectedBook.status !== "available" || currentUser?.accountStatus === "suspended"}
+                      disabled={Boolean(selectedBookActiveRequest) || requestLookupStatus === "loading" || selectedBook.status !== "available" || currentUser?.accountStatus === "suspended"}
                       onClick={() => {
                         if (selectedBookActiveRequest) return;
+                        if (requestLookupStatus === "loading") return;
+                        if (requestLookupStatus === "error") {
+                          setRequestLookupRetry((attempt) => attempt + 1);
+                          return;
+                        }
                         requireActive(() => setModal("request"));
                       }}
                     >
-                      <Check size={18} />{selectedBookActiveRequest ? requestLabels[selectedBookActiveRequest.status] : selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
+                      <Check size={18} />{selectedBookActiveRequest
+                        ? `已下訂：${requestLabels[selectedBookActiveRequest.status]}`
+                        : requestLookupStatus === "loading"
+                          ? "確認中..."
+                          : requestLookupStatus === "error"
+                            ? "重新確認"
+                            : selectedBook.status === "available"
+                              ? "確認下訂"
+                              : "已保留，暫停新訂單"}
                     </button>
                   </div>
                 )}
@@ -3141,6 +3399,7 @@ export function MarketplaceApp() {
             </button>
             <button type="button" className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 {activeMyRequestCount > 0 && <span>{activeMyRequestCount}</span>}</button>
             <button type="button" className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
+            <button type="button" className={dashboardTab === "tracking" ? "active" : ""} onClick={() => setDashboardTab("tracking")}>交易追蹤 {activeTrackedOrderCount > 0 && <span>{activeTrackedOrderCount}</span>}</button>
             <button type="button" className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
           </div>
 
@@ -3230,7 +3489,7 @@ export function MarketplaceApp() {
                       type="button"
                       className={`conversation-item ${expandedConversationId === conversation.id ? "active" : ""}`}
                       key={conversation.id}
-                      onClick={() => void openConversation(conversation.id)}
+                      onClick={() => void openConversation(conversation.id, { preservePageScroll: true })}
                     >
                       <span className="avatar">{profile(otherId)?.name.slice(0, 1) || "聊"}</span>
                       <span>
@@ -3267,6 +3526,13 @@ export function MarketplaceApp() {
                         onBack={() => setExpandedConversationId(null)}
                         onHide={() => void hideClosedConversation(expandedConversationId)}
                         onOpenBook={openBook}
+                        onEditRequest={() => {
+                          if (!conversationRequest) return;
+                          setEditingRequest(conversationRequest);
+                          setSelectedId(conversation.bookId);
+                          setDetailBook(null);
+                          setModal("request");
+                        }}
                         onRespondToRequest={respondToRequest}
                       />
                     );
@@ -3299,13 +3565,14 @@ export function MarketplaceApp() {
                         </div>
                       )}
                       {["reserved", "awaiting_confirmation", "completed"].includes(request.status) && !contact && <div className="contact-note">賣家尚未分享額外聯絡方式，請使用聊聊聯絡。</div>}
+                      <RequestCoordinationPanel request={request} viewer="buyer" />
                       <OrderTimeline request={request} />
                     </div>
                     <div className="request-actions">
                       {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
                         <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消訂單</button>
                       )}
-                      {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
+                      {["pending", "waitlisted", "reserved"].includes(request.status) && (
                         <button type="button" onClick={() => {
                           setEditingRequest(request);
                           setSelectedId(request.bookId);
@@ -3343,10 +3610,12 @@ export function MarketplaceApp() {
                       <h3>{buyer?.name} 想買《{book.title}》</h3>
                       {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
                       {["reserved", "awaiting_confirmation"].includes(request.status) && <div className="contact-note">聯絡請使用獨立的「聊聊」頁籤。</div>}
+                      <RequestCoordinationPanel request={request} viewer="seller" />
+                      {sellerRequestNextStep(request) && <p className="order-next-step">{sellerRequestNextStep(request)}</p>}
                       <OrderTimeline request={request} />
                     </div>
                     <div className="request-actions">
-                      {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
+                      {["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status) && (
                         <button type="button" onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />聊聊</button>
                       )}
                       {["pending", "waitlisted"].includes(request.status) && book.status === "available" && (
@@ -3376,6 +3645,42 @@ export function MarketplaceApp() {
                 );
               })}
               {receivedRequests.length === 0 && <EmptyDashboard text="目前還沒有人送出購買意願" />}
+            </div>
+          )}
+
+          {dashboardTab === "tracking" && (
+            <div className="dashboard-list">
+              {trackedOrders.map(({ request, role }) => {
+                const book = (supabase ? [...myBooks, ...requestBooks, ...marketplaceBooks] : store.books)
+                  .find((item) => item.id === request.bookId);
+                const otherUser = profile(role === "seller" ? request.buyerId : book?.sellerId || "");
+                if (!book) return null;
+                return (
+                  <div className="request-row tracking-row" key={`${role}-${request.id}`}>
+                    <div className="request-icon"><CheckCheck /></div>
+                    <div className="request-main">
+                      <span className={`request-status ${request.status}`}>{role === "seller" ? "賣家" : "買家"} · {requestLabels[request.status]}</span>
+                      <h3>{role === "seller" ? `${otherUser?.name || "買家"} 想買《${book.title}》` : `你想買《${book.title}》`}</h3>
+                      <p className="order-next-step">{orderTrackingNote(request, role)}</p>
+                      <RequestCoordinationPanel request={request} viewer={role} />
+                      <OrderTimeline request={request} />
+                    </div>
+                    <div className="request-actions">
+                      {["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status) && (
+                        <button type="button" onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />聊聊</button>
+                      )}
+                      {role === "seller" && request.status === "reserved" && (
+                        <button type="button" className="accept" onClick={() => void sellerConfirmHandoff(request.id)}><CheckCheck size={16} />已完成面交</button>
+                      )}
+                      {role === "buyer" && request.status === "awaiting_confirmation" && (
+                        <button type="button" className="accept" onClick={() => void buyerConfirmTrade(request.id)}><CheckCheck size={16} />確認收到</button>
+                      )}
+                    </div>
+                    <small>{timeAgo(request.updatedAt || request.createdAt)}</small>
+                  </div>
+                );
+              })}
+              {trackedOrders.length === 0 && <EmptyDashboard text="目前沒有可追蹤的交易" />}
             </div>
           )}
 
@@ -3635,6 +3940,21 @@ export function MarketplaceApp() {
           book={selectedBook}
           request={editingRequest}
           onClose={() => { setModal(null); setEditingRequest(null); }}
+          onOpenChat={() => {
+            setModal(null);
+            const activeRequest = editingRequest
+              || store.requests.find((request) =>
+                request.bookId === selectedBook.id
+                && request.buyerId === currentUser?.id
+                && ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status),
+              )
+              || null;
+            if (activeRequest) {
+              void openOrderConversation(activeRequest.id);
+              return;
+            }
+            void startConversation(selectedBook.id);
+          }}
           onSubmit={sendRequest}
         />
       )}
@@ -4605,6 +4925,7 @@ function BookFormModal({
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrMessage, setOcrMessage] = useState("");
+  const [showCourseHelp, setShowCourseHelp] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const ocrRequestRef = useRef(0);
   const savedDepartment = (() => {
@@ -4934,7 +5255,28 @@ function BookFormModal({
               <label>作者 *<input name="author" required maxLength={LISTING_FIELD_LIMITS.author} value={draft.author} onChange={(event) => updateDraft("author", event.target.value)} /></label>
               <label>版本（選填）<input name="edition" maxLength={LISTING_FIELD_LIMITS.edition} value={draft.edition} onChange={(event) => updateDraft("edition", event.target.value)} placeholder="例如：第 2 版" /></label>
               <label>科系（選填）<select name="department" value={draft.department} onChange={(event) => updateDraft("department", event.target.value)}><option value="">不指定科系</option>{departments.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
-              <label>課程（選填）<input name="course" maxLength={LISTING_FIELD_LIMITS.course} value={draft.course} onChange={(event) => updateDraft("course", event.target.value)} /></label>
+              <label className="field-with-help">
+                <span className="field-label-row">
+                  課堂名稱（選填）
+                  <span className="field-help-anchor">
+                    <button
+                      type="button"
+                      className="field-help-button"
+                      aria-label="課堂名稱填寫說明"
+                      aria-expanded={showCourseHelp}
+                      onClick={() => setShowCourseHelp((open) => !open)}
+                    >
+                      <HelpCircle size={15} aria-hidden="true" />
+                    </button>
+                    {showCourseHelp && (
+                      <small className="field-help-text" role="tooltip">
+                        填課表上的課名、老師常用的課堂名稱，或同學搜尋時會打的稱呼；不確定可以留空。
+                      </small>
+                    )}
+                  </span>
+                </span>
+                <input name="course" maxLength={LISTING_FIELD_LIMITS.course} value={draft.course} onChange={(event) => updateDraft("course", event.target.value)} placeholder="例如：資料結構、微積分（一）" />
+              </label>
               <label>授課老師（選填）<input name="teacher" maxLength={LISTING_FIELD_LIMITS.teacher} value={draft.teacher} onChange={(event) => updateDraft("teacher", event.target.value)} /></label>
             </>
           )}
@@ -5012,15 +5354,19 @@ function RequestModal({
   book,
   request,
   onClose,
+  onOpenChat,
   onSubmit,
 }: {
   book: Book;
   request?: PurchaseRequest | null;
   onClose: () => void;
+  onOpenChat: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const [message, setMessage] = useState(request?.message || REQUEST_PHRASES[0]);
   const [versionConfirmed, setVersionConfirmed] = useState(book.listingType !== "book");
+  const [preferredMeetupLocation, setPreferredMeetupLocation] = useState(request?.preferredMeetupLocation || "");
+  const [preferredMeetupTime, setPreferredMeetupTime] = useState(request?.preferredMeetupTime || "");
   const versionDetails = [
     book.publisher && `出版社：${book.publisher}`,
     book.edition && `版本：${book.edition}`,
@@ -5073,11 +5419,44 @@ function RequestModal({
             placeholder="介紹一下方便面交的時間，或想確認的書況..."
           />
         </label>
+        <div className="request-coordination-card">
+          <div className="request-coordination-head">
+            <b>想約的面交資訊</b>
+            <small>還沒確定也可以先留空，先去聊聊確認。</small>
+          </div>
+          <label>
+            希望面交地點（選填）
+            <input
+              name="preferredMeetupLocation"
+              maxLength={REQUEST_COORDINATION_MAX_LENGTH}
+              value={preferredMeetupLocation}
+              onChange={(event) => setPreferredMeetupLocation(event.target.value)}
+              placeholder="例如：圖書館一樓、第一教學區"
+            />
+          </label>
+          <label>
+            希望面交時間（選填）
+            <input
+              name="preferredMeetupTime"
+              maxLength={REQUEST_COORDINATION_MAX_LENGTH}
+              value={preferredMeetupTime}
+              onChange={(event) => setPreferredMeetupTime(event.target.value)}
+              placeholder="例如：週三下午、今晚 7 點後"
+            />
+          </label>
+          <div className="request-coordination-actions">
+            <button type="button" className="ghost" onClick={onOpenChat}>
+              <MessageCircle size={16} />
+              先去聊聊確認
+            </button>
+            <small>送出後，在賣家按下「已完成面交」前，都能回聊天室再修改。</small>
+          </div>
+        </div>
         <button className="primary wide" type="submit" disabled={!versionConfirmed}>
           {request ? <Pencil size={17} /> : <MessageCircle size={17} />}
           {request ? "儲存訂單修改" : "確認下訂"}
         </button>
-        <p className="form-note">下訂後仍需等待賣家選定，不代表交易完成。</p>
+        <p className="form-note">下訂後仍需等待賣家選定，不代表交易完成；若時間地點還沒談好，先用聊聊確認最穩妥。</p>
       </form>
     </ModalShell>
   );
@@ -5129,6 +5508,33 @@ function OrderTimeline({ request }: { request: PurchaseRequest }) {
   return <div className="order-timeline">{steps.map((step) => <span className={step.done ? "done" : ""} key={step.label}>{step.label}</span>)}</div>;
 }
 
+function RequestCoordinationPanel({
+  request,
+  viewer,
+}: {
+  request: PurchaseRequest;
+  viewer: "buyer" | "seller";
+}) {
+  const lines = requestCoordinationLines(request);
+  if (lines.length === 0) {
+    return (
+      <div className="request-coordination-note is-empty">
+        {viewer === "buyer"
+          ? "你還沒填寫希望的面交時間或地點，可以先去聊聊和賣家確認。"
+          : "買家還沒填寫希望的面交時間或地點，建議先到聊聊確認。"}
+      </div>
+    );
+  }
+  return (
+    <div className="request-coordination-note">
+      <b>{viewer === "buyer" ? "你填寫的面交偏好" : "買家填寫的面交偏好"}</b>
+      <ul>
+        {lines.map((line) => <li key={line}>{line}</li>)}
+      </ul>
+    </div>
+  );
+}
+
 /* eslint-disable @next/next/no-img-element */
 function TradeChatPanel({
   conversation,
@@ -5142,6 +5548,7 @@ function TradeChatPanel({
   onBack,
   onHide,
   onOpenBook,
+  onEditRequest,
   onRespondToRequest,
 }: {
   conversation: Conversation;
@@ -5155,6 +5562,7 @@ function TradeChatPanel({
   onBack: () => void;
   onHide: () => void;
   onOpenBook: (bookId: string) => void;
+  onEditRequest: () => void;
   onRespondToRequest: (requestId: string, status: "accepted" | "rejected") => void | Promise<void>;
 }) {
   const [messages, setMessages] = useState<TradeMessage[]>([]);
@@ -5171,8 +5579,13 @@ function TradeChatPanel({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const actionDialog = useActionDialog();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const draftInputRef = useRef<HTMLTextAreaElement>(null);
   const sendingRef = useRef(false);
+  const stickToBottomRef = useRef(true);
+  const lastMessageCountRef = useRef(0);
+  const sentByCurrentUserRef = useRef(false);
+  const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
   const otherUserId = conversation.buyerId === currentUserId ? conversation.sellerId : conversation.buyerId;
   const isSeller = conversation.sellerId === currentUserId;
   const canRespondToRequest = Boolean(
@@ -5181,6 +5594,18 @@ function TradeChatPanel({
     && ["pending", "waitlisted"].includes(request.status)
     && book?.status === "available",
   );
+  const canEditRequestFromChat = Boolean(
+    !isSeller
+    && request
+    && ["pending", "waitlisted", "reserved"].includes(request.status),
+  );
+
+  useEffect(() => {
+    const input = draftInputRef.current;
+    if (!input) return;
+    input.style.height = "0px";
+    input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+  }, [draft]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -5190,6 +5615,9 @@ function TradeChatPanel({
       .then(async (page) => {
         if (!active) return;
         setMessages(page.messages);
+        lastMessageCountRef.current = page.messages.length;
+        stickToBottomRef.current = true;
+        window.requestAnimationFrame(() => scrollChatLogToBottom("auto"));
         setShowQuickPhrases(!page.messages.some((item) => item.senderId === currentUserId));
         setHasOlderMessages(page.hasMore);
         setMessageCursor(page.nextCursor);
@@ -5263,7 +5691,17 @@ function TradeChatPanel({
   }, [conversation.id, currentUserId, onRead]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const messageCount = messages.length;
+    const addedMessage = messageCount > lastMessageCountRef.current;
+    lastMessageCountRef.current = messageCount;
+    if (!addedMessage) return;
+    if (stickToBottomRef.current || sentByCurrentUserRef.current) {
+      sentByCurrentUserRef.current = false;
+      setHasUnreadBelow(false);
+      scrollChatLogToBottom("smooth");
+    } else {
+      setHasUnreadBelow(true);
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -5289,6 +5727,7 @@ function TradeChatPanel({
         ? await uploadChatImages(supabase, conversation.id, currentUserId, files)
         : [];
       const message = await sendTradeMessage(supabase, conversation.id, body, uploadedPaths);
+      sentByCurrentUserRef.current = true;
       setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
       if (uploadedPaths.length > 0) {
         const signed = await signChatImages(supabase, uploadedPaths);
@@ -5311,8 +5750,32 @@ function TradeChatPanel({
 
   const senderName = (senderId: string) => profiles.find((profile) => profile.id === senderId)?.name || "使用者";
 
+  function updateStickToBottom() {
+    const log = logRef.current;
+    if (!log) return;
+    const distanceFromBottom = log.scrollHeight - log.scrollTop - log.clientHeight;
+    const nearBottom = distanceFromBottom < 80;
+    stickToBottomRef.current = nearBottom;
+    if (nearBottom) setHasUnreadBelow(false);
+  }
+
+  function scrollChatLogToBottom(behavior: ScrollBehavior) {
+    const log = logRef.current;
+    if (!log) return;
+    log.scrollTo({ top: log.scrollHeight, behavior });
+  }
+
+  function scrollToLatestMessage() {
+    stickToBottomRef.current = true;
+    setHasUnreadBelow(false);
+    scrollChatLogToBottom("smooth");
+  }
+
   async function loadOlderMessages() {
     if (!supabase || !messageCursor || loadingOlder) return;
+    const log = logRef.current;
+    const previousScrollHeight = log?.scrollHeight ?? 0;
+    const previousScrollTop = log?.scrollTop ?? 0;
     setLoadingOlder(true);
     try {
       const page = await fetchTradeMessages(supabase, conversation.id, messageCursor);
@@ -5322,6 +5785,11 @@ function TradeChatPanel({
       ]);
       setHasOlderMessages(page.hasMore);
       setMessageCursor(page.nextCursor);
+      window.requestAnimationFrame(() => {
+        if (!logRef.current) return;
+        const heightDelta = logRef.current.scrollHeight - previousScrollHeight;
+        logRef.current.scrollTop = previousScrollTop + heightDelta;
+      });
       const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
       const signed = await signChatImages(supabase, paths);
       setImageUrls((previous) => ({ ...previous, ...signed }));
@@ -5466,8 +5934,15 @@ function TradeChatPanel({
             <div className="chat-order-status">
               <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
               <p>{isSeller ? `${senderName(request.buyerId)} 已送出購買意願` : "你已送出購買意願"}</p>
+              <RequestCoordinationPanel request={request} viewer={isSeller ? "seller" : "buyer"} />
+              {canEditRequestFromChat && (
+                <button type="button" className="chat-inline-edit" onClick={onEditRequest}>
+                  <Pencil size={14} />
+                  修改面交資訊
+                </button>
+              )}
               {canRespondToRequest && (
-                <div>
+                <div className="chat-order-actions">
                   <button className="accept" type="button" disabled={currentUser.accountStatus === "suspended"} onClick={() => void respondFromChat("accepted")}><Check size={15} />接受</button>
                   <button type="button" disabled={currentUser.accountStatus === "suspended"} onClick={() => void respondFromChat("rejected")}><X size={15} />婉拒</button>
                 </div>
@@ -5478,7 +5953,8 @@ function TradeChatPanel({
           )}
         </div>
       )}
-      <div className="trade-chat-log">
+      <div className="trade-chat-log-wrap">
+      <div className="trade-chat-log" ref={logRef} onScroll={updateStickToBottom}>
         {loading && <p className="trade-chat-empty">載入訊息中...</p>}
         {!loading && hasOlderMessages && (
           <button className="chat-load-older" type="button" disabled={loadingOlder} onClick={() => void loadOlderMessages()}>
@@ -5520,12 +5996,18 @@ function TradeChatPanel({
             )}
           </div>
         ))}
-        <div ref={bottomRef} />
+      </div>
+      {hasUnreadBelow && (
+        <button type="button" className="chat-new-message-button" onClick={scrollToLatestMessage}>
+          新訊息
+          <ArrowRight size={14} aria-hidden="true" />
+        </button>
+      )}
       </div>
       {showQuickPhrases && (
         <div className="trade-chat-phrases">
           <small>常用語句</small>
-          <div>{CHAT_PHRASES.map((phrase) => <button type="button" key={phrase} onClick={() => applyQuickPhrase(phrase)}>{phrase}</button>)}</div>
+          <div className="trade-chat-phrases-scroll">{CHAT_PHRASES.map((phrase) => <button type="button" key={phrase} onClick={() => applyQuickPhrase(phrase)}>{phrase}</button>)}</div>
         </div>
       )}
       {conversation.status === "active" ? (
@@ -5534,7 +6016,15 @@ function TradeChatPanel({
             <ImagePlus size={18} />
             <input type="file" accept="image/jpeg,image/png,image/webp" multiple aria-label="加入聊天圖片" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 5))} />
           </label>
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="輸入訊息..." maxLength={500} aria-label="輸入聊天訊息" />
+          <textarea
+            ref={draftInputRef}
+            rows={1}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="輸入訊息..."
+            maxLength={500}
+            aria-label="輸入聊天訊息"
+          />
           <button type="submit" disabled={(!draft.trim() && files.length === 0) || sending}>{sending ? "傳送中" : "送出"}</button>
           {files.length > 0 && <small className="selected-images">已選擇 {files.length} 張圖片</small>}
         </form>
