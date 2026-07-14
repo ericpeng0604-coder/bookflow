@@ -70,6 +70,14 @@ const rpcProbes = [
     name: "anonymize_account_for_deletion",
     body: { target_user_id: "00000000-0000-0000-0000-000000000000" },
   },
+  {
+    name: "get_public_trust_badges",
+    body: { target_user_ids: [] },
+  },
+  {
+    name: "get_my_review_status",
+    body: { target_request_id: "00000000-0000-0000-0000-000000000000" },
+  },
 ];
 
 for (const rpc of rpcProbes) {
@@ -97,6 +105,10 @@ for (const table of [
   "moderation_audit_logs",
   "textbook_ocr_feedback",
   "account_deletion_requests",
+  "trade_reviews",
+  "risk_profiles",
+  "risk_policy_settings",
+  "risk_audit_logs",
 ]) {
   const serviceResponse = await request(`/rest/v1/${table}?select=*&limit=0`, serviceKey);
   if (!serviceResponse.ok) {

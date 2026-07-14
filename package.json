@@ -31,6 +31,7 @@
     "benchmark:taiwan-textbooks": "node --experimental-strip-types scripts/benchmark-taiwan-textbooks.mjs",
     "check:lifecycle": "node scripts/check-listing-lifecycle.mjs",
     "check:trade": "node scripts/check-trade-workflow.mjs",
+    "check:risk-warning": "node scripts/check-risk-warning.mjs",
     "check:chat-state": "node scripts/check-chat-switching.mjs",
     "check:notifications": "node scripts/check-notification-refresh.mjs",
     "check:push": "node scripts/check-browser-push.mjs",

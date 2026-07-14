@@ -213,3 +213,92 @@ export type StudentVerification = {
   reviewedAt: string | null;
   createdAt: string;
 };
+
+export type TradeReviewTag =
+  | "item_as_described"
+  | "punctual"
+  | "clear_communication"
+  | "no_show"
+  | "misleading"
+  | "other";
+
+export type TradeReview = {
+  id: string;
+  requestId: string;
+  reviewerId: string;
+  reviewerName: string;
+  revieweeId: string;
+  rating: number;
+  tags: TradeReviewTag[];
+  comment: string;
+  createdAt: string;
+};
+
+export type RiskLevel = "low" | "medium" | "high";
+export type TrustBadgeType = "seller" | "buyer";
+export type TrustBadgeStatus = "pending" | "approved" | "rejected";
+
+export type TrustBadge = {
+  userId: string;
+  badgeType: TrustBadgeType;
+  status: TrustBadgeStatus;
+  label: string;
+  reviewNote: string;
+  updatedAt: string;
+};
+
+export type RiskEvidence = {
+  id: string;
+  requestId?: string;
+  reviewerId?: string;
+  reviewerName?: string;
+  targetType?: ReportTargetType;
+  targetId?: string;
+  reason?: ReportReason;
+  details?: string;
+  status?: ReportStatus;
+  resolutionNote?: string;
+  rating?: number;
+  tags?: TradeReviewTag[];
+  comment?: string;
+  createdAt: string;
+};
+
+export type RiskProfile = {
+  userId: string;
+  userName: string;
+  userDepartment: string;
+  completedTradeCount: number;
+  reviewCount: number;
+  averageRating: number;
+  lowRatingCount: number;
+  resolvedReportCount: number;
+  seriousReportCount: number;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  sellerBadgeEligible: boolean;
+  buyerBadgeEligible: boolean;
+  sellerBadgeStatus: TrustBadgeStatus;
+  buyerBadgeStatus: TrustBadgeStatus;
+  reviewEvidence: RiskEvidence[];
+  reportEvidence: RiskEvidence[];
+  computedAt: string;
+};
+
+export type RiskPolicy = {
+  minCompletedTrades: number;
+  goodBadgeMinAverage: number;
+  goodBadgeMaxSeriousReports: number;
+  mediumRiskScore: number;
+  highRiskScore: number;
+  oneStarPenalty: number;
+  twoStarPenalty: number;
+  threeStarPenalty: number;
+  fraudReportWeight: number;
+  harassmentReportWeight: number;
+  noShowReportWeight: number;
+  misleadingReportWeight: number;
+  duplicateReportWeight: number;
+  otherReportWeight: number;
+  updatedAt: string;
+};
