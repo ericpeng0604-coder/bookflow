@@ -169,6 +169,19 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   day: "numeric",
 });
 
+function safeImageSource(value: string | null | undefined) {
+  if (!value) return "";
+  if (value.startsWith("blob:")) return value;
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | "feedback" | "tradeReview" | null;
 
 type Store = {
@@ -402,13 +415,6 @@ function listingContextLabel(book: Book) {
 
 function cardContextLabel(book: Book) {
   return listingContextLabel(book) || visibleBookField(book.subject) || visibleBookField(book.course);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function studentVerificationFlagLabels(flags: StudentVerificationFlags) {
-  const labels = [flags.schoolMatched ? "校名疑似符合" : "未辨識到虎科校名"];
-  if (flags.imageTooSmall) labels.push("圖片尺寸偏小");
-  return labels;
 }
 
 function studentVerificationFlagLabelsForDisplay(flags: StudentVerificationFlags) {
@@ -1232,7 +1238,7 @@ export function MarketplaceApp() {
       if (currentUser) window.localStorage.setItem(pushPromptStorageKey(currentUser.id), "true");
       setToast("瀏覽器推播已開啟");
     } catch (error) {
-      const state = "Notification" in window && Notification.permission === "denied" ? "denied" : "disabled";
+      const state = window.Notification?.permission === "denied" ? "denied" : "disabled";
       setPushState(state);
       setToast(error instanceof Error ? error.message : "無法開啟瀏覽器推播");
     } finally {
@@ -1245,7 +1251,7 @@ export function MarketplaceApp() {
     setPushSaving(true);
     try {
       await disableBrowserPush(supabase);
-      setPushState("Notification" in window && Notification.permission === "denied" ? "denied" : "disabled");
+      setPushState(window.Notification?.permission === "denied" ? "denied" : "disabled");
       if (currentUser) window.localStorage.setItem(pushPromptStorageKey(currentUser.id), "true");
       setToast("瀏覽器推播已關閉");
     } finally {
@@ -3311,7 +3317,7 @@ export function MarketplaceApp() {
                 {imageSearchPreview && (
                   <div className="image-search-preview">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imageSearchPreview} alt="用來搜尋站內課本的書封照片" />
+                    <img src={safeImageSource(imageSearchPreview)} alt="用來搜尋站內課本的書封照片" />
                   </div>
                 )}
                 <div>
@@ -4698,7 +4704,7 @@ function StudentVerificationPanel({
             {studentIdPreview && (
               <div className="student-id-preview">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={studentIdPreview} alt="學生證預覽" />
+                <img src={safeImageSource(studentIdPreview)} alt="學生證預覽" />
               </div>
             )}
             {studentIdFlags && (
@@ -4829,71 +4835,6 @@ function StudentVerificationCardWithZoom({
         </div>
       )}
     </>
-  );
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function StudentVerificationCard({
-  verification,
-  onReview,
-}: {
-  verification: StudentVerification;
-  onReview: (verificationId: string, decision: "approved" | "rejected") => void | Promise<void>;
-}) {
-  const [imageUrl, setImageUrl] = useState("");
-  const flags = verification.qualityFlags as Partial<StudentVerificationFlags>;
-  const flagLabels = studentVerificationFlagLabelsForDisplay({
-    schoolMatched: Boolean(flags.schoolMatched),
-    textTooShort: Boolean(flags.textTooShort),
-    imageTooSmall: Boolean(flags.imageTooSmall),
-  });
-
-  useEffect(() => {
-    if (!supabase || !verification.imagePath) return;
-    let active = true;
-    supabase.storage
-      .from("student-verifications")
-      .createSignedUrl(verification.imagePath, 600)
-      .then(({ data }) => {
-        if (active && data?.signedUrl) setImageUrl(data.signedUrl);
-      });
-    return () => {
-      active = false;
-    };
-  }, [verification.imagePath]);
-
-  return (
-    <article className="student-review-card">
-      <div className="student-review-image">
-        {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrl} alt={`${verification.userName} 的學生證`} />
-        ) : (
-          <ShieldCheck size={28} />
-        )}
-      </div>
-      <div className="student-review-body">
-        <div className="report-card-head">
-          <span className="report-target user"><ShieldCheck size={14} />待人工審核</span>
-          <time>{timeAgo(verification.createdAt)}</time>
-        </div>
-        <h3>{verification.userName}</h3>
-        <div className="ocr-flags">
-          {verification.programType && <span>{verification.programType === "four_year" ? "四技" : "二技"}</span>}
-          {verification.admissionYear && <span>民國 {verification.admissionYear} 年</span>}
-          {verification.departmentCode && <span>系所 {verification.departmentCode}</span>}
-          {verification.classCode && <span>{verification.classCode} 班</span>}
-        </div>
-        <div className="ocr-flags">
-          {flagLabels.map((label) => <span key={label}>{label}</span>)}
-        </div>
-        <textarea className="ocr-text" readOnly value={verification.ocrText || "OCR 未讀到可用文字，請直接人工檢查圖片。"} aria-label="學生證 OCR 文字" />
-        <div className="report-actions">
-          <button type="button" className="accept" onClick={() => void onReview(verification.id, "approved")}><Check size={16} />通過學生證</button>
-          <button type="button" className="reject" onClick={() => void onReview(verification.id, "rejected")}><X size={16} />拒絕</button>
-        </div>
-      </div>
-    </article>
   );
 }
 
@@ -5455,7 +5396,7 @@ function BookFormModal({
     listingType: initialListingType,
     itemCategory: initialListingType === "secondhand" ? DEFAULT_SECONDHAND_CATEGORY : "book",
   };
-  const [preview, setPreview] = useState(value.imageUrl);
+  const [preview, setPreview] = useState(() => safeImageSource(value.imageUrl));
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [ocrReferenceFile, setOcrReferenceFile] = useState<File | null>(null);
   const [ocrOriginalDraft, setOcrOriginalDraft] = useState<BookOcrDraft | null>(null);
@@ -5721,7 +5662,7 @@ function BookFormModal({
           {preview && (
             <div className="image-preview full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview} alt={isSecondhand ? "商品圖片預覽" : "書籍封面預覽"} />
+              <img src={safeImageSource(preview)} alt={isSecondhand ? "商品圖片預覽" : "書籍封面預覽"} />
             </div>
           )}
 

@@ -2,58 +2,62 @@
 
 ## 任務目標
 
-加入獨立且不阻擋部署的 CodeQL JavaScript/TypeScript 安全掃描。
+修正 GitHub CodeQL 在 BookFlow 預設分支發現的 JavaScript/TypeScript 安全與程式品質告警，保留 CodeQL 為非阻塞的獨立掃描，不修改部署或受保護的復原流程。
 
 ## 目前狀態與背景
 
-- Branch: `codex/codeql-nonblocking`。
-- Base commit: `3e2dd548a8e6e5802aa0398e09e5d86a867b7694`（`origin/main`）。
-- 本次只新增 `.github/workflows/codeql-nonblocking.yml`。
-- Workflow 只在 `main` push、PR、每週排程或手動觸發時執行；`push` 只會執行獨立 CodeQL job。
-- 不修改部署 workflow、資料庫、應用程式程式碼或受保護 recovery 檔案。
+- Branch: `codex/codeql-security-fixes`.
+- Base commit: `e333579312e455d3375cfc0a3fb291d9fde05f4f`.
+- No database migration is included.
+- No GitHub workflow or protected recovery file is changed.
+- The original dirty checkout is outside this worktree and remains untouched.
 
 ## 已完成
 
-- 使用 CodeQL Action v4 與 `security-and-quality` query suite 掃描 JavaScript/TypeScript。
-- 設定 `continue-on-error: true`，不把 CodeQL 結果接到部署 job。
-- PR #95 已建立並成功執行 CodeQL。
+- 加入圖片來源協定與路徑白名單，降低 DOM image sink 的 XSS 風險。
+- 修正通知 API 的安全屬性存取、非同步錯誤結果的區域變數，以及檔案歸檔的 check-then-write race。
+- 將 CodeQL 指出的正則表達式改為具明確錨點，並限制健康檢查的遠端探測只使用 process.env。
+- 移除沒有任何引用點的舊學生證 helper 與卡片元件。
 
 ## 下一步
 
-1. 完成 PR 必要檢查後合併 CodeQL workflow。
-2. 確認合併後的 GitHub Code Scanning alerts。
-3. 確認網站部署流程與正式環境健康檢查未受影響。
+1. 建立 PR 並等待 GitHub quality checks 與 CodeQL 掃描。
+2. 檢查預設分支的 Code Scanning 告警是否已清除；若仍有確認過的誤報，再以具體理由關閉。
 
 ## 變更檔案
 
-- `.github/workflows/codeql-nonblocking.yml`
+- `components/marketplace-app.tsx`
+- `app/api/cron/listing-lifecycle/route.ts`
+- `scripts/ai-collaboration.mjs`
+- `scripts/check-book-ocr-ai.mjs`
+- `scripts/check-site-quality-hardening.mjs`
+- `scripts/lib/check-runner.mjs`
+- `scripts/setup-health-check.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260716-codeql-nonblocking.md`
+- `.ai/history/20260716-codeql-security-fixes.md`
 
 ## 驗證結果
 
-- YAML parse: passed。
-- `node scripts/check-workflows.mjs`: passed。
-- GitHub Actions workflow syntax: passed。
-- GitHub CodeQL run: passed。
-- PR #95 CodeQL open alerts: 0。
-- 初次執行只出現 action 版本與 default-branch push trigger 提醒，已在本次修正。
-- 其他 PR checks 的結果需以 GitHub 最新狀態為準。
+- `node node_modules/typescript/bin/tsc --noEmit`: passed.
+- `node node_modules/eslint/bin/eslint.js .`: passed.
+- `node scripts/check-workflows.mjs`: passed.
+- `node scripts/check-refresh-guard.mjs`: passed.
+- `node --check` on changed `.mjs` files: passed.
+- `git diff --check`: passed.
+- GitHub CodeQL PR scan: pending.
 
 ## 風險與注意事項
 
-- CodeQL 是靜態分析，不能取代 Playwright、Sentry、RLS 權限測試或 staging DAST。
-- GitHub PR 與 `main` push 仍會依專案既有設定觸發既有 release checks；本次沒有修改那些 workflow。
-- 不得修改 `.github/workflows/rollback-production.yml`、`.github/workflows/protect-rollback-workflow.yml` 或 `.github/CODEOWNERS`。
+- 本次沒有修改部署 workflow、資料庫 migration 或 protected recovery files。
+- pnpm 的依賴安裝需要使用隔離 worktree 的本地 runtime；未把 lockfile 或依賴目錄納入提交。
 
 ## 下一位 AI 工作指引
 
-1. 保持 CodeQL workflow 與部署 workflow 分離。
-2. 修改實質檔案時同步更新 `AI_HANDOFF.md`、`.ai/state.json` 與新的 `.ai/history/*.md`。
-3. 合併前重新確認 CodeQL alerts、PR checks 與 production proof，不要把 workflow 成功誤認為網站功能測試完成。
+1. 先檢查 PR checks 與 CodeQL alert 結果，再決定是否需要處理剩餘告警。
+2. 保持 `AI_HANDOFF.md`、`.ai/state.json` 與 `.ai/history/*.md` 同步。
 
 ## 相關 Commit
 
-- Base: `3e2dd548a8e6e5802aa0398e09e5d86a867b7694`。
-- CodeQL implementation: `fd6b80e61a116ec51e18ebc92b9c489f36763be0`。
+- Base commit: `e333579312e455d3375cfc0a3fb291d9fde05f4f`.
+- Current implementation commit before final commit: not committed yet.

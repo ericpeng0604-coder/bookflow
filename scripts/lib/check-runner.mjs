@@ -56,12 +56,29 @@ export function extractExportFunction(source, name) {
   throw new Error(`Could not extract export function ${name}`);
 }
 
+const typeParameterPattern = /^<([A-Za-z_$][\w$]*(?:,\s*[A-Za-z_$][\w$]*)?)>/;
+
+function stripTypeParameterLists(source) {
+  let normalized = "";
+  for (let index = 0; index < source.length;) {
+    const match = source.slice(index).match(typeParameterPattern);
+    if (source[index] === "<" && match) {
+      index += match[0].length;
+      continue;
+    }
+    normalized += source[index];
+    index += 1;
+  }
+  return normalized;
+}
+
 export function normalizeTypeScriptForMirrorCompare(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/.*$/gm, "")
-    .replace(/\bexport\b/g, "")
-    .replace(/<[A-Za-z_$][\w$]*(?:,\s*[A-Za-z_$][\w$]*)?>/g, "")
+  return stripTypeParameterLists(
+    source
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "")
+      .replace(/\bexport\b/g, ""),
+  )
     .replace(/:\s*\(\s*signal\s*:\s*AbortSignal\s*\)\s*=>\s*Promise(?:<[^>]+>)?/g, "")
     .replace(/:\s*\(\s*signal\s*\)\s*=>\s*Promise\b/g, "")
     .replace(/\)\s*:\s*Promise(?:<[^>]+>)?\s*\{/g, ") {")

@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "project": "bookflow",
   "owner": "codex",
-  "status": "handoff",
-  "taskId": "20260716-codeql-nonblocking",
-  "taskTitle": "add non-blocking CodeQL security scan",
-  "baseCommit": "3e2dd548a8e6e5802aa0398e09e5d86a867b7694",
-  "updatedAt": "2026-07-16T00:13:29+08:00",
+  "status": "in_progress",
+  "taskId": "20260716-codeql-security-fixes",
+  "taskTitle": "fix CodeQL security and quality alerts",
+  "baseCommit": "e333579312e455d3375cfc0a3fb291d9fde05f4f",
+  "updatedAt": "2026-07-16T15:00:00+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260716-codeql-nonblocking.md"
+  "historyFile": ".ai/history/20260716-codeql-security-fixes.md"
 }

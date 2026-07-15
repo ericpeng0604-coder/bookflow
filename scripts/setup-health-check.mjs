@@ -35,30 +35,29 @@ const fileEnv = {
   ...parseEnvFile(path.join(root, ".env")),
   ...parseEnvFile(path.join(root, ".env.local")),
 };
-const env = { ...fileEnv, ...process.env };
+const runtimeEnv = { ...process.env };
+const env = { ...fileEnv, ...runtimeEnv };
 
 function add(status, area, message, fix = "") {
   results.push({ status, area, message, fix });
 }
 
 function required(name, area) {
-  const value = env[name]?.trim();
-  if (!value) {
+  if (!env[name]?.trim()) {
     add("FAIL", area, `${name} 未設定。`, `請在 .env.local 加上 ${name}=...`);
     return "";
   }
   add("PASS", area, `${name} 已設定。`);
-  return value;
+  return env[name]?.trim() || "";
 }
 
 function optionalWhenDisabled(name, area) {
-  const value = env[name]?.trim();
-  if (value) {
+  if (env[name]?.trim()) {
     add("PASS", area, `${name} 已設定。`);
   } else {
     add("WARN", area, `${name} 未設定；目前通知信停用時不影響網站。`, "啟用通知信前必須補上。");
   }
-  return value || "";
+  return env[name]?.trim() || "";
 }
 
 function parseUrl(value) {
@@ -436,8 +435,17 @@ add(
   "URL 指向正式站 /api/cron/push；secret 必須與 PUSH_DISPATCH_SECRET 相同。",
 );
 
-await checkSupabaseRemote(supabaseUrl, anonKey, serviceRoleKey);
-if (emailEnabled) await checkResendRemote(resendKey, resendFrom);
+await checkSupabaseRemote(
+  runtimeEnv.NEXT_PUBLIC_SUPABASE_URL?.trim() || "",
+  runtimeEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || "",
+  runtimeEnv.SUPABASE_SERVICE_ROLE_KEY?.trim() || "",
+);
+if (runtimeEnv.EMAIL_NOTIFICATIONS_ENABLED?.trim() === "true") {
+  await checkResendRemote(
+    runtimeEnv.RESEND_API_KEY?.trim() || "",
+    runtimeEnv.RESEND_FROM_EMAIL?.trim() || "",
+  );
+}
 if (noNetwork) {
   add("INFO", "遠端探測", "已依 --no-network 略過 Supabase 與 Resend 遠端驗證。");
 }

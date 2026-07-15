@@ -115,21 +115,15 @@ export async function GET(request: Request) {
     sanitized += 1;
   }
 
-  let email = { enabled: false, sent: 0, failed: 0 };
-  try {
-    email = await deliverNotificationEmails(admin, { limit: 100 });
-  } catch (error) {
-    email = { enabled: true, sent: 0, failed: 1 };
+  const email = await deliverNotificationEmails(admin, { limit: 100 }).catch((error) => {
     console.error("Lifecycle email delivery failed", error);
-  }
+    return { enabled: true, sent: 0, failed: 1 };
+  });
 
-  let push = { enabled: false, sent: 0, failed: 0, skipped: 0 };
-  try {
-    push = await deliverBrowserPush(admin, { limit: 100 });
-  } catch (error) {
-    push = { enabled: true, sent: 0, failed: 1, skipped: 0 };
+  const push = await deliverBrowserPush(admin, { limit: 100 }).catch((error) => {
     console.error("Lifecycle browser push delivery failed", error);
-  }
+    return { enabled: true, sent: 0, failed: 1, skipped: 0 };
+  });
 
   const [{ data: verificationCleanup }, { data: operationalCleanup }] = await Promise.all([
     admin.rpc("cleanup_sensitive_verification_data", { reference_time: now.toISOString() }),
