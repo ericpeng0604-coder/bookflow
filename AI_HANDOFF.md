@@ -2,79 +2,58 @@
 
 ## 任務目標
 
-Ship the administrator moderation workbench and keep the homepage market
-switch free of the orange active underline.
+加入獨立且不阻擋部署的 CodeQL JavaScript/TypeScript 安全掃描。
 
 ## 目前狀態與背景
 
-- Branch: `codex/admin-workbench-release`.
-- Base commit: `25ea7b0882610add242671d305373e2fc1e0b5ca` (`origin/main`).
-- Work is isolated from the dirty `codex/unify-market-switch-green` checkout.
-- The admin page now has a persistent left workspace navigation, an overview
-  with actionable counts, URL-persisted admin tabs, responsive mobile navigation,
-  a listing review table, and a right-side listing detail drawer.
-- Existing risk review queue behavior, private evidence loading, and review
-  status policy remain unchanged.
-- No database migration is required for this UI-only release.
-- Protected rollback files and CODEOWNERS are unchanged.
+- Branch: `codex/codeql-nonblocking`。
+- Base commit: `3e2dd548a8e6e5802aa0398e09e5d86a867b7694`（`origin/main`）。
+- 本次只新增 `.github/workflows/codeql-nonblocking.yml`。
+- Workflow 只在 `main` push、PR、每週排程或手動觸發時執行；`push` 只會執行獨立 CodeQL job。
+- 不修改部署 workflow、資料庫、應用程式程式碼或受保護 recovery 檔案。
 
 ## 已完成
 
-- TypeScript: passed (`node node_modules/typescript/bin/tsc --noEmit`).
-- ESLint: passed with temporary local compatibility plugins; those plugins are
-  not part of the product diff.
-- Project checks: passed (27/27).
-- Admin workbench checks: passed (8/8).
-- Risk warning checks: passed (23/23).
-- Listing navigation and upload checks: passed.
-- Home accessibility checks: passed (26/26).
-- Production build: passed; 22 static pages generated.
-- Local browser: public homepage loaded successfully. Admin interaction proof
-  is pending because the available browser session is not signed in as an
-  administrator.
-- Staging and production migration: not applicable for this release.
+- 使用 CodeQL Action v4 與 `security-and-quality` query suite 掃描 JavaScript/TypeScript。
+- 設定 `continue-on-error: true`，不把 CodeQL 結果接到部署 job。
+- PR #95 已建立並成功執行 CodeQL。
 
 ## 下一步
 
-1. Commit only the scoped UI, navigation, check, package script, and handoff
-   files.
-2. Push the branch and open a ready PR after checks are green.
-3. Verify the merged SHA through Vercel, `/api/health/release`, and
-   `release:smoke`.
-4. Use a signed-in administrator session to verify the overview, workspace
-   navigation, listing table, and listing detail drawer on production.
+1. 完成 PR 必要檢查後合併 CodeQL workflow。
+2. 確認合併後的 GitHub Code Scanning alerts。
+3. 確認網站部署流程與正式環境健康檢查未受影響。
 
 ## 變更檔案
 
-- `app/globals.css`
-- `components/marketplace-app.tsx`
-- `components/marketplace/navigation-state.ts`
-- `package.json`
-- `scripts/check-admin-workbench.mjs`
+- `.github/workflows/codeql-nonblocking.yml`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260715-admin-workbench-release.md`
+- `.ai/history/20260716-codeql-nonblocking.md`
 
 ## 驗證結果
 
-- TypeScript、ESLint、專案檢查 27/27、風險檢查 23/23、首頁無障礙 26/26、管理工作台 8/8、Next production build 22 頁均已通過。
-- 本地公開首頁可載入；正式網站管理員工作台互動尚待可用的管理員登入工作階段確認。
+- YAML parse: passed。
+- `node scripts/check-workflows.mjs`: passed。
+- GitHub Actions workflow syntax: passed。
+- GitHub CodeQL run: passed。
+- PR #95 CodeQL open alerts: 0。
+- 初次執行只出現 action 版本與 default-branch push trigger 提醒，已在本次修正。
+- 其他 PR checks 的結果需以 GitHub 最新狀態為準。
 
 ## 風險與注意事項
 
-- Do not include the dirty checkout's student-card or unrelated changes.
-- Do not change `.github/workflows/rollback-production.yml`,
-  `.github/workflows/protect-rollback-workflow.yml`, or `.github/CODEOWNERS`.
-- A local build or preview is not production proof.
+- CodeQL 是靜態分析，不能取代 Playwright、Sentry、RLS 權限測試或 staging DAST。
+- GitHub PR 與 `main` push 仍會依專案既有設定觸發既有 release checks；本次沒有修改那些 workflow。
+- 不得修改 `.github/workflows/rollback-production.yml`、`.github/workflows/protect-rollback-workflow.yml` 或 `.github/CODEOWNERS`。
 
 ## 下一位 AI 工作指引
 
-1. 只 stage 本 handoff 列出的 release 檔案。
-2. 建立 commit、push、開 PR，等待 required checks 綠燈後 merge。
-3. 以合併 SHA 驗證 Vercel、`/api/health/release` 與 `release:smoke`。
-4. 用管理員登入工作階段確認總覽、左側導覽、刊登表格與右側詳情抽屜。
+1. 保持 CodeQL workflow 與部署 workflow 分離。
+2. 修改實質檔案時同步更新 `AI_HANDOFF.md`、`.ai/state.json` 與新的 `.ai/history/*.md`。
+3. 合併前重新確認 CodeQL alerts、PR checks 與 production proof，不要把 workflow 成功誤認為網站功能測試完成。
 
 ## 相關 Commit
 
-- Base: `25ea7b0882610add242671d305373e2fc1e0b5ca`。
-- Feature commit: 待建立。
+- Base: `3e2dd548a8e6e5802aa0398e09e5d86a867b7694`。
+- CodeQL implementation: `fd6b80e61a116ec51e18ebc92b9c489f36763be0`。
