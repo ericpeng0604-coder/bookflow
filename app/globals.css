@@ -202,6 +202,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .book-card:hover img { transform: scale(1.04); }
 .status { display: inline-flex; align-items: center; border-radius: 20px; padding: 5px 10px; font-size: 11px; font-weight: 700; }
 .card-image .status, .detail-image .status { position: absolute; top: 13px; left: 13px; }
+.verified-seller-badge { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 5px 8px; background: rgba(232, 247, 241, .94); color: var(--green); font-size: 11px; font-weight: 800; }
 .status.available { background: var(--mint); color: var(--green); }
 .status.negotiating { background: #fff0d4; color: #9a631b; }
 .status.sold { background: #eee; color: #666; }
@@ -537,6 +538,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .student-id-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .student-id-preview { height: 180px; border-radius: 9px; overflow: hidden; background: var(--cream); }
 .student-id-preview img { width: 100%; height: 100%; object-fit: contain; }
+.student-id-result { display: grid; gap: 3px; padding: 10px 12px; border-radius: 8px; background: #edf6f2; color: var(--green); }
 .ocr-flags { display: flex; flex-wrap: wrap; gap: 6px; }
 .ocr-flags span { border-radius: 999px; padding: 5px 8px; background: #edf6f2; color: var(--green); font-size: 11px; font-weight: 800; }
 .ocr-text { min-height: 86px; font-size: 12px; line-height: 1.5; }

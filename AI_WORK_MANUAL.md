@@ -1024,6 +1024,23 @@ workflow runtime. If a GitHub workflow uses `npm ci`, umbrella scripts like
 `check:all` must call `npm run ...` or direct local binaries instead of
 assuming `pnpm` is available.
 
+### LESSON-056: Guard optional migration dependencies before privilege changes
+
+**Observed problem:** A staging migration failed because it attempted to
+`REVOKE` privileges from an older overloaded RPC signature that was already
+absent in the target database.
+
+**Cause:** The migration assumed historical function signatures were present
+even though earlier migrations may have dropped or never created them.
+
+**Detection:** Run migrations against a staging database with a different
+historical state and inspect `42883` errors around `GRANT` or `REVOKE`
+statements.
+
+**Prevention rule:** Use `DROP FUNCTION IF EXISTS` for obsolete overloads before
+privilege changes, and only grant or revoke privileges for the signature that
+the migration creates or otherwise proves exists.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

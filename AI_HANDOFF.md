@@ -2,40 +2,53 @@
 
 ## 任務目標
 
-Deploy the homepage market-switch color update.
+Deploy optional student-card OCR verification and verified-seller marketplace priority.
 
 ## 目前狀態與背景
 
-- Branch: `codex/unify-market-switch-green`.
-- Base commit: `e1374ec335c744bb3b1ddf1b3b51c5380c2b2d89` (`origin/main`).
-- This release contains only one homepage CSS color update.
-- No database migration is required.
+- Branch: `codex/student-verification-deploy`.
+- Base commit: `5289f6634542742111cd7bbb7f3fad482e5a276d` (`origin/main`).
+- This release adds the `我的交易 → 學生身分驗證` tab, OCR-only student ID
+  parsing, moderator review, derived-field storage, and verified-seller
+  marketplace ordering for books and secondhand listings.
+- Database migration `20260714164420_student_verification_priority.sql` is
+  required and must pass staging before production database approval.
 - No protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
 
 ## 已完成
 
-- Unified the active `二手物品` market-switch button with the left `二手書籍` green.
+- OCR accepts only current five-year student IDs and never exposes a manual ID
+  input.
+- Server-side RPCs revalidate the OCR candidate and return only
+  `seller_verified` publicly.
+- Verified sellers are ordered first with a cursor containing verification,
+  creation time, and ID.
+- Local typecheck, lint, student verification checks, and production build pass.
 
 ## 驗證結果
 
 - Diff check: passed.
-- Production build: pending for this one-line CSS release.
+- Production build: passed.
 - Vercel Preview: pending on the release PR.
+- Staging migration/RLS probes: pending staging credentials.
 - Production deployment: pending PR merge and post-merge verification.
 
 ## 下一步
 
 1. Wait for the release PR checks and resolve only release-gate failures.
 2. Merge the clean PR after required checks pass.
-3. Verify the Vercel production deployment commit and homepage market switch.
-4. Run production smoke checks for release health.
+3. Apply the migration through the protected production workflow after staging
+   approval.
+4. Verify the Vercel production deployment commit and student verification flow.
+5. Run production smoke checks for release health.
 
 ## 風險與注意事項
 
 - A Vercel Preview is not production proof.
 - Do not include unrelated local files or pnpm-generated files in the release.
-- Keep staging/database migration evidence separate; this UI release has no migration.
+- Approved verification rows retain only derived fields; image/OCR data must be
+  cleared by the review/cleanup flow.
 
 ## 下一位 AI 工作指引
 
@@ -46,11 +59,14 @@ Deploy the homepage market-switch color update.
 ## 變更檔案
 
 - `app/globals.css`
+- `components/marketplace-app.tsx`
+- `lib/marketplace/student-id.ts`
+- `supabase/migrations/20260714164420_student_verification_priority.sql`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260714-secondhand-market-homepage-release.md`
+- `.ai/history/20260715-student-verification-release.md`
 
 ## 相關 Commit
 
-- Base commit: `af354eb6fbcc682185df3359284dcf0753be208b`.
-- Feature commit: `67af592`.
+- Base commit: `5289f6634542742111cd7bbb7f3fad482e5a276d`.
+- Feature commit: `ac379e0987a20f187d91fe0eb43f1fa6c00076ae`.
