@@ -4341,6 +4341,58 @@ export function MarketplaceApp() {
   );
 }
 
+function NativeDialog({
+  className,
+  label,
+  labelledBy,
+  onClose,
+  closeOnBackdrop = true,
+  children,
+}: {
+  className: string;
+  label?: string;
+  labelledBy?: string;
+  onClose: () => void;
+  closeOnBackdrop?: boolean;
+  children: React.ReactNode;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+      previouslyFocused?.focus();
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className={className}
+      aria-label={label}
+      aria-labelledby={labelledBy}
+      onCancel={(event) => {
+        event.preventDefault();
+        onCloseRef.current();
+      }}
+      onMouseDown={(event) => {
+        if (closeOnBackdrop && event.target === event.currentTarget) onCloseRef.current();
+      }}
+    >
+      {children}
+    </dialog>
+  );
+}
+
 function ModalShell({
   title,
   subtitle,
@@ -4357,83 +4409,16 @@ function ModalShell({
   children: React.ReactNode;
 }) {
   const headingId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const activeDialog = dialog;
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const backdrop = dialog.parentElement;
-    const root = backdrop?.parentElement;
-    const hiddenSiblings = root
-      ? Array.from(root.children).filter((child) => child !== backdrop && child instanceof HTMLElement) as HTMLElement[]
-      : [];
-    hiddenSiblings.forEach((element) => {
-      element.setAttribute("inert", "");
-      element.setAttribute("aria-hidden", "true");
-    });
-    const focusable = () => Array.from(activeDialog.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
-    ));
-    (focusable()[0] ?? activeDialog).focus();
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const items = focusable();
-      if (items.length === 0) {
-        event.preventDefault();
-        activeDialog.focus();
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      hiddenSiblings.forEach((element) => {
-        element.removeAttribute("inert");
-        element.removeAttribute("aria-hidden");
-      });
-      previouslyFocused?.focus();
-    };
-  }, []);
 
   return (
-    <div className="modal-backdrop">
-      {closeOnBackdrop && (
-        <button
-          type="button"
-          className="modal-backdrop-dismiss"
-          aria-label="關閉視窗"
-          onClick={onClose}
-        />
-      )}
+    <NativeDialog
+      className="modal-backdrop"
+      labelledBy={headingId}
+      onClose={onClose}
+      closeOnBackdrop={closeOnBackdrop}
+    >
       <div
-        ref={dialogRef}
         className={`modal ${dialogClassName}`.trim()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={headingId}
-        tabIndex={-1}
       >
         <button className="modal-close" type="button" onClick={onClose} aria-label="關閉視窗"><X aria-hidden="true" /></button>
         <div className="modal-heading">
@@ -4442,7 +4427,7 @@ function ModalShell({
         </div>
         {children}
       </div>
-    </div>
+    </NativeDialog>
   );
 }
 
@@ -4820,19 +4805,19 @@ function StudentVerificationCardWithZoom({
         </div>
       </article>
       {imageViewerOpen && imageUrl && (
-        <div className="student-card-lightbox" role="dialog" aria-modal="true" aria-label="放大的學生證圖片" onMouseDown={() => setImageViewerOpen(false)}>
+        <NativeDialog className="student-card-lightbox" label="放大的學生證圖片" onClose={() => setImageViewerOpen(false)}>
           <button type="button" className="student-card-lightbox-close" onClick={() => setImageViewerOpen(false)} aria-label="關閉圖片"><X size={24} /></button>
-          <div className="student-card-lightbox-content" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="student-card-lightbox-content">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={imageUrl} alt="放大的學生證圖片" style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }} />
           </div>
-          <div className="student-card-lightbox-controls" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="student-card-lightbox-controls">
             <button type="button" onClick={() => setZoom((value) => Math.min(4, value + 0.25))} aria-label="放大"><ZoomIn size={18} /></button>
             <button type="button" onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))} aria-label="縮小"><ZoomOut size={18} /></button>
             <button type="button" onClick={() => setZoom(1)} aria-label="重設大小">100%</button>
             <button type="button" onClick={() => setRotation((value) => value + 90)} aria-label="旋轉圖片"><RotateCcw size={18} /></button>
           </div>
-        </div>
+        </NativeDialog>
       )}
     </>
   );
@@ -5406,20 +5391,11 @@ function BookFormModal({
   const [showCourseHelp, setShowCourseHelp] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const ocrRequestRef = useRef(0);
-  const savedDepartment = (() => {
-    if (book || initialListingType !== "book") return "";
-    try {
-      const value = window.localStorage.getItem(listingDepartmentStorageKey(userId)) || "";
-      return departments.slice(1).includes(value) ? value : "";
-    } catch {
-      return "";
-    }
-  })();
-  const baseDraft = {
+  const baseDraft = useMemo(() => ({
     title: value.title,
     author: value.author,
     edition: value.edition,
-    department: value.department || savedDepartment,
+    department: value.department,
     course: value.course,
     teacher: value.teacher,
     condition: value.condition,
@@ -5427,27 +5403,57 @@ function BookFormModal({
     meetup: value.meetup,
     description: value.description,
     itemCategory: value.itemCategory === "book" ? DEFAULT_SECONDHAND_CATEGORY : value.itemCategory,
-  };
-  const baseDraftSignature = JSON.stringify(baseDraft);
+  }), [
+    value.author,
+    value.condition,
+    value.course,
+    value.department,
+    value.description,
+    value.edition,
+    value.itemCategory,
+    value.meetup,
+    value.price,
+    value.teacher,
+    value.title,
+  ]);
   const draftStorageKey = listingDraftStorageKey(userId, initialListingType, book?.id);
-  const [draft, setDraft] = useState(() => {
-    try {
-      const saved = window.localStorage.getItem(draftStorageKey);
-      if (!saved) return baseDraft;
-      return { ...baseDraft, ...(JSON.parse(saved) as Partial<typeof baseDraft>) };
-    } catch {
-      return baseDraft;
-    }
-  });
-  const draftChanged = JSON.stringify(draft) !== baseDraftSignature;
+  const baseDraftSignatureRef = useRef(JSON.stringify(baseDraft));
+  const skipDraftPersistenceRef = useRef(true);
+  const [draft, setDraft] = useState(baseDraft);
+  const draftChanged = JSON.stringify(draft) !== baseDraftSignatureRef.current;
   const dirty = imageFile !== null || ocrReferenceFile !== null || draftChanged;
   const isSecondhand = initialListingType === "secondhand";
+
+  useEffect(() => {
+    let hydratedBase = baseDraft;
+    try {
+      if (!book && initialListingType === "book") {
+        const savedDepartment = window.localStorage.getItem(listingDepartmentStorageKey(userId)) || "";
+        if (departments.slice(1).includes(savedDepartment)) {
+          hydratedBase = { ...hydratedBase, department: hydratedBase.department || savedDepartment };
+        }
+      }
+      baseDraftSignatureRef.current = JSON.stringify(hydratedBase);
+      const saved = window.localStorage.getItem(draftStorageKey);
+      setDraft(saved
+        ? { ...hydratedBase, ...(JSON.parse(saved) as Partial<typeof baseDraft>) }
+        : hydratedBase);
+    } catch {
+      baseDraftSignatureRef.current = JSON.stringify(hydratedBase);
+      setDraft(hydratedBase);
+    }
+    skipDraftPersistenceRef.current = true;
+  }, [baseDraft, book, draftStorageKey, initialListingType, userId]);
 
   useEffect(() => () => {
     if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
   }, [preview]);
 
   useEffect(() => {
+    if (skipDraftPersistenceRef.current) {
+      skipDraftPersistenceRef.current = false;
+      return;
+    }
     if (!draftChanged) {
       window.localStorage.removeItem(draftStorageKey);
       return;
@@ -6568,7 +6574,7 @@ function TradeChatPanel({
         </form>
       ) : <p className="chat-readonly">這個聊天室已結束，紀錄保持唯讀。你可從書籍頁重新建立聊天室。</p>}
       {enlargedImageUrl && (
-        <div className="chat-image-lightbox" role="dialog" aria-modal="true" aria-label="放大的聊聊圖片" onMouseDown={() => setEnlargedImageUrl(null)}>
+        <NativeDialog className="chat-image-lightbox" label="放大的聊聊圖片" onClose={() => setEnlargedImageUrl(null)}>
           <button type="button" className="chat-image-lightbox-close" onClick={() => setEnlargedImageUrl(null)} aria-label="關閉圖片">
             <X size={24} />
           </button>
@@ -6581,7 +6587,7 @@ function TradeChatPanel({
           >
             <img src={enlargedImageUrl} alt="" />
           </button>
-        </div>
+        </NativeDialog>
       )}
       {actionDialog.dialog && (
         <ActionDialog

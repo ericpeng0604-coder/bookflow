@@ -9,6 +9,7 @@ const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8")
 const header = app.slice(app.indexOf('<header className="site-header">'), app.indexOf("</header>"));
 const market = app.slice(app.indexOf('<section className="market"'), app.indexOf('view === "book"'));
 const listingForm = app.slice(app.indexOf("function BookFormModal"), app.indexOf("function ContactSettingsModal"));
+const nativeDialog = app.slice(app.indexOf("function NativeDialog"), app.indexOf("function ModalShell"));
 const modalShell = app.slice(app.indexOf("function ModalShell"), app.indexOf("function ActionDialog"));
 
 assert.ok(
@@ -35,17 +36,22 @@ assert.equal(
 assert.ok(listingForm.includes('className="listing-file-input full"'), "the file control must use the styled input");
 assert.ok(css.includes(".listing-file-input::file-selector-button"), "the native file button must be styled");
 assert.ok(
-  modalShell.includes("const onCloseRef = useRef(onClose)")
-    && modalShell.includes("onCloseRef.current = onClose")
-    && modalShell.includes("onCloseRef.current()"),
-  "modal close handlers must stay current without rerunning the focus trap",
+  nativeDialog.includes("const onCloseRef = useRef(onClose)")
+    && nativeDialog.includes("onCloseRef.current = onClose")
+    && nativeDialog.includes("dialog.showModal()")
+    && nativeDialog.includes("onCloseRef.current()"),
+  "native dialog close handlers must stay current without reopening the dialog",
 );
 assert.ok(
-  modalShell.includes("closeOnBackdrop = true")
-    && modalShell.includes("{closeOnBackdrop &&")
-    && modalShell.includes('className="modal-backdrop-dismiss"')
-    && modalShell.includes("onClick={onClose}"),
+  nativeDialog.includes("closeOnBackdrop = true")
+    && nativeDialog.includes("event.target === event.currentTarget")
+    && modalShell.includes("closeOnBackdrop={closeOnBackdrop}"),
   "modal backdrop close behavior must be configurable",
+);
+assert.ok(
+  (app.match(/<NativeDialog/g) ?? []).length >= 3
+    && !app.includes('role="dialog"'),
+  "modal shell and image lightboxes must use native dialogs",
 );
 assert.ok(
   listingForm.includes("closeOnBackdrop={false}"),
@@ -56,6 +62,11 @@ assert.ok(
     && listingForm.includes("savedDepartment")
     && listingForm.includes('field === "department"'),
   "new textbook listings must remember the last selected department only",
+);
+assert.doesNotMatch(
+  listingForm.slice(0, listingForm.indexOf("useEffect")),
+  /window\.localStorage/,
+  "listing form render and state initialization must not read browser storage",
 );
 assert.ok(
   listingForm.includes("課堂名稱（選填）")
@@ -73,9 +84,9 @@ assert.ok(
   "book OCR must show a visible progress bar",
 );
 assert.doesNotMatch(
-  modalShell,
+  nativeDialog,
   /previouslyFocused\?\.focus\(\);\s*\};\s*}, \[onClose\]\);/,
-  "modal focus trap must not rerun on every input render",
+  "native dialog focus management must not rerun on every input render",
 );
 
 console.log("Listing navigation and upload UI checks passed.");
