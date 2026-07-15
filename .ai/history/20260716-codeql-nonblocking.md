@@ -11,8 +11,8 @@
 ## Scope
 
 Added `.github/workflows/codeql-nonblocking.yml` to scan JavaScript and
-TypeScript with CodeQL without adding a deployment dependency or a `push`
-trigger.
+TypeScript with CodeQL without adding a deployment dependency. The workflow
+scans PRs, the `main` branch, weekly, or manually.
 
 ## Evidence
 
@@ -21,6 +21,8 @@ trigger.
 - GitHub workflow syntax check passed.
 - CodeQL run for PR #95 passed.
 - GitHub Code Scanning reported zero open alerts for the scanned change.
+- The workflow uses CodeQL Action v4 and checkout v5 to avoid the observed
+  Node 20 and CodeQL v3 deprecation warnings.
 
 ## Release boundary
 
