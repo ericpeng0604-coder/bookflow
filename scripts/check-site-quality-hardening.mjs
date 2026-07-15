@@ -20,7 +20,7 @@ for (const expected of [
   assert.match(headers, new RegExp(expected), `missing security header ${expected}`);
 }
 assert.doesNotMatch(headers, /script-src[^"]+\*/, "CSP script policy must not use wildcard sources");
-assert.doesNotMatch(headers, /cdn\.jsdelivr\.net/, "Tesseract script must not depend on jsDelivr");
+assert.doesNotMatch(headers, /^.*cdn\.jsdelivr\.net.*$/m, "Tesseract script must not depend on jsDelivr");
 
 const apiSecurity = read("lib/server/api-security.ts");
 assert.match(apiSecurity, /createHash\("sha256"\)/);

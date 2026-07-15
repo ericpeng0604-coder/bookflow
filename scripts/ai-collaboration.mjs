@@ -176,10 +176,6 @@ function archiveHandoff(state, actor, statusLabel) {
   mkdirSync(HISTORY_DIR, { recursive: true });
   const filename = `${timestampForFile()}-${taskSlug(state.taskId)}.md`;
   const path = join(HISTORY_DIR, filename);
-  if (existsSync(path)) {
-    fail(`History file already exists: ${filename}`);
-  }
-
   const metadata = [
     "# AI Handoff Archive",
     "",
@@ -192,7 +188,18 @@ function archiveHandoff(state, actor, statusLabel) {
     "---",
     "",
   ].join("\n");
-  writeFileSync(path, `${metadata}${readHandoff()}`, "utf8");
+  try {
+    writeFileSync(path, `${metadata}${readHandoff()}`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    });
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      fail(`History file already exists: ${filename}`);
+    }
+    throw error;
+  }
   return relative(ROOT, path).replaceAll("\\", "/");
 }
 

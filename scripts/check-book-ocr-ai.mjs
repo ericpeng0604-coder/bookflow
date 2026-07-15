@@ -114,7 +114,7 @@ assert.match(route, /finalize_book_ocr_quota/, "AI route must complete or releas
 assert.match(client, /X-Idempotency-Key/, "browser requests must use an idempotency key");
 assert.match(route, /image\.size > BOOK_OCR_AI_MAX_FILE_BYTES/, "AI route must enforce image size");
 assert.match(route, /GEMINI_API_KEY/, "AI route must keep the Gemini key server-side");
-assert.match(route, /generativelanguage\.googleapis\.com/, "AI route must call the official Gemini API");
+assert.match(route, /^.*generativelanguage\.googleapis\.com.*$/m, "AI route must call the official Gemini API");
 assert.match(route, /x-goog-api-key/, "Gemini authentication must stay in a server-side header");
 assert.match(route, /Gemini \$\{aiResponse\.status\}/, "Gemini failures must expose only a safe status diagnostic");
 assert.doesNotMatch(route, /console\.(log|info|debug)/, "AI route must not log uploaded image data");
