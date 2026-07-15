@@ -44,6 +44,14 @@ const migration = fs.readFileSync(
   path.join(root, "supabase/migrations/20260714164420_student_verification_priority.sql"),
   "utf8",
 );
+const storageRoute = fs.readFileSync(
+  path.join(root, "app/api/admin/student-verifications/review/route.ts"),
+  "utf8",
+);
+const storageMigration = fs.readFileSync(
+  path.join(root, "supabase/migrations/20260715100000_student_verification_storage_api.sql"),
+  "utf8",
+);
 assert.match(app, /studentVerification/, "the dashboard must expose the student verification tab");
 assert.match(app, /findStudentIdCandidates/, "the UI must use OCR candidates");
 assert.match(app, /找不到有效學號時不能送出/, "OCR failure must require a new upload");
@@ -52,5 +60,9 @@ assert.match(migration, /normalized_ocr/, "the server must cross-check the OCR t
 assert.match(migration, /seller_verified boolean/, "public listing output must expose only the verification boolean");
 assert.match(migration, /p_cursor_verified boolean/, "the cursor must include verification state");
 assert.match(migration, /grant execute on function public\.list_books_page[\s\S]*to anon, authenticated/, "catalog RPC must remain public");
+assert.match(app, /student-card-lightbox/, "moderators must be able to enlarge student card images");
+assert.match(app, /reviewStudentVerificationWithStorage/, "student review must use the server storage cleanup flow");
+assert.match(storageRoute, /storage[\s\S]*\.remove\(\[verification\.image_path\]\)/, "review route must use the Storage API");
+assert.doesNotMatch(storageMigration, /delete\s+from\s+storage\.objects/i, "student verification migration must not delete storage tables directly");
 
 console.log("student verification checks passed");

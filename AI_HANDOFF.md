@@ -83,3 +83,19 @@ Deploy optional student-card OCR verification and verified-seller marketplace pr
   does not store the image or expose the result publicly.
 - Verification: typecheck, lint, student verification check, diff check, and
   production build passed. No database migration is required.
+
+## Student verification Storage API fix release update
+
+- Branch: `codex/student-review-storage-fix`.
+- Base commit: `9c4dea468e2ccbf7a9d68cd7d24bbe732770ea96`.
+- This release moves moderator student-card cleanup to the server-side
+  Supabase Storage API and replaces the database functions without direct
+  `storage.objects` deletion.
+- The admin review image now opens in a private signed-URL lightbox with
+  zoom, reset, rotation, and Escape-to-close support.
+- Student-card OCR adds one bounded bilingual pass on the best orientation;
+  the sparse-text flag remains internal and is no longer displayed.
+- Verification: typecheck, targeted lint, student verification checks, diff
+  check, and production build passed.
+- A staging migration and post-merge production deployment proof are required.
+- No protected recovery file is changed.

@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260715-student-card-ai-fallback",
-  "taskTitle": "ship consented AI fallback for student-card OCR",
-  "baseCommit": "4f5465eeb5394533dd7d22b95718c27e1809c60a",
-  "updatedAt": "2026-07-15T21:10:00.000Z",
+  "taskId": "20260715-student-review-storage-fix",
+  "taskTitle": "fix student verification Storage API cleanup and review UI",
+  "baseCommit": "9c4dea468e2ccbf7a9d68cd7d24bbe732770ea96",
+  "updatedAt": "2026-07-15T22:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260715-student-card-ai-fallback.md"
+  "historyFile": ".ai/history/20260715-student-review-storage-fix.md"
 }

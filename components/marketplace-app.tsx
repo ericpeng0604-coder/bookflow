@@ -31,6 +31,8 @@ import {
   Trash2,
   UserRound,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -66,6 +68,7 @@ import type {
   StudentVerificationFlags,
   BookOcrDraft,
 } from "@/lib/marketplace/free-ocr";
+import { reviewStudentVerificationWithStorage } from "@/lib/marketplace/student-verification";
 import {
   deleteChatImageUploads,
   fetchTradeMessages,
@@ -390,10 +393,16 @@ function cardContextLabel(book: Book) {
   return listingContextLabel(book) || visibleBookField(book.subject) || visibleBookField(book.course);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function studentVerificationFlagLabels(flags: StudentVerificationFlags) {
   const labels = [flags.schoolMatched ? "校名疑似符合" : "未辨識到虎科校名"];
-  if (flags.textTooShort) labels.push("可讀文字偏少");
   if (flags.imageTooSmall) labels.push("圖片尺寸偏小");
+  return labels;
+}
+
+function studentVerificationFlagLabelsForDisplay(flags: StudentVerificationFlags) {
+  const labels = [flags.schoolMatched ? "\u6821\u540d\u7591\u4f3c\u7b26\u5408" : "\u672a\u8fa8\u8b58\u5230\u864e\u79d1\u6821\u540d"];
+  if (flags.imageTooSmall) labels.push("\u5716\u7247\u5c3a\u5bf8\u504f\u5c0f");
   return labels;
 }
 
@@ -2266,14 +2275,11 @@ export function MarketplaceApp() {
     const note = dialogResult.trim();
     if (decision === "rejected" && !note) return;
 
-    const { error } = await supabase.rpc("review_student_verification", {
-      target_id: verificationId,
-      decision,
-      note: note || "",
-    });
-    if (error) {
-      if (await recoverAdminVerification(error.message, currentUser)) return;
-      setToast(`學生證審核失敗：${error.message}`);
+    try {
+      await reviewStudentVerificationWithStorage(supabase, verificationId, decision, note || "");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "學生證審核失敗";
+      setToast(`學生證審核失敗：${message}`);
       return;
     }
     await reloadAfterModerationMutation();
@@ -3863,7 +3869,7 @@ export function MarketplaceApp() {
           <h2 className="admin-section-title">學生證審核</h2>
           <div className="reports-list">
             {studentVerifications.map((verification) => (
-              <StudentVerificationCard
+              <StudentVerificationCardWithZoom
                 key={verification.id}
                 verification={verification}
                 onReview={reviewStudentVerification}
@@ -4461,7 +4467,7 @@ function StudentVerificationPanel({
             )}
             {studentIdFlags && (
               <div className="ocr-flags">
-                {studentVerificationFlagLabels(studentIdFlags!).map((label) => <span key={label}>{label}</span>)}
+                {studentVerificationFlagLabelsForDisplay(studentIdFlags!).map((label) => <span key={label}>{label}</span>)}
               </div>
             )}
             {studentIdDetails && (
@@ -4488,6 +4494,109 @@ function StudentVerificationPanel({
   );
 }
 
+function StudentVerificationCardWithZoom({
+  verification,
+  onReview,
+}: {
+  verification: StudentVerification;
+  onReview: (verificationId: string, decision: "approved" | "rejected") => void | Promise<void>;
+}) {
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const flags = verification.qualityFlags as Partial<StudentVerificationFlags>;
+  const flagLabels = studentVerificationFlagLabelsForDisplay({
+    schoolMatched: Boolean(flags.schoolMatched),
+    textTooShort: Boolean(flags.textTooShort),
+    imageTooSmall: Boolean(flags.imageTooSmall),
+  });
+
+  useEffect(() => {
+    if (!supabase || !verification.imagePath) return;
+    let active = true;
+    supabase.storage
+      .from("student-verifications")
+      .createSignedUrl(verification.imagePath, 600)
+      .then(({ data }) => {
+        if (active && data?.signedUrl) setImageUrl(data.signedUrl);
+      });
+    return () => {
+      active = false;
+    };
+  }, [verification.imagePath]);
+
+  useEffect(() => {
+    if (!imageViewerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setImageViewerOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [imageViewerOpen]);
+
+  return (
+    <>
+      <article className="student-review-card">
+        <div className="student-review-image">
+          {imageUrl ? (
+            <button
+              type="button"
+              className="student-review-image-button"
+              onClick={() => {
+                setZoom(1);
+                setRotation(0);
+                setImageViewerOpen(true);
+              }}
+              aria-label="放大學生證圖片"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="學生證圖片，點擊放大" />
+            </button>
+          ) : <ShieldCheck size={28} />}
+        </div>
+        <div className="student-review-body">
+          <div className="report-card-head">
+            <span className="report-target user"><ShieldCheck size={14} />學生證審核</span>
+            <time>{timeAgo(verification.createdAt)}</time>
+          </div>
+          <h3>{verification.userName}</h3>
+          <div className="ocr-flags">
+            {verification.programType && <span>{verification.programType === "four_year" ? "四技" : "二技"}</span>}
+            {verification.admissionYear && <span>民國 {verification.admissionYear} 年</span>}
+            {verification.departmentCode && <span>系所 {verification.departmentCode}</span>}
+            {verification.classCode && <span>{verification.classCode} 班</span>}
+          </div>
+          <div className="ocr-flags">
+            {flagLabels.map((label) => <span key={label}>{label}</span>)}
+          </div>
+          <textarea className="ocr-text" readOnly value={verification.ocrText || "OCR 未讀到可用文字，請直接人工檢查圖片。"} aria-label="學生證 OCR 文字" />
+          <div className="report-actions">
+            <button type="button" className="accept" onClick={() => void onReview(verification.id, "approved")}><Check size={16} />通過學生證</button>
+            <button type="button" className="reject" onClick={() => void onReview(verification.id, "rejected")}><X size={16} />拒絕</button>
+          </div>
+        </div>
+      </article>
+      {imageViewerOpen && imageUrl && (
+        <div className="student-card-lightbox" role="dialog" aria-modal="true" aria-label="放大的學生證圖片" onMouseDown={() => setImageViewerOpen(false)}>
+          <button type="button" className="student-card-lightbox-close" onClick={() => setImageViewerOpen(false)} aria-label="關閉圖片"><X size={24} /></button>
+          <div className="student-card-lightbox-content" onMouseDown={(event) => event.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={imageUrl} alt="放大的學生證圖片" style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }} />
+          </div>
+          <div className="student-card-lightbox-controls" onMouseDown={(event) => event.stopPropagation()}>
+            <button type="button" onClick={() => setZoom((value) => Math.min(4, value + 0.25))} aria-label="放大"><ZoomIn size={18} /></button>
+            <button type="button" onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))} aria-label="縮小"><ZoomOut size={18} /></button>
+            <button type="button" onClick={() => setZoom(1)} aria-label="重設大小">100%</button>
+            <button type="button" onClick={() => setRotation((value) => value + 90)} aria-label="旋轉圖片"><RotateCcw size={18} /></button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function StudentVerificationCard({
   verification,
   onReview,
@@ -4497,7 +4606,7 @@ function StudentVerificationCard({
 }) {
   const [imageUrl, setImageUrl] = useState("");
   const flags = verification.qualityFlags as Partial<StudentVerificationFlags>;
-  const flagLabels = studentVerificationFlagLabels({
+  const flagLabels = studentVerificationFlagLabelsForDisplay({
     schoolMatched: Boolean(flags.schoolMatched),
     textTooShort: Boolean(flags.textTooShort),
     imageTooSmall: Boolean(flags.imageTooSmall),

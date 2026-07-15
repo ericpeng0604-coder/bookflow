@@ -29,6 +29,22 @@ lesson.
 
 ## Recorded Lessons
 
+### LESSON-058: Supabase Storage objects require the Storage API
+
+**Observed problem:** Student verification review failed with `Direct deletion
+from storage tables is not allowed`.
+
+**Cause:** A database function attempted to delete rows from
+`storage.objects`, which Supabase protects from direct table deletion.
+
+**Detection:** Search new migrations and database functions for
+`delete from storage.objects`; review and cleanup paths must use the Storage
+API from a trusted server route instead.
+
+**Prevention rule:** Keep database functions responsible for metadata and
+status updates only. Use a server-side Storage API client for object deletion,
+with authenticated permission checks and retry-safe cleanup.
+
 ### LESSON-001: A completed plan is not verified software
 
 **Observed problem:** An optimization task was reported as complete even though
