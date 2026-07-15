@@ -70,3 +70,16 @@ Deploy optional student-card OCR verification and verified-seller marketplace pr
 
 - Base commit: `5289f6634542742111cd7bbb7f3fad482e5a276d`.
 - Feature commit: `ac379e0987a20f187d91fe0eb43f1fa6c00076ae`.
+
+## Student-card AI fallback release update
+
+- Branch: `codex/student-card-ai-release`.
+- Base commit: `4f5465eeb5394533dd7d22b95718c27e1809c60a`.
+- Feature commit: `c0e5e77e338a1b1d8d0e4db80674c0fbb929e1b3`.
+- Local OCR now tries four orientations with a bounded wait. If it cannot
+  produce a valid candidate, the user must explicitly consent before using a
+  rate-limited Gemini vision fallback.
+- The fallback returns only a server-validated student-number candidate; it
+  does not store the image or expose the result publicly.
+- Verification: typecheck, lint, student verification check, diff check, and
+  production build passed. No database migration is required.
