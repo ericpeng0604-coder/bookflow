@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260716-codeql-security-fixes",
-  "taskTitle": "fix CodeQL security and quality alerts",
-  "baseCommit": "e333579312e455d3375cfc0a3fb291d9fde05f4f",
-  "updatedAt": "2026-07-16T15:00:00+08:00",
+  "taskId": "20260716-react-doctor-priority-fixes",
+  "taskTitle": "fix priority React Doctor findings",
+  "baseCommit": "db75c82f243bf704c30e80d1238cefbd6e74927a",
+  "updatedAt": "2026-07-16T01:25:00+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260716-codeql-security-fixes.md"
+  "historyFile": ".ai/history/20260716-react-doctor-priority-fixes.md"
 }

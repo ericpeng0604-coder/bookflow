@@ -2,62 +2,57 @@
 
 ## 任務目標
 
-修正 GitHub CodeQL 在 BookFlow 預設分支發現的 JavaScript/TypeScript 安全與程式品質告警，保留 CodeQL 為非阻塞的獨立掃描，不修改部署或受保護的復原流程。
+處理 React Doctor 中最高優先且可確認的問題：避免 BookForm 在 SSR render 期間讀取 localStorage，並讓 Modal 與圖片 lightbox 使用原生 dialog 的焦點及鍵盤管理。
 
 ## 目前狀態與背景
 
-- Branch: `codex/codeql-security-fixes`.
-- Base commit: `e333579312e455d3375cfc0a3fb291d9fde05f4f`.
-- No database migration is included.
-- No GitHub workflow or protected recovery file is changed.
-- The original dirty checkout is outside this worktree and remains untouched.
+- Branch: `codex/react-doctor-priority-fixes`.
+- Base commit: `db75c82f243bf704c30e80d1238cefbd6e74927a`.
+- No database migration, GitHub workflow, deployment configuration, or protected recovery file is changed.
+- The original dirty checkout remains untouched.
 
 ## 已完成
 
-- 加入圖片來源協定與路徑白名單，降低 DOM image sink 的 XSS 風險。
-- 修正通知 API 的安全屬性存取、非同步錯誤結果的區域變數，以及檔案歸檔的 check-then-write race。
-- 將 CodeQL 指出的正則表達式改為具明確錨點，限制健康檢查的遠端探測只使用 process.env，且健康檢查輸出只記錄固定的狀態與區域名稱。
-- 移除沒有任何引用點的舊學生證 helper 與卡片元件。
+- BookForm 使用穩定的 server/client 初始草稿，掛載後才載入科系偏好與 localStorage 草稿。
+- ModalShell、學生證圖片及聊天圖片統一使用原生 dialog，保留 Escape、背景關閉設定與焦點復原。
+- 更新刊登 UI 回歸檢查，驗證 render 階段不讀 browser storage 且三種對話框使用原生 dialog。
+- React Doctor browser-global errors 從 2 降為 0，prefer-html-dialog warnings 從 3 降為 0，分數從 32 提升至 39。
 
 ## 下一步
 
-1. 建立 PR 並等待 GitHub quality checks 與 CodeQL 掃描。
-2. 檢查預設分支的 Code Scanning 告警是否已清除；若仍有確認過的誤報，再以具體理由關閉。
+1. 建立 PR 並等待 GitHub checks。
+2. Checks 通過後合併並確認 production smoke。
 
 ## 變更檔案
 
 - `components/marketplace-app.tsx`
-- `app/api/cron/listing-lifecycle/route.ts`
-- `scripts/ai-collaboration.mjs`
-- `scripts/check-book-ocr-ai.mjs`
-- `scripts/check-site-quality-hardening.mjs`
-- `scripts/lib/check-runner.mjs`
-- `scripts/setup-health-check.mjs`
+- `app/globals.css`
+- `scripts/check-listing-navigation-ui.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260716-codeql-security-fixes.md`
+- `.ai/history/20260716-react-doctor-priority-fixes.md`
 
 ## 驗證結果
 
-- `node node_modules/typescript/bin/tsc --noEmit`: passed.
-- `node node_modules/eslint/bin/eslint.js .`: passed.
-- `node scripts/check-workflows.mjs`: passed.
-- `node scripts/check-refresh-guard.mjs`: passed.
-- `node --check` on changed `.mjs` files: passed.
-- `git diff --check`: passed.
-- GitHub CodeQL PR scan: pending.
+- TypeScript typecheck: passed.
+- ESLint on changed source/check files: passed.
+- Project checks: passed (27/27).
+- Listing navigation and upload UI check: passed.
+- Next.js production build: passed.
+- Browser verification: homepage loaded, native dialog opened, Escape closed it, no page errors or Next.js overlay.
+- React Doctor targeted rescan: browser-global 0, prefer-html-dialog 0, score 39.
 
 ## 風險與注意事項
 
-- 本次沒有修改部署 workflow、資料庫 migration 或 protected recovery files。
-- pnpm 的依賴安裝需要使用隔離 worktree 的本地 runtime；未把 lockfile 或依賴目錄納入提交。
+- React Doctor 仍列出 14 個 errors；13 個是把 requireLogin/requireActive callback 誤判為 state updater，另 1 個 subscription cleanup 已有 removeChannel，未為了分數修改。
+- 大元件拆分與次要效能 warnings 不在本批範圍。
 
 ## 下一位 AI 工作指引
 
-1. 先檢查 PR checks 與 CodeQL alert 結果，再決定是否需要處理剩餘告警。
+1. 不要把 React Doctor 的剩餘誤報機械式改寫成大型重構。
 2. 保持 `AI_HANDOFF.md`、`.ai/state.json` 與 `.ai/history/*.md` 同步。
 
 ## 相關 Commit
 
-- Base commit: `e333579312e455d3375cfc0a3fb291d9fde05f4f`.
+- Base commit: `db75c82f243bf704c30e80d1238cefbd6e74927a`.
 - Current implementation commit before final commit: not committed yet.
