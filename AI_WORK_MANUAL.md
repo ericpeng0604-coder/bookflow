@@ -1041,6 +1041,24 @@ statements.
 privilege changes, and only grant or revoke privileges for the signature that
 the migration creates or otherwise proves exists.
 
+### LESSON-057: Student-card OCR needs a consented vision fallback
+
+**Observed problem:** Rotated and oblique student-card photos produced valid
+student IDs for only some orientations with local numeric OCR.
+
+**Cause:** A full-card photo contains glare, background, perspective, and
+barcode noise that can split or distort the eight-digit line even after
+rotation attempts.
+
+**Detection:** Benchmark representative student-card photos across 0, 90, 180,
+and 270 degree orientations; do not treat one clear reference photo as OCR
+coverage.
+
+**Prevention rule:** Keep local OCR as the private first pass, cap its wait
+time, and offer a rate-limited AI vision fallback only after explicit user
+consent. Always validate the returned candidate against the server-side
+student-ID parser and retain the original image for moderator review.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

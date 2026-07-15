@@ -2,6 +2,7 @@ import {
   extractTaiwanTextbookMetadata,
   normalizeIsbn13,
 } from "./taiwan-textbook.ts";
+import { findStudentIdCandidates } from "./student-id.ts";
 
 type OcrProgress = {
   status?: string;
@@ -24,10 +25,12 @@ type TesseractLike = {
 };
 
 export const BOOK_OCR_MAX_SIDE = 1400;
+export const STUDENT_OCR_MAX_SIDE = 1800;
 
 let tesseractLoadPromise: Promise<TesseractLike> | null = null;
 let englishWorkerPromise: Promise<OcrWorkerLike> | null = null;
 let combinedWorkerPromise: Promise<OcrWorkerLike> | null = null;
+let studentNumericWorkerPromise: Promise<OcrWorkerLike> | null = null;
 let activeProgress: ((message: OcrProgress) => void) | null = null;
 
 async function loadTesseract() {
@@ -66,6 +69,31 @@ function getWorker(languages: "eng" | "eng+chi_tra") {
 
   if (languages === "eng") englishWorkerPromise = workerPromise;
   else combinedWorkerPromise = workerPromise;
+  return workerPromise;
+}
+
+function getStudentNumericWorker() {
+  if (studentNumericWorkerPromise) return studentNumericWorkerPromise;
+
+  const workerPromise = loadTesseract()
+    .then(async (tesseract) => {
+      const worker = await tesseract.createWorker("eng", undefined, {
+        logger: (message) => activeProgress?.(message),
+      });
+      await worker.setParameters({
+        tessedit_char_whitelist: "0123456789",
+        tessedit_pageseg_mode: "11",
+        preserve_interword_spaces: "1",
+        user_defined_dpi: "300",
+      });
+      return worker;
+    })
+    .catch((error) => {
+      studentNumericWorkerPromise = null;
+      throw error;
+    });
+
+  studentNumericWorkerPromise = workerPromise;
   return workerPromise;
 }
 
@@ -119,6 +147,50 @@ async function prepareBookCoverForOcr(file: File) {
   return canvas;
 }
 
+type StudentOcrRotation = 0 | 90 | 180 | 270;
+
+async function prepareStudentCardForOcr(file: File, rotation: StudentOcrRotation) {
+  const image = await loadOcrImage(file);
+  const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+  const scale = Math.min(1, STUDENT_OCR_MAX_SIDE / Math.max(longestSide, 1));
+  const sourceWidth = Math.max(1, Math.round(image.naturalWidth * scale));
+  const sourceHeight = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = rotation === 90 || rotation === 270 ? sourceHeight : sourceWidth;
+  canvas.height = rotation === 90 || rotation === 270 ? sourceWidth : sourceHeight;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("瀏覽器無法準備學生證 OCR 圖片");
+
+  context.save();
+  if (rotation === 90) {
+    context.translate(canvas.width, 0);
+    context.rotate(Math.PI / 2);
+  } else if (rotation === 180) {
+    context.translate(canvas.width, canvas.height);
+    context.rotate(Math.PI);
+  } else if (rotation === 270) {
+    context.translate(0, canvas.height);
+    context.rotate(-Math.PI / 2);
+  }
+  context.drawImage(image, 0, 0, sourceWidth, sourceHeight);
+  context.restore();
+
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    const red = pixels.data[index];
+    const green = pixels.data[index + 1];
+    const blue = pixels.data[index + 2];
+    const gray = red * 0.299 + green * 0.587 + blue * 0.114;
+    const enhanced = Math.max(0, Math.min(255, (gray - 112) * 1.45 + 128));
+    pixels.data[index] = enhanced;
+    pixels.data[index + 1] = enhanced;
+    pixels.data[index + 2] = enhanced;
+  }
+  context.putImageData(pixels, 0, 0);
+  return canvas;
+}
+
 async function recognizeWithWorker(
   worker: OcrWorkerLike,
   image: HTMLCanvasElement,
@@ -144,6 +216,55 @@ export async function recognizeImageText(file: File) {
   const worker = await getWorker("eng+chi_tra");
   const result = await worker.recognize(file);
   return String(result.data?.text || "").replace(/\s+\n/g, "\n").trim();
+}
+
+export type StudentCardOcrResult = {
+  text: string;
+  confidence: number;
+  rotation: StudentOcrRotation;
+};
+
+/**
+ * Student cards are commonly photographed sideways or upside down. Run a
+ * small numeric-only pass in all four orientations first, then use the best
+ * orientation for the readable bilingual OCR text shown to moderators.
+ */
+export async function recognizeStudentCardText(file: File): Promise<StudentCardOcrResult> {
+  const numericWorker = await getStudentNumericWorker();
+  const rotations: StudentOcrRotation[] = [0, 90, 180, 270];
+  const attempts: Array<{
+    canvas: HTMLCanvasElement;
+    text: string;
+    confidence: number;
+    rotation: StudentOcrRotation;
+    candidateCount: number;
+  }> = [];
+
+  for (const rotation of rotations) {
+    const canvas = await prepareStudentCardForOcr(file, rotation);
+    const result = await recognizeWithWorker(numericWorker, canvas);
+    const attempt = {
+      canvas,
+      text: result.text,
+      confidence: result.confidence,
+      rotation,
+      candidateCount: findStudentIdCandidates(result.text).length,
+    };
+    attempts.push(attempt);
+    if (attempt.candidateCount > 0) break;
+  }
+
+  const bestAttempt = [...attempts].sort((left, right) =>
+    (right.candidateCount - left.candidateCount) * 1000
+      + right.confidence - left.confidence,
+  )[0];
+  if (!bestAttempt) throw new Error("學生證 OCR 沒有可用結果");
+
+  return {
+    text: bestAttempt.text,
+    confidence: bestAttempt.confidence,
+    rotation: bestAttempt.rotation,
+  };
 }
 
 type DetectedBarcode = { rawValue?: string };

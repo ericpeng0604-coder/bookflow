@@ -4325,6 +4325,7 @@ function StudentVerificationPanel({
   const [studentIdDetails, setStudentIdDetails] = useState<StudentIdDetails | null>(null);
   const [studentIdPreview, setStudentIdPreview] = useState("");
   const [studentIdBusy, setStudentIdBusy] = useState(false);
+  const [studentAiBusy, setStudentAiBusy] = useState(false);
   const [studentIdConsent, setStudentIdConsent] = useState(false);
   const [error, setError] = useState("");
   const [localPending, setLocalPending] = useState(false);
@@ -4354,8 +4355,11 @@ function StudentVerificationPanel({
     setStudentIdPreview(URL.createObjectURL(file));
     setStudentIdBusy(true);
     try {
-      const { imageQualityFlags, recognizeImageText } = await import("@/lib/marketplace/free-ocr");
-      const ocrText = await recognizeImageText(file);
+      const { imageQualityFlags, recognizeStudentCardText } = await import("@/lib/marketplace/free-ocr");
+      const { text: ocrText } = await Promise.race([
+        recognizeStudentCardText(file),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("本機 OCR 較慢，請勾選同意後使用 AI 補強。")), 15000)),
+      ]);
       const details = findStudentIdCandidates(ocrText)[0] ?? null;
       setStudentIdOcrText(ocrText);
       setStudentIdFlags(await imageQualityFlags(file, ocrText));
@@ -4369,6 +4373,28 @@ function StudentVerificationPanel({
       setError(ocrError instanceof Error ? ocrError.message : "OCR 讀取失敗，請重新上傳清楚的學生證照片。");
     } finally {
       setStudentIdBusy(false);
+    }
+  }
+
+  async function retryStudentIdWithAi() {
+    if (!studentIdFile || !studentIdConsent) {
+      setError("請先勾選同意，再使用 AI 辨識學生證。");
+      return;
+    }
+    setStudentAiBusy(true);
+    setError("");
+    try {
+      const { recognizeStudentCardWithAi } = await import("@/lib/marketplace/student-card-ai");
+      const { parseStudentId } = await import("@/lib/marketplace/student-id");
+      const result = await recognizeStudentCardWithAi(supabase!, studentIdFile, studentIdOcrText);
+      const details = parseStudentId(result.studentNumber);
+      if (!details) throw new Error("AI 找不到符合近五年規則的學號，請重新拍攝學生證。");
+      setStudentIdOcrText((previous) => `${previous}\nAI 候選學號：${details.value}`.trim());
+      setStudentIdDetails(details);
+    } catch (aiError) {
+      setError(aiError instanceof Error ? aiError.message : "AI 學生證辨識失敗，請重新上傳。");
+    } finally {
+      setStudentAiBusy(false);
     }
   }
 
@@ -4447,9 +4473,10 @@ function StudentVerificationPanel({
             {studentIdOcrText && <textarea className="ocr-text" readOnly value={studentIdOcrText} aria-label="學生證 OCR 結果" />}
             <label className="student-id-consent">
               <input type="checkbox" checked={studentIdConsent} onChange={(event) => setStudentIdConsent(event.target.checked)} />
-              <span>我同意學生證圖片與 OCR 結果僅供身分驗證，審核完成後清除敏感內容。</span>
+              <span>我同意學生證圖片與 OCR 結果僅供身分驗證，必要時送交 AI 辨識服務，審核完成後清除敏感內容。</span>
             </label>
             {error && <p className="form-error">{error}</p>}
+            {!studentIdDetails && studentIdFile && !studentIdBusy && <button className="secondary-action wide" type="button" disabled={studentAiBusy || !studentIdConsent} onClick={() => void retryStudentIdWithAi()}>{studentAiBusy ? "AI 辨識中..." : "使用 AI 協助辨識"}</button>}
             <button className="secondary-action wide" type="button" disabled={studentIdBusy || !studentIdFile || !studentIdDetails || !studentIdConsent} onClick={() => void submitStudentId()}>
               {studentIdBusy ? "OCR 處理中..." : "送交學生身分審核"}
             </button>
