@@ -20,6 +20,9 @@ import type {
   RiskLevel,
   RiskPolicy,
   RiskProfile,
+  RiskProfileSummary,
+  RiskModerationSummary,
+  RiskReviewStatus,
   TradeReview,
   TradeReviewTag,
   TrustBadge,
@@ -281,7 +284,7 @@ export function mapTrustBadge(row: Record<string, unknown>): TrustBadge {
   };
 }
 
-export function mapRiskProfile(row: Record<string, unknown>): RiskProfile {
+export function mapRiskProfileSummary(row: Record<string, unknown>): RiskProfileSummary {
   return {
     userId: String(row.user_id),
     userName: String(row.user_name || "使用者"),
@@ -298,9 +301,32 @@ export function mapRiskProfile(row: Record<string, unknown>): RiskProfile {
     buyerBadgeEligible: Boolean(row.buyer_badge_eligible),
     sellerBadgeStatus: String(row.seller_badge_status || "pending") as TrustBadgeStatus,
     buyerBadgeStatus: String(row.buyer_badge_status || "pending") as TrustBadgeStatus,
+    reviewStatus: String(row.review_status || "pending") as RiskReviewStatus,
+    reviewUpdatedAt: row.review_updated_at ? String(row.review_updated_at) : null,
+    totalCount: Number(row.total_count || 0),
+    computedAt: String(row.computed_at || ""),
+  };
+}
+
+export function mapRiskProfile(row: Record<string, unknown>): RiskProfile {
+  const summary = mapRiskProfileSummary(row);
+  return {
+    ...summary,
     reviewEvidence: jsonArray(row.review_evidence).map(mapRiskEvidence),
     reportEvidence: jsonArray(row.report_evidence).map(mapRiskEvidence),
-    computedAt: String(row.computed_at),
+  };
+}
+
+export function mapRiskModerationSummary(row: Record<string, unknown>): RiskModerationSummary {
+  return {
+    queueCount: Number(row.queue_count || 0),
+    pendingCount: Number(row.pending_count || 0),
+    viewedCount: Number(row.viewed_count || 0),
+    processedCount: Number(row.processed_count || 0),
+    highCount: Number(row.high_count || 0),
+    mediumCount: Number(row.medium_count || 0),
+    lowCount: Number(row.low_count || 0),
+    allCount: Number(row.all_count || 0),
   };
 }
 

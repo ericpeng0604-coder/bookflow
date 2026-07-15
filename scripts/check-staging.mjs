@@ -108,6 +108,7 @@ for (const table of [
   "account_deletion_requests",
   "trade_reviews",
   "risk_profiles",
+  "risk_review_states",
   "risk_policy_settings",
   "risk_audit_logs",
   "student_verifications",

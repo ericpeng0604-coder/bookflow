@@ -16,9 +16,11 @@ import {
   mapFeedback,
   mapRiskPolicy,
   mapRiskProfile,
+  mapRiskProfileSummary,
+  mapRiskModerationSummary,
   mapTrustBadge,
 } from "@/lib/marketplace/mappers";
-import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskPolicy, RiskProfile, SellerLifecycle, StudentVerification, StudentVerificationSummary, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
+import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskLevel, RiskModerationSummary, RiskPolicy, RiskProfile, RiskProfileSummary, RiskReviewStatus, SellerLifecycle, StudentVerification, StudentVerificationSummary, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 
@@ -33,6 +35,31 @@ export type MarketplacePageResult = {
   books: Book[];
   hasMore: boolean;
   nextCursor: MarketplaceCursor;
+};
+
+export const RISK_REVIEW_PAGE_SIZE = 20;
+
+export type RiskModerationFilters = {
+  scope: "queue" | "all";
+  status: RiskReviewStatus | "all";
+  riskLevel: RiskLevel | "all";
+  query: string;
+  department: string;
+  offset: number;
+};
+
+export const DEFAULT_RISK_MODERATION_FILTERS: RiskModerationFilters = {
+  scope: "queue",
+  status: "pending",
+  riskLevel: "all",
+  query: "",
+  department: "",
+  offset: 0,
+};
+
+export type RiskModerationPage = {
+  profiles: RiskProfileSummary[];
+  total: number;
 };
 
 function marketplaceRpcParams(filters: MarketplaceFilters, limit: number, cursor: MarketplaceCursor) {
@@ -353,10 +380,48 @@ export async function submitTradeReview(
   return String(data);
 }
 
-export async function fetchRiskProfilesForModeration(client: SupabaseClient): Promise<RiskProfile[]> {
-  const { data, error } = await client.rpc("list_risk_profiles_for_moderation");
+export async function fetchRiskProfilesForModeration(
+  client: SupabaseClient,
+  filters: RiskModerationFilters = DEFAULT_RISK_MODERATION_FILTERS,
+): Promise<RiskModerationPage> {
+  const { data, error } = await client.rpc("list_risk_profiles_for_moderation", {
+    p_scope: filters.scope,
+    p_status: filters.status,
+    p_risk_level: filters.riskLevel,
+    p_query: filters.query.trim(),
+    p_department: filters.department,
+    p_limit: RISK_REVIEW_PAGE_SIZE,
+    p_offset: filters.offset,
+  });
   if (error) throw error;
-  return (data ?? []).map((row: Record<string, unknown>) => mapRiskProfile(row));
+  const profiles = (data ?? []).map((row: Record<string, unknown>) => mapRiskProfileSummary(row));
+  return { profiles, total: profiles[0]?.totalCount ?? 0 };
+}
+
+export async function fetchRiskProfileDetail(client: SupabaseClient, userId: string): Promise<RiskProfile | null> {
+  const { data, error } = await client.rpc("get_risk_profile_for_moderation", { target_user_id: userId });
+  if (error) throw error;
+  const row = data?.[0] as Record<string, unknown> | undefined;
+  return row ? mapRiskProfile(row) : null;
+}
+
+export async function fetchRiskModerationSummary(client: SupabaseClient): Promise<RiskModerationSummary | null> {
+  const { data, error } = await client.rpc("get_risk_moderation_summary");
+  if (error) throw error;
+  const row = data?.[0] as Record<string, unknown> | undefined;
+  return row ? mapRiskModerationSummary(row) : null;
+}
+
+export async function updateRiskReviewStatus(
+  client: SupabaseClient,
+  userId: string,
+  status: RiskReviewStatus,
+): Promise<void> {
+  const { error } = await client.rpc("update_risk_review_status", {
+    target_user_id: userId,
+    new_status: status,
+  });
+  if (error) throw error;
 }
 
 export async function fetchRiskPolicy(client: SupabaseClient): Promise<RiskPolicy | null> {
@@ -477,18 +542,17 @@ export async function loadWorkspaceTabData(
 }
 
 export async function loadModerationData(client: SupabaseClient, user: Profile) {
-  const [pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskProfiles, riskPolicy, adminProfiles] = await Promise.all([
+  const [pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskPolicy, adminProfiles] = await Promise.all([
     fetchPendingReviews(client),
     fetchHiddenBooks(client),
     fetchModerationReports(client),
     fetchFeedbackForModeration(client),
     fetchStudentVerificationsForReview(client),
-    fetchRiskProfilesForModeration(client),
     user.role === "admin" ? fetchRiskPolicy(client) : Promise.resolve(null),
     user.role === "admin" ? fetchAdminProfiles(client) : Promise.resolve([] as Profile[]),
   ]);
 
-  return { pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskProfiles, riskPolicy, adminProfiles };
+  return { pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskPolicy, adminProfiles };
 }
 
 export function mergeProfiles(
