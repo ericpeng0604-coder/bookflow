@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260715-risk-review-queue-release",
-  "taskTitle": "deploy paginated risk review queue and market switch UI",
+  "taskId": "20260715-admin-workbench-release",
+  "taskTitle": "deploy administrator moderation workbench",
   "baseCommit": "a57f5857474445bdfaae06b04377e30642d69c0c",
-  "updatedAt": "2026-07-15T22:40:14.0234599+08:00",
+  "updatedAt": "2026-07-15T23:58:00+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260715-risk-review-queue-release.md"
+  "historyFile": ".ai/history/20260715-admin-workbench-release.md"
 }
