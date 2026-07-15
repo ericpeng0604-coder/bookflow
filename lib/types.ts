@@ -254,6 +254,7 @@ export type TradeReview = {
 };
 
 export type RiskLevel = "low" | "medium" | "high";
+export type RiskReviewStatus = "pending" | "viewed" | "processed";
 export type TrustBadgeType = "seller" | "buyer";
 export type TrustBadgeStatus = "pending" | "approved" | "rejected";
 
@@ -299,9 +300,26 @@ export type RiskProfile = {
   buyerBadgeEligible: boolean;
   sellerBadgeStatus: TrustBadgeStatus;
   buyerBadgeStatus: TrustBadgeStatus;
+  reviewStatus: RiskReviewStatus;
+  reviewUpdatedAt: string | null;
   reviewEvidence: RiskEvidence[];
   reportEvidence: RiskEvidence[];
   computedAt: string;
+};
+
+export type RiskProfileSummary = Omit<RiskProfile, "reviewEvidence" | "reportEvidence"> & {
+  totalCount: number;
+};
+
+export type RiskModerationSummary = {
+  queueCount: number;
+  pendingCount: number;
+  viewedCount: number;
+  processedCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  allCount: number;
 };
 
 export type RiskPolicy = {

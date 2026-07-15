@@ -90,10 +90,17 @@ import {
   fetchPublicTrustBadges,
   submitTradeReview,
   fetchUnreadNotificationCount,
+  DEFAULT_RISK_MODERATION_FILTERS,
+  fetchRiskModerationSummary,
+  fetchRiskProfileDetail,
+  fetchRiskProfilesForModeration,
+  updateRiskReviewStatus,
   loadModerationData,
   loadWorkspaceTabData,
   mergeProfiles,
   fetchNotifications,
+  RISK_REVIEW_PAGE_SIZE,
+  type RiskModerationFilters,
 } from "@/lib/marketplace/queries";
 import { isAbortError, runGuarded } from "@/lib/marketplace/refresh-guard";
 import {
@@ -129,6 +136,9 @@ import type {
   TrustBadge,
   RiskPolicy,
   RiskProfile,
+  RiskProfileSummary,
+  RiskModerationSummary,
+  RiskReviewStatus,
   ListingType,
   UserRole,
 } from "@/lib/types";
@@ -593,7 +603,14 @@ export function MarketplaceApp() {
   const [reports, setReports] = useState<Report[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [trustBadges, setTrustBadges] = useState<TrustBadge[]>([]);
-  const [riskProfiles, setRiskProfiles] = useState<RiskProfile[]>([]);
+  const [riskProfiles, setRiskProfiles] = useState<RiskProfileSummary[]>([]);
+  const [riskProfileTotal, setRiskProfileTotal] = useState(0);
+  const [riskSummary, setRiskSummary] = useState<RiskModerationSummary | null>(null);
+  const [riskFilters, setRiskFilters] = useState<RiskModerationFilters>(() => ({ ...DEFAULT_RISK_MODERATION_FILTERS }));
+  const [riskPageLoading, setRiskPageLoading] = useState(false);
+  const [selectedRiskProfileId, setSelectedRiskProfileId] = useState<string | null>(null);
+  const [riskProfileDetail, setRiskProfileDetail] = useState<RiskProfile | null>(null);
+  const [riskProfileDetailLoading, setRiskProfileDetailLoading] = useState(false);
   const [riskPolicy, setRiskPolicy] = useState<RiskPolicy | null>(null);
   const [reviewRequest, setReviewRequest] = useState<PurchaseRequest | null>(null);
   const [reviewStatus, setReviewStatus] = useState<{ reviewed: boolean; revieweeId: string; revieweeName: string } | null>(null);
@@ -641,6 +658,11 @@ export function MarketplaceApp() {
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
   const debouncedQuery = useDebouncedValue(query, 300);
+  const debouncedRiskQuery = useDebouncedValue(riskFilters.query, 300);
+  const appliedRiskFilters = useMemo(
+    () => ({ ...riskFilters, query: debouncedRiskQuery }),
+    [debouncedRiskQuery, riskFilters],
+  );
   const currentUser = store.currentUser;
   const {
     dashboardTab,
@@ -824,7 +846,6 @@ export function MarketplaceApp() {
         setReports(data.reports);
         setFeedback(data.feedback);
         setStudentVerifications(data.studentVerifications);
-        setRiskProfiles(data.riskProfiles);
         setRiskPolicy(data.riskPolicy);
         if (data.adminProfiles.length > 0) {
           setStore((previous) => ({
@@ -837,6 +858,31 @@ export function MarketplaceApp() {
         if (!isAbortError(error)) {
           setToast(`讀取審核資料失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
         }
+      }
+    });
+  }, []);
+
+  const loadRiskModeration = useCallback(async (user: Profile, filters: RiskModerationFilters) => {
+    if (!supabase) return;
+    const client = supabase;
+    await runGuarded("risk-moderation", async (signal) => {
+      setRiskPageLoading(true);
+      try {
+        const [page, summary] = await Promise.all([
+          fetchRiskProfilesForModeration(client, filters),
+          fetchRiskModerationSummary(client),
+        ]);
+        if (signal.aborted) return;
+        setRiskProfiles(page.profiles);
+        setRiskProfileTotal(page.total);
+        setRiskSummary(summary);
+      } catch (error) {
+        if (await recoverAdminVerification(error instanceof Error ? error.message : "", user)) return;
+        if (!isAbortError(error)) {
+          setToast(`讀取交易風險失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
+        }
+      } finally {
+        if (!signal.aborted) setRiskPageLoading(false);
       }
     });
   }, []);
@@ -1091,6 +1137,12 @@ export function MarketplaceApp() {
     if (!["admin", "moderator"].includes(store.currentUser.role)) return;
     void loadModerationPanel(store.currentUser);
   }, [view, store.currentUser, loadModerationPanel]);
+
+  useEffect(() => {
+    if (!supabase || view !== "admin" || !store.currentUser) return;
+    if (!["admin", "moderator"].includes(store.currentUser.role)) return;
+    void loadRiskModeration(store.currentUser, appliedRiskFilters);
+  }, [view, store.currentUser, appliedRiskFilters, loadRiskModeration]);
 
   useEffect(() => {
     if (!supabase || view !== "dashboard" || !store.currentUser) return;
@@ -2416,7 +2468,57 @@ export function MarketplaceApp() {
       return;
     }
     await loadModerationPanel(currentUser);
+    await loadRiskModeration(currentUser, appliedRiskFilters);
     setToast(decision === "approve" ? "徽章已核准公開" : "徽章已撤下");
+  }
+
+  function updateRiskFilter<K extends keyof RiskModerationFilters>(key: K, value: RiskModerationFilters[K]) {
+    setRiskFilters((previous) => ({ ...previous, [key]: value, offset: 0 }));
+  }
+
+  function changeRiskPage(direction: -1 | 1) {
+    setRiskFilters((previous) => ({
+      ...previous,
+      offset: Math.max(0, previous.offset + direction * RISK_REVIEW_PAGE_SIZE),
+    }));
+  }
+
+  async function openRiskProfile(userId: string) {
+    if (!supabase || !currentUser) return;
+    setSelectedRiskProfileId(userId);
+    setRiskProfileDetail(null);
+    setRiskProfileDetailLoading(true);
+    try {
+      const detail = await fetchRiskProfileDetail(supabase, userId);
+      if (!detail) {
+        setToast("找不到這筆風險資料");
+        return;
+      }
+      setRiskProfileDetail(detail);
+      if (detail.reviewStatus === "pending") {
+        await updateRiskReviewStatus(supabase, userId, "viewed");
+        setRiskProfileDetail((previous) => previous ? { ...previous, reviewStatus: "viewed", reviewUpdatedAt: new Date().toISOString() } : previous);
+        await loadRiskModeration(currentUser, appliedRiskFilters);
+      }
+    } catch (error) {
+      if (await recoverAdminVerification(error instanceof Error ? error.message : "", currentUser)) return;
+      setToast(`讀取風險詳情失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
+    } finally {
+      setRiskProfileDetailLoading(false);
+    }
+  }
+
+  async function changeRiskReviewStatus(status: RiskReviewStatus) {
+    if (!supabase || !currentUser || !riskProfileDetail) return;
+    try {
+      await updateRiskReviewStatus(supabase, riskProfileDetail.userId, status);
+      setRiskProfileDetail((previous) => previous ? { ...previous, reviewStatus: status, reviewUpdatedAt: new Date().toISOString() } : previous);
+      await loadRiskModeration(currentUser, appliedRiskFilters);
+      setToast(status === "processed" ? "風險項目已標記為已處理" : status === "pending" ? "風險項目已重新開啟" : "風險項目已標記為已查看");
+    } catch (error) {
+      if (await recoverAdminVerification(error instanceof Error ? error.message : "", currentUser)) return;
+      setToast(`更新風險狀態失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
+    }
   }
 
   async function saveRiskPolicy(event: FormEvent<HTMLFormElement>) {
@@ -2447,6 +2549,7 @@ export function MarketplaceApp() {
       return;
     }
     await loadModerationPanel(currentUser);
+    await loadRiskModeration(currentUser, appliedRiskFilters);
     setToast("風險門檻已更新");
   }
 
@@ -3804,49 +3907,106 @@ export function MarketplaceApp() {
               <div>
                 <span className="section-kicker">TRUST & SAFETY</span>
                 <h2 id="risk-panel-title">交易風險預警</h2>
-                <p>只供管理員查看原始評價、已處理檢舉與公開徽章資格。</p>
+                <p>先處理高／中風險項目；完整評價與檢舉證據只在開啟詳情後載入。</p>
               </div>
-              <strong>{riskProfiles.length} 位使用者</strong>
+              <div className="risk-kpi-grid" aria-label="風險摘要">
+                <div><small>待處理</small><b>{riskSummary?.queueCount ?? 0}</b></div>
+                <div><small>高風險</small><b>{riskSummary?.highCount ?? 0}</b></div>
+                <div><small>中風險</small><b>{riskSummary?.mediumCount ?? 0}</b></div>
+                <div><small>全部名冊</small><b>{riskSummary?.allCount ?? 0}</b></div>
+              </div>
+            </div>
+            <div className="risk-toolbar">
+              <div className="risk-status-tabs" role="tablist" aria-label="風險審查狀態">
+                {([
+                  ["pending", "待處理"],
+                  ["viewed", "已查看"],
+                  ["processed", "已處理"],
+                  ["all", "全部狀態"],
+                ] as const).map(([status, label]) => (
+                  <button key={status} type="button" role="tab" className={riskFilters.status === status ? "active" : ""} aria-selected={riskFilters.status === status} onClick={() => updateRiskFilter("status", status)}>{label}</button>
+                ))}
+              </div>
+              <label className="risk-search"><Search size={16} aria-hidden="true" /><span className="visually-hidden">搜尋姓名或系所</span><input value={riskFilters.query} onChange={(event) => updateRiskFilter("query", event.target.value)} placeholder="搜尋姓名或系所" /></label>
+              <select aria-label="風險等級" value={riskFilters.riskLevel} onChange={(event) => updateRiskFilter("riskLevel", event.target.value as RiskModerationFilters["riskLevel"])}>
+                <option value="all">全部風險</option>
+                <option value="high">高風險</option>
+                <option value="medium">中風險</option>
+                <option value="low">低風險</option>
+              </select>
+              <select aria-label="系所" value={riskFilters.department} onChange={(event) => updateRiskFilter("department", event.target.value)}>
+                <option value="">全部系所</option>
+                {departments.filter((item) => item !== departments[0]).map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <button type="button" className={riskFilters.scope === "all" ? "risk-scope-button active" : "risk-scope-button"} onClick={() => updateRiskFilter("scope", riskFilters.scope === "all" ? "queue" : "all")}>
+                {riskFilters.scope === "all" ? "只看風險佇列" : "查看完整名冊"}
+              </button>
             </div>
             {currentUser.role === "admin" && riskPolicy && (
-              <form className="risk-policy-form" onSubmit={saveRiskPolicy}>
-                <label>最少完成交易<input name="minCompletedTrades" type="number" min="1" max="1000" defaultValue={riskPolicy.minCompletedTrades} /></label>
-                <label>優良最低平均<input name="goodBadgeMinAverage" type="number" min="1" max="5" step="0.1" defaultValue={riskPolicy.goodBadgeMinAverage} /></label>
-                <label>優良最多嚴重檢舉<input name="goodBadgeMaxSeriousReports" type="number" min="0" max="1000" defaultValue={riskPolicy.goodBadgeMaxSeriousReports} /></label>
-                <label>中風險分數<input name="mediumRiskScore" type="number" min="1" defaultValue={riskPolicy.mediumRiskScore} /></label>
-                <label>高風險分數<input name="highRiskScore" type="number" min="1" defaultValue={riskPolicy.highRiskScore} /></label>
-                <div className="risk-actions"><button type="submit" className="primary">儲存風險門檻</button></div>
-              </form>
+              <details className="risk-policy-settings">
+                <summary>風險規則設定</summary>
+                <form className="risk-policy-form" onSubmit={saveRiskPolicy}>
+                  <label>最少完成交易<input name="minCompletedTrades" type="number" min="1" max="1000" defaultValue={riskPolicy.minCompletedTrades} /></label>
+                  <label>優良最低平均<input name="goodBadgeMinAverage" type="number" min="1" max="5" step="0.1" defaultValue={riskPolicy.goodBadgeMinAverage} /></label>
+                  <label>優良最多嚴重檢舉<input name="goodBadgeMaxSeriousReports" type="number" min="0" max="1000" defaultValue={riskPolicy.goodBadgeMaxSeriousReports} /></label>
+                  <label>中風險分數<input name="mediumRiskScore" type="number" min="1" defaultValue={riskPolicy.mediumRiskScore} /></label>
+                  <label>高風險分數<input name="highRiskScore" type="number" min="1" defaultValue={riskPolicy.highRiskScore} /></label>
+                  <div className="risk-actions"><button type="submit" className="primary">儲存風險門檻</button></div>
+                </form>
+              </details>
             )}
+            <div className="risk-list-head"><strong>{riskFilters.scope === "all" ? "完整使用者名冊" : "待審查風險佇列"}</strong><span>{riskPageLoading ? "讀取中…" : `${riskProfileTotal} 筆`}</span></div>
             <div className="risk-profile-list">
               {riskProfiles.map((risk) => (
-                <article className="risk-profile-card" key={risk.userId}>
-                  <header><div><h3>{risk.userName}</h3><small>{risk.userDepartment || "未填系所"}</small></div><span className={"risk-level " + risk.riskLevel}>{risk.riskLevel === "high" ? "高風險" : risk.riskLevel === "medium" ? "中風險" : "低風險"} · {risk.riskScore}</span></header>
-                  <div className="risk-summary-grid">
-                    <div><small>完成交易</small><b>{risk.completedTradeCount}</b></div>
-                    <div><small>平均評分</small><b>{risk.reviewCount ? risk.averageRating.toFixed(2) : "尚無"}</b></div>
-                    <div><small>已解決檢舉</small><b>{risk.resolvedReportCount}</b></div>
-                    <div><small>嚴重檢舉</small><b>{risk.seriousReportCount}</b></div>
-                  </div>
-                  <div className="risk-evidence">評價證據 {risk.reviewEvidence.length} 筆 · 檢舉證據 {risk.reportEvidence.length} 筆 · 更新於 {timeAgo(risk.computedAt)}</div>
-                  {(risk.reviewEvidence.length > 0 || risk.reportEvidence.length > 0) && (
-                    <details className="risk-evidence">
-                      <summary>查看證據明細</summary>
-                      {risk.reviewEvidence.map((evidence) => <p key={evidence.id}>評價 {evidence.rating} 星 · {evidence.reviewerName || "使用者"} · {evidence.comment || "無文字評論"}</p>)}
-                      {risk.reportEvidence.map((evidence) => <p key={evidence.id}>檢舉 {evidence.reason || "其他"} · {evidence.status} · {evidence.details || "無補充說明"}</p>)}
-                    </details>
-                  )}
-                  <div className="risk-actions">
-                    {risk.sellerBadgeEligible && risk.sellerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(risk.userId, "seller", "approve")}><ShieldCheck size={16} />核准優良賣家</button>}
-                    {risk.sellerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(risk.userId, "seller", "revoke")}><EyeOff size={16} />撤下賣家徽章</button>}
-                    {risk.buyerBadgeEligible && risk.buyerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(risk.userId, "buyer", "approve")}><ShieldCheck size={16} />核准推薦買家</button>}
-                    {risk.buyerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(risk.userId, "buyer", "revoke")}><EyeOff size={16} />撤下買家徽章</button>}
-                  </div>
-                </article>
+                <button type="button" className={`risk-profile-row ${risk.riskLevel}`} key={risk.userId} onClick={() => void openRiskProfile(risk.userId)}>
+                  <span className={`risk-profile-avatar ${risk.riskLevel}`} aria-hidden="true">{risk.userName.slice(0, 1)}</span>
+                  <span className="risk-profile-main"><strong>{risk.userName}</strong><small>{risk.userDepartment || "未填系所"} · {risk.completedTradeCount} 筆完成交易 · {risk.reviewCount ? `${risk.averageRating.toFixed(2)} 平均評分` : "尚無評分"}</small></span>
+                  <span className={`risk-level ${risk.riskLevel}`}>{risk.riskLevel === "high" ? "高風險" : risk.riskLevel === "medium" ? "中風險" : "低風險"} · {risk.riskScore}</span>
+                  <span className={`risk-review-status ${risk.reviewStatus}`}>{risk.reviewStatus === "pending" ? "待處理" : risk.reviewStatus === "viewed" ? "已查看" : "已處理"}</span>
+                  <span className="risk-profile-arrow" aria-hidden="true">›</span>
+                </button>
               ))}
-              {riskProfiles.length === 0 && <EmptyDashboard text="目前沒有可分析的交易風險資料" />}
+              {!riskPageLoading && riskProfiles.length === 0 && <EmptyDashboard text={riskFilters.scope === "all" ? "找不到符合條件的使用者" : "目前沒有待處理的交易風險"} />}
+            </div>
+            <div className="risk-pagination">
+              <span>{riskProfileTotal === 0 ? "0" : `${riskFilters.offset + 1}–${Math.min(riskFilters.offset + RISK_REVIEW_PAGE_SIZE, riskProfileTotal)}`} / {riskProfileTotal} 筆</span>
+              <div><button type="button" disabled={riskFilters.offset === 0 || riskPageLoading} onClick={() => changeRiskPage(-1)}>上一頁</button><button type="button" disabled={riskFilters.offset + RISK_REVIEW_PAGE_SIZE >= riskProfileTotal || riskPageLoading} onClick={() => changeRiskPage(1)}>下一頁</button></div>
             </div>
           </section>
+
+          {selectedRiskProfileId && (
+            <ModalShell
+              title={riskProfileDetail?.userName || "風險詳情"}
+              subtitle={riskProfileDetail ? `${riskProfileDetail.userDepartment || "未填系所"} · 交易風險審查` : "正在載入風險資料"}
+              onClose={() => { setSelectedRiskProfileId(null); setRiskProfileDetail(null); }}
+              dialogClassName="risk-detail-modal"
+            >
+              {riskProfileDetailLoading && <div className="risk-detail-loading">正在載入評價與檢舉證據…</div>}
+              {!riskProfileDetailLoading && riskProfileDetail && (
+                <div className="risk-detail-content">
+                  <div className="risk-detail-topline"><span className={`risk-level ${riskProfileDetail.riskLevel}`}>{riskProfileDetail.riskLevel === "high" ? "高風險" : riskProfileDetail.riskLevel === "medium" ? "中風險" : "低風險"} · {riskProfileDetail.riskScore}</span><span className={`risk-review-status ${riskProfileDetail.reviewStatus}`}>{riskProfileDetail.reviewStatus === "pending" ? "待處理" : riskProfileDetail.reviewStatus === "viewed" ? "已查看" : "已處理"}</span></div>
+                  <div className="risk-summary-grid">
+                    <div><small>完成交易</small><b>{riskProfileDetail.completedTradeCount}</b></div>
+                    <div><small>平均評分</small><b>{riskProfileDetail.reviewCount ? riskProfileDetail.averageRating.toFixed(2) : "尚無"}</b></div>
+                    <div><small>已解決檢舉</small><b>{riskProfileDetail.resolvedReportCount}</b></div>
+                    <div><small>嚴重檢舉</small><b>{riskProfileDetail.seriousReportCount}</b></div>
+                  </div>
+                  <p className="risk-detail-meta">風險計算更新於 {timeAgo(riskProfileDetail.computedAt)}；狀態更新於 {riskProfileDetail.reviewUpdatedAt ? timeAgo(riskProfileDetail.reviewUpdatedAt) : "尚未更新"}</p>
+                  <div className="risk-evidence-block"><h3>評價證據（{riskProfileDetail.reviewEvidence.length}）</h3>{riskProfileDetail.reviewEvidence.length === 0 ? <p>目前沒有評價證據。</p> : riskProfileDetail.reviewEvidence.map((evidence) => <p key={evidence.id}>評價 {evidence.rating} 星 · {evidence.reviewerName || "使用者"} · {evidence.comment || "無文字評論"}</p>)}</div>
+                  <div className="risk-evidence-block"><h3>檢舉證據（{riskProfileDetail.reportEvidence.length}）</h3>{riskProfileDetail.reportEvidence.length === 0 ? <p>目前沒有檢舉證據。</p> : riskProfileDetail.reportEvidence.map((evidence) => <p key={evidence.id}>檢舉 {evidence.reason || "其他"} · {evidence.status} · {evidence.details || "無補充說明"}</p>)}</div>
+                  <div className="risk-actions risk-detail-actions">
+                    {riskProfileDetail.reviewStatus !== "viewed" && riskProfileDetail.reviewStatus !== "processed" && <button type="button" className="secondary" onClick={() => void changeRiskReviewStatus("viewed")}>標記已查看</button>}
+                    {riskProfileDetail.reviewStatus !== "processed" && <button type="button" className="primary" onClick={() => void changeRiskReviewStatus("processed")}>標記已處理</button>}
+                    {riskProfileDetail.reviewStatus === "processed" && <button type="button" className="secondary" onClick={() => void changeRiskReviewStatus("pending")}>重新開啟</button>}
+                    {riskProfileDetail.sellerBadgeEligible && riskProfileDetail.sellerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(riskProfileDetail.userId, "seller", "approve")}><ShieldCheck size={16} />核准優良賣家</button>}
+                    {riskProfileDetail.sellerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(riskProfileDetail.userId, "seller", "revoke")}><EyeOff size={16} />撤下賣家徽章</button>}
+                    {riskProfileDetail.buyerBadgeEligible && riskProfileDetail.buyerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(riskProfileDetail.userId, "buyer", "approve")}><ShieldCheck size={16} />核准推薦買家</button>}
+                    {riskProfileDetail.buyerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(riskProfileDetail.userId, "buyer", "revoke")}><EyeOff size={16} />撤下買家徽章</button>}
+                  </div>
+                </div>
+              )}
+            </ModalShell>
+          )}
 
           <h2 className="admin-section-title">網站問題回報</h2>
           <div className="reports-list">
@@ -4106,12 +4266,14 @@ function ModalShell({
   subtitle,
   onClose,
   closeOnBackdrop = true,
+  dialogClassName = "",
   children,
 }: {
   title: string;
   subtitle: string;
   onClose: () => void;
   closeOnBackdrop?: boolean;
+  dialogClassName?: string;
   children: React.ReactNode;
 }) {
   const headingId = useId();
@@ -4187,7 +4349,7 @@ function ModalShell({
       )}
       <div
         ref={dialogRef}
-        className="modal"
+        className={`modal ${dialogClassName}`.trim()}
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
