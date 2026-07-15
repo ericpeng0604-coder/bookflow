@@ -1075,6 +1075,22 @@ time, and offer a rate-limited AI vision fallback only after explicit user
 consent. Always validate the returned candidate against the server-side
 student-ID parser and retain the original image for moderator review.
 
+### LESSON-058: PR CodeQL results do not prove default-branch cleanliness
+
+**Observed problem:** The CodeQL PR run reported zero alerts, while the first
+default-branch push scan later reported 15 existing open alerts, including
+high-severity findings.
+
+**Cause:** PR results were interpreted as a whole-repository baseline, and the
+initial workflow did not include a default-branch push trigger.
+
+**Detection:** After merging CodeQL, verify a successful push scan for the
+default branch and query its Code Scanning alerts separately from PR alerts.
+
+**Prevention rule:** Keep PR, default-branch push, and scheduled scans enabled;
+treat a PR result of zero as "no alert in this change" rather than proof that
+the repository is clean.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
