@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260715-admin-workbench-release",
-  "taskTitle": "deploy administrator moderation workbench",
-  "baseCommit": "a57f5857474445bdfaae06b04377e30642d69c0c",
-  "updatedAt": "2026-07-15T23:58:00+08:00",
+  "taskId": "20260716-codeql-nonblocking",
+  "taskTitle": "add non-blocking CodeQL security scan",
+  "baseCommit": "3e2dd548a8e6e5802aa0398e09e5d86a867b7694",
+  "updatedAt": "2026-07-16T00:13:29+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260715-admin-workbench-release.md"
+  "historyFile": ".ai/history/20260716-codeql-nonblocking.md"
 }
