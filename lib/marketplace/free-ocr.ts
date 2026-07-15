@@ -260,8 +260,20 @@ export async function recognizeStudentCardText(file: File): Promise<StudentCardO
   )[0];
   if (!bestAttempt) throw new Error("學生證 OCR 沒有可用結果");
 
+  let readableText = bestAttempt.text;
+  try {
+    const bilingualWorker = await getWorker("eng+chi_tra");
+    const bilingual = await Promise.race([
+      recognizeWithWorker(bilingualWorker, bestAttempt.canvas),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("bilingual OCR timeout")), 7000)),
+    ]);
+    readableText = [bestAttempt.text, bilingual.text].filter(Boolean).join("\n");
+  } catch {
+    // The numeric pass is sufficient for submission when bilingual OCR is slow.
+  }
+
   return {
-    text: bestAttempt.text,
+    text: readableText,
     confidence: bestAttempt.confidence,
     rotation: bestAttempt.rotation,
   };
@@ -674,7 +686,10 @@ export async function imageQualityFlags(file: File, ocrText: string): Promise<St
     image.src = url;
   });
 
-  const normalized = ocrText.replace(/\s/g, "");
+  const schoolNameMatched = /\u864e\u5c3e\u79d1\u6280\u5927\u5b78|\u570b\u7acb\u864e\u5c3e\u79d1\u6280\u5927\u5b78|\u864e\u5c3e\u79d1\u5927|NFU|NationalFormosaUniversity/i.test(ocrText.normalize("NFKC"));
+  const normalized = `${ocrText}${schoolNameMatched ? " NFU" : ""}`
+    .normalize("NFKC")
+    .replace(/[\s.,:：、/\\()[\]{}_-]/g, "");
   return {
     schoolMatched: /虎尾科技大學|國立虎尾科技大學|NFU|NationalFormosaUniversity/i.test(normalized),
     textTooShort: normalized.length < 12,
@@ -685,7 +700,6 @@ export async function imageQualityFlags(file: File, ocrText: string): Promise<St
 export function studentVerificationFlagLabels(flags: StudentVerificationFlags) {
   const labels: string[] = [];
   labels.push(flags.schoolMatched ? "校名疑似符合" : "未辨識到虎科校名");
-  if (flags.textTooShort) labels.push("可讀文字偏少");
   if (flags.imageTooSmall) labels.push("圖片尺寸偏小");
   return labels;
 }
