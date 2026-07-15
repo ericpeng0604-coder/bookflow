@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "project": "bookflow",
   "owner": "codex",
-  "status": "in_progress",
+  "status": "handoff",
   "taskId": "20260716-codeql-security-fixes",
   "taskTitle": "fix CodeQL security and quality alerts",
   "baseCommit": "e333579312e455d3375cfc0a3fb291d9fde05f4f",
