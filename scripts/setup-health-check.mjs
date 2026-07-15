@@ -452,8 +452,7 @@ if (noNetwork) {
 
 const icons = { PASS: "PASS", FAIL: "FAIL", WARN: "WARN", MANUAL: "TODO", INFO: "INFO" };
 for (const result of results) {
-  console.log(`[${icons[result.status]}] ${result.area}: ${result.message}`);
-  if (result.fix) console.log(`       -> ${result.fix}`);
+  console.log(`[${icons[result.status]}] ${result.area}`);
 }
 
 const counts = Object.fromEntries(
