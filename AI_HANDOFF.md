@@ -6,15 +6,17 @@
 
 ## 目前狀態與背景
 
-- Branch: `codex/confirmation-loading-fix`.
-- Base commit: `e5db18f00049eb1817e3f4a355d029787bf9c904` (`origin/main`).
+- Branch: `codex/confirmation-loading-fix-rebase`.
+- Base commit: `1b125f6245a183b224b56601bffa7e0420214378` (`origin/main`).
 - The original checkout remains dirty and mixed; this release worktree is isolated from it.
 - No database migration, workflow, rollback file, or `.github/CODEOWNERS` change is included.
-- Production deployment is pending PR merge and the required post-merge release proof.
+- Production deployment is pending PR #104 merge and the required post-merge release proof.
 
 ## 已完成
 
-- Added a 10-second timeout to the active purchase-request lookup.
+- Added an independent 10-second timeout around the active purchase-request lookup.
+- Added an 8-second UI recovery timeout so a pending data-client thenable cannot keep the action disabled forever.
+- Changed the lookup effect to use stable primitive dependencies and a per-book request key.
 - Changed the request lookup error state from a disabled dead end to an enabled `重試確認` action.
 - Added duplicate-submit protection and guaranteed busy-state cleanup for purchase requests.
 - Added `try/catch/finally` recovery to authentication, administrator OTP, profile, account deletion, and password reset callbacks.
@@ -22,7 +24,7 @@
 
 ## 下一步
 
-1. Wait for the refreshed PR checks and merge PR #103 after all required gates pass.
+1. Wait for the refreshed PR checks and merge PR #104 after all required gates pass.
 2. Run the repository's post-merge production deployment flow.
 3. Verify the deployed commit with `/api/health/release` and the release smoke check.
 
@@ -31,8 +33,7 @@
 - `components/marketplace-app.tsx`
 - `lib/marketplace/queries.ts`
 - `scripts/check-transaction-loading.mjs`
-- `scripts/run-project-checks.mjs`
-- `package.json`
+- `AI_WORK_MANUAL.md`
 - `AI_WORK_MANUAL.md`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
@@ -40,7 +41,7 @@
 
 ## 驗證結果
 
-- Transaction loading checks: passed (6/6).
+- Transaction loading checks: passed (8/8).
 - TypeScript no-emit check: passed.
 - ESLint: passed.
 - Project checks: passed (29/29) on the latest `origin/main` base.
@@ -50,7 +51,7 @@
 
 ## 風險與注意事項
 
-- A slow Supabase request now fails closed after 10 seconds and exposes retry; it does not infer that no active request exists.
+- A slow Supabase request now fails closed after 8 seconds in the UI and 10 seconds in the query wrapper, then exposes retry; it does not infer that no active request exists.
 - The timeout prevents a permanent UI lock but does not replace production network or database monitoring.
 - A Vercel Preview is not production proof.
 - Do not modify the rollback workflows or `.github/CODEOWNERS`.
@@ -64,6 +65,6 @@
 
 ## 相關 Commit
 
-- Base commit: `e5db18f00049eb1817e3f4a355d029787bf9c904`.
-- Current implementation commit: `2058ec192c579e0c0b693dc2023817045b9de165`.
-- Pull request: #103.
+- Base commit: `1b125f6245a183b224b56601bffa7e0420214378`.
+- Current implementation commit: `d60ffb4416e6f9dda06d43d204263e6443d2b763`.
+- Pull request: #104.

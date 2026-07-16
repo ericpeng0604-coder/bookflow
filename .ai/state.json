@@ -5,8 +5,8 @@
   "status": "handoff",
   "taskId": "20260716-marketplace-confirmation-loading-recovery",
   "taskTitle": "recover stalled marketplace confirmation actions",
-  "baseCommit": "e5db18f00049eb1817e3f4a355d029787bf9c904",
-  "updatedAt": "2026-07-16T15:12:00.000Z",
+  "baseCommit": "1b125f6245a183b224b56601bffa7e0420214378",
+  "updatedAt": "2026-07-16T07:45:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260716-marketplace-confirmation-loading-recovery.md"
+  "historyFile": ".ai/history/20260716-marketplace-confirmation-loading-recovery-followup.md"
 }
