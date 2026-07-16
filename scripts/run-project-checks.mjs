@@ -17,6 +17,7 @@ const checks = [
   { file: "check-listing-navigation-ui.mjs" },
   { file: "check-listing-lifecycle.mjs" },
   { file: "check-trade-workflow.mjs" },
+  { file: "check-transaction-loading.mjs" },
   { file: "check-risk-warning.mjs" },
   { file: "check-chat-switching.mjs" },
   { file: "check-notification-refresh.mjs" },
