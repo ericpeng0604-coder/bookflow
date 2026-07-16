@@ -1182,6 +1182,24 @@ independent of the transport abort implementation, reset its busy state in
 recovery action after failure. Add a focused regression check for the loading
 contract when the path is release-critical.
 
+### LESSON-063: Responsive overflow fixes must cover every nested grid
+
+**Observed problem:** The first desktop chat fix constrained the header, but
+the production screenshot still showed the order note, edit action, and quick
+phrases clipped at the right edge of the chat panel.
+
+**Cause:** The nested context-card grid and scrollable phrase row retained
+intrinsic minimum widths even after the outer conversation grid was constrained.
+
+**Detection:** Inspect the narrowest supported desktop chat width with a real
+request containing long text. Check the context card, order status, action
+button, message bubbles, and phrase scroller for clipping or horizontal page
+overflow.
+
+**Prevention rule:** For responsive grid fixes, set `min-width: 0` on every
+nested grid/flex item that can contain user text, cap intrinsic columns, and
+assert the critical containment rules in a focused regression check.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
