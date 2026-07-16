@@ -89,6 +89,7 @@ import {
   fetchProfilesByIds,
   fetchMyReviewStatus,
   fetchPublicTrustBadges,
+  fetchConversations,
   submitTradeReview,
   fetchUnreadNotificationCount,
   DEFAULT_RISK_MODERATION_FILTERS,
@@ -668,6 +669,9 @@ export function MarketplaceApp() {
   const imageSearchRequestRef = useRef(0);
   const marketplaceCursorRef = useRef<{ sellerVerified: boolean; createdAt: string; id: string } | null>(null);
   const badgeLookupRef = useRef<Set<string>>(new Set());
+  const conversationSummaryLoadingRef = useRef(false);
+  const conversationSummaryUserRef = useRef<string | null>(null);
+  const lastConversationRefreshRef = useRef(0);
   const [bookSaving, setBookSaving] = useState(false);
   const [requestSaving, setRequestSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
@@ -953,6 +957,23 @@ export function MarketplaceApp() {
     }
   }, [store.currentUser]);
 
+  const loadConversationSummary = useCallback(async () => {
+    if (!supabase || !store.currentUser || conversationSummaryLoadingRef.current) return;
+    const userId = store.currentUser.id;
+    conversationSummaryLoadingRef.current = true;
+    conversationSummaryUserRef.current = userId;
+    try {
+      const items = await fetchConversations(supabase);
+      if (conversationSummaryUserRef.current !== userId) return;
+      setConversations(items);
+      lastConversationRefreshRef.current = Date.now();
+    } catch {
+      // Keep the last known message badge value when the network is temporarily unavailable.
+    } finally {
+      conversationSummaryLoadingRef.current = false;
+    }
+  }, [store.currentUser]);
+
   const reloadAfterUserMutation = useCallback(async () => {
     if (!supabase || !store.currentUser) return;
     await Promise.all([
@@ -988,6 +1009,17 @@ export function MarketplaceApp() {
     showDashboard();
     setDashboardTab(tab);
   }, [setDashboardTab, showDashboard]);
+
+  function openMessages() {
+    setNotificationOpen(false);
+    setMobileMenuOpen(false);
+    requireLogin(() => {
+      if (view === "dashboard" && dashboardTab === "chats" && currentUser) {
+        void loadDashboardWorkspace(currentUser, "chats");
+      }
+      openDashboardTab("chats");
+    });
+  }
 
   useEffect(() => {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -1034,11 +1066,15 @@ export function MarketplaceApp() {
     } | null) => {
       if (!user?.email) {
         adminOtpRequestedRef.current = null;
+        conversationSummaryUserRef.current = null;
+        conversationSummaryLoadingRef.current = false;
+        lastConversationRefreshRef.current = 0;
         setStore((previous) => ({ ...previous, currentUser: null, requests: [] }));
         setMyBooks([]);
         setRequestBooks([]);
         setNotifications([]);
         setUnreadNotificationCount(0);
+        setConversations([]);
         setContacts({});
         setSellerLifecycle(null);
         setSelectedArchivedIds(new Set());
@@ -1053,11 +1089,15 @@ export function MarketplaceApp() {
         .maybeSingle();
       if (!storedProfile) {
         await client.auth.signOut();
+        conversationSummaryUserRef.current = null;
+        conversationSummaryLoadingRef.current = false;
+        lastConversationRefreshRef.current = 0;
         setStore((previous) => ({ ...previous, currentUser: null, requests: [] }));
         setMyBooks([]);
         setRequestBooks([]);
         setNotifications([]);
         setUnreadNotificationCount(0);
+        setConversations([]);
         setContacts({});
         return;
       }
@@ -1090,6 +1130,10 @@ export function MarketplaceApp() {
         if (!isVerified) {
           setAdminOtpEmail(user.email);
           setModal("adminOtp");
+          conversationSummaryUserRef.current = null;
+          conversationSummaryLoadingRef.current = false;
+          lastConversationRefreshRef.current = 0;
+          setConversations([]);
           setStore((previous) => ({ ...previous, currentUser: null }));
           const otpError = await ensureAdminOtp(user.email);
           setToast(otpError || "管理員驗證碼已寄出");
@@ -1126,6 +1170,7 @@ export function MarketplaceApp() {
       if (document.visibilityState !== "visible") return;
       if (Date.now() - lastNotificationRefreshRef.current < NOTIFICATION_REFRESH_INTERVAL_MS) return;
       void loadNotificationCount();
+      if (!(view === "dashboard" && dashboardTab === "chats")) void loadConversationSummary();
     };
     const interval = window.setInterval(refreshWhenVisible, NOTIFICATION_REFRESH_INTERVAL_MS);
     document.addEventListener("visibilitychange", refreshWhenVisible);
@@ -1133,7 +1178,13 @@ export function MarketplaceApp() {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [store.currentUser, loadNotificationCount]);
+  }, [dashboardTab, loadConversationSummary, loadNotificationCount, store.currentUser, view]);
+
+  useEffect(() => {
+    if (!supabase || !store.currentUser || (view === "dashboard" && dashboardTab === "chats")) return;
+    if (Date.now() - lastConversationRefreshRef.current < NOTIFICATION_REFRESH_INTERVAL_MS) return;
+    void loadConversationSummary();
+  }, [dashboardTab, loadConversationSummary, store.currentUser, view]);
 
   useEffect(() => {
     if (!notificationOpen || !store.currentUser) return;
@@ -2821,7 +2872,7 @@ export function MarketplaceApp() {
       return;
     }
     if (notification.type === "trade_message") {
-      openDashboardTab("chats");
+      openMessages();
       if (notification.conversationId) void openConversation(notification.conversationId);
       return;
     }
@@ -2894,6 +2945,7 @@ export function MarketplaceApp() {
     setMobileMenuOpen(false);
   }
   const unreadNotifications = unreadNotificationCount;
+  const unreadMessages = conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
   const activeAvailableListings = myListings.filter((book) => book.lifecycleState === "active" && book.status === "available");
   const archivedListings = myListings.filter((book) => book.lifecycleState === "archived");
   const nextConfirmationAt = sellerLifecycle
@@ -3110,6 +3162,16 @@ export function MarketplaceApp() {
           {isModerator && <button type="button" className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>管理</button>}
         </nav>
         <div className="header-actions">
+          <button
+            type="button"
+            className="icon-button message-button"
+            title="訊息"
+            aria-label={`訊息，${unreadMessages} 則未讀`}
+            onClick={openMessages}
+          >
+            <MessageCircle size={18} aria-hidden="true" />
+            {unreadMessages > 0 && <span className="notification-count message-count">{unreadMessages > 9 ? "9+" : unreadMessages}</span>}
+          </button>
           {currentUser ? (
             <>
               {isModerator && <button type="button" className="icon-button admin-shortcut" title="管理" onClick={() => setView("admin")}><UserCog size={18} /></button>}
@@ -3731,9 +3793,6 @@ export function MarketplaceApp() {
           <div className="dashboard-tabs">
             <button type="button" className={dashboardTab === "studentVerification" ? "active" : ""} onClick={() => setDashboardTab("studentVerification")}>學生身分驗證</button>
             <button type="button" className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
-            <button type="button" className={dashboardTab === "chats" ? "active" : ""} onClick={() => setDashboardTab("chats")}>
-              聊聊 <span>{conversations.reduce((sum, item) => sum + item.unreadCount, 0)}</span>
-            </button>
             <button type="button" className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 {activeMyRequestCount > 0 && <span>{activeMyRequestCount}</span>}</button>
             <button type="button" className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
             <button type="button" className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
