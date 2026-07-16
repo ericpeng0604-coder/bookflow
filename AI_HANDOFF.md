@@ -8,7 +8,7 @@
 ## 目前狀態與背景
 
 - Branch: `codex/student-verification-release`.
-- Base commit: `bca8cc3` (`origin/main`).
+- Base commit: `bca8cc37688a64c2b69e8165925277cf215a0468` (`origin/main`).
 - This release changes the student-verification UI and authenticated review
   request flow only; the existing student-verification migration is already in
   `origin/main`.
@@ -59,5 +59,5 @@
 
 ## 相關 Commit
 
-- Base commit: `bca8cc3`.
+- Base commit: `bca8cc37688a64c2b69e8165925277cf215a0468`.
 - Current implementation commit: `96a4998`.
