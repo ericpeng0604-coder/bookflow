@@ -144,6 +144,8 @@ import type {
   UserRole,
 } from "@/lib/types";
 
+const ACTIVE_REQUEST_CHECK_TIMEOUT_MS = 8_000;
+
 const STORAGE_KEY = "bookflow-market-v1";
 const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
 const LAST_CHAT_KEY = "bookflow-last-chat-v1";
@@ -661,6 +663,7 @@ export function MarketplaceApp() {
   const [showCourseSearchGuide, setShowCourseSearchGuide] = useState(false);
   const bookSavingRef = useRef(false);
   const requestSavingRef = useRef(false);
+  const activeRequestCheckStartedRef = useRef<string | null>(null);
   const adminOtpRequestedRef = useRef<string | null>(null);
   const imageSearchInputRef = useRef<HTMLInputElement>(null);
   const imageSearchRequestRef = useRef(0);
@@ -1361,6 +1364,12 @@ export function MarketplaceApp() {
       && ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status)
     )
     : null;
+  const currentUserRef = useRef(currentUser);
+  const selectedBookRef = useRef(selectedBook);
+  const selectedBookActiveRequestRef = useRef(selectedBookActiveRequest);
+  currentUserRef.current = currentUser;
+  selectedBookRef.current = selectedBook;
+  selectedBookActiveRequestRef.current = selectedBookActiveRequest;
   const profile = (id: string) => store.profiles.find((item) => item.id === id);
   const badgeFor = (userId: string, badgeType: "seller" | "buyer") =>
     trustBadges.find((badge) => badge.userId === userId && badge.badgeType === badgeType && badge.status === "approved");
@@ -1379,24 +1388,32 @@ export function MarketplaceApp() {
   }, [selectedBook, view, store.profiles]);
 
   useEffect(() => {
-    const requestCheckKey = currentUser && selectedBook && selectedBook.sellerId !== currentUser.id && view === "book"
-      ? `${selectedBook.id}:${currentUser.id}`
+    const user = currentUserRef.current;
+    const book = selectedBookRef.current;
+    const activeRequest = selectedBookActiveRequestRef.current;
+    const requestCheckKey = user && book && book.sellerId !== user.id && view === "book"
+      ? `${book.id}:${user.id}`
       : null;
-    if (!supabase || !currentUser || !selectedBook || view !== "book" || selectedBook.sellerId === currentUser.id) {
+    if (!supabase || !user || !book || view !== "book" || book.sellerId === user.id) {
+      activeRequestCheckStartedRef.current = null;
       setActiveRequestCheckKey(null);
       setActiveRequestCheckState("idle");
       return;
     }
-    if (selectedBookActiveRequest) {
+    if (activeRequest) {
       setActiveRequestCheckKey(requestCheckKey);
       setActiveRequestCheckState("ready");
       return;
     }
-    if (activeRequestCheckKey === requestCheckKey && activeRequestCheckState !== "idle") return;
+    if (activeRequestCheckStartedRef.current === requestCheckKey) return;
+    activeRequestCheckStartedRef.current = requestCheckKey;
     setActiveRequestCheckKey(requestCheckKey);
     setActiveRequestCheckState("loading");
     let active = true;
-    void fetchActiveRequestForBook(supabase, selectedBook.id, currentUser.id)
+    const timeoutId = window.setTimeout(() => {
+      if (active) setActiveRequestCheckState("error");
+    }, ACTIVE_REQUEST_CHECK_TIMEOUT_MS);
+    void fetchActiveRequestForBook(supabase, book.id, user.id)
       .then((request) => {
         if (!active) return;
         if (request) {
@@ -1412,11 +1429,15 @@ export function MarketplaceApp() {
       })
       .catch(() => {
         if (active) setActiveRequestCheckState("error");
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
       });
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
     };
-  }, [activeRequestCheckKey, activeRequestCheckState, currentUser, selectedBook, selectedBookActiveRequest, view]);
+  }, [activeRequestCheckKey, currentUser?.id, selectedBook?.id, selectedBook?.sellerId, selectedBookActiveRequest?.id, view]);
 
   function clearBookDetailRouteState() {
     setDetailBook(null);
