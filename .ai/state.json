@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260716-release-flow-hardening",
-  "taskTitle": "harden deployment flow provenance and production proof",
-  "baseCommit": "3fb323823cdf2ecd6a67c666e8af7dd5736b9cd4",
-  "updatedAt": "2026-07-16T00:00:00.000Z",
+  "taskId": "20260716-student-verification-release",
+  "taskTitle": "fix student verification session and show recognized number",
+  "baseCommit": "bca8cc37688a64c2b69e8165925277cf215a0468",
+  "updatedAt": "2026-07-16T05:05:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260716-release-flow-hardening.md"
+  "historyFile": ".ai/history/20260716-student-verification-release.md"
 }

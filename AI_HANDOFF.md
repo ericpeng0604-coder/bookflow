@@ -2,81 +2,70 @@
 
 ## 任務目標
 
-Harden the BookFlow deployment flow so migration evidence, release gates,
-Windows helper commands, and production version monitoring cannot silently
-report a false release success.
+修復學生證審核在長時間開啟管理頁後的 session 失效問題，並讓一般
+使用者在送出驗證前看見 OCR 辨識出的 8 碼學號以便核對。
 
 ## 目前狀態與背景
 
-- Branch: `codex/release-flow-hardening-20260716`.
-- Base commit: `3fb323823cdf2ecd6a67c666e8af7dd5736b9cd4` (`origin/main`).
-- This release changes deployment workflow checks, release tooling, docs, and
-  AI workflow metadata only.
-- No database migration or protected recovery file is included.
-- Production deployment is pending PR checks, merge, and post-merge smoke.
+- Branch: `codex/student-verification-release`.
+- Base commit: `bca8cc37688a64c2b69e8165925277cf215a0468` (`origin/main`).
+- This release changes the student-verification UI and authenticated review
+  request flow only; the existing student-verification migration is already in
+  `origin/main`.
+- No protected recovery file is changed.
+- Production deployment is pending local gates, PR checks, merge, and smoke.
 
 ## 已完成
 
-- Production migration now requires a full commit SHA and a successful Staging
-  Migration run for that exact SHA.
-- Staging RPC probes now assert expected authorization status and JSON shape.
-- Scheduled production uptime smoke now checks the deployed commit against the
-  current `main` commit.
-- Release tooling now uses the npm lockfile and includes the Windows bundled-Node
-  wrapper used by the `:codex` scripts.
-- Workflow and release-flow checks cover the new provenance and monitoring
-  guards.
+- Refresh the Supabase session before student-verification review actions.
+- Retry the review request once after an HTTP 401 auth failure.
+- Show the recognized student number and a confirmation instruction in the
+  ordinary user verification panel.
+- Add focused regression assertions for the displayed number and auth refresh.
 
 ## 下一步
 
-1. Run the local release-flow and project checks in the isolated worktree.
-2. Run release preflight, commit, push, and open the PR.
-3. Wait for required checks, merge only after they pass, then verify the Vercel
-   deployment commit and production smoke.
+1. Run release preflight, push, and open the release PR.
+2. Wait for required checks, merge after they pass, then verify the Vercel
+   production deployment commit and production smoke.
 
 ## 變更檔案
 
-- `.github/workflows/check-ai-handoff.yml`
-- `.github/workflows/production-migration.yml`
-- `.github/workflows/production-uptime-smoke.yml`
-- `scripts/check-release-flow.mjs`
-- `scripts/check-staging.mjs`
-- `scripts/check-workflows.mjs`
-- `scripts/lib/release-environment.mjs`
-- `scripts/release-plan.mjs`
-- `scripts/run-node.ps1`
-- `package.json`
-- `docs/RELEASE_WORKFLOW.md`
-- `docs/MONITORING.md`
+- `components/marketplace-app.tsx`
+- `lib/marketplace/student-verification.ts`
+- `scripts/check-student-verification.mjs`
 - `AI_WORK_MANUAL.md`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260716-release-flow-hardening.md`
+- `.ai/history/20260716-student-verification-release.md`
 
 ## 驗證結果
 
-- Workflow structure and rollback selection: pending.
-- Release-flow checks: pending.
-- Typecheck, lint, project checks, and production build: pending.
-- Staging and production database operations: not run from this local worktree.
+- Focused student-verification check: passed.
+- Typecheck: passed.
+- ESLint: passed.
+- Project checks: passed (28/28).
+- Workflow checks: passed.
+- Production build: passed; `.next/BUILD_ID` was generated.
+- Staging and production database operations: not required for this UI/API
+  change; the required schema is already in `origin/main`.
 
 ## 風險與注意事項
 
-- The existing user checkout is dirty and mixed; it was intentionally not
-  included in this release branch.
-- Production Migration requires the staging workflow run ID for the same commit.
-- Production deployment proof remains separate from migration history; verify
-  `/api/health/release` and `release-smoke` after deployment.
+- The original checkout remains dirty and mixed; this release worktree is
+  intentionally isolated from it.
+- A Vercel Preview is not production proof.
+- Do not modify the rollback workflows or `.github/CODEOWNERS`.
 
 ## 下一位 AI 工作指引
 
-1. Preserve the exact migration SHA and staging run ID relationship.
-2. Do not add mutable branch names back to `migration_ref`.
-3. Keep `package-lock.json`, npm CI, and release helper output aligned.
-4. Use the compact PR status helper and report any unavailable check as
+1. Preserve the exact release commit and production deployment proof.
+2. Keep the original dirty checkout isolated from this release worktree.
+3. Treat any unavailable staging, PR, deployment, or smoke evidence as
    `NOT VERIFIED`.
+4. Do not change protected recovery files without explicit authorization.
 
 ## 相關 Commit
 
-- Base commit: `3fb323823cdf2ecd6a67c666e8af7dd5736b9cd4`.
-- Current implementation commit before final commit: not committed yet.
+- Base commit: `bca8cc37688a64c2b69e8165925277cf215a0468`.
+- Current implementation commit: `96a4998`.

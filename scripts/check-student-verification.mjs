@@ -99,6 +99,7 @@ const studentPanel = app.slice(
 );
 const studentCardRoute = fs.readFileSync(path.join(root, "app/api/ai/student-card/route.ts"), "utf8");
 const studentCardClient = fs.readFileSync(path.join(root, "lib/marketplace/student-card-ai.ts"), "utf8");
+const studentVerificationClient = fs.readFileSync(path.join(root, "lib/marketplace/student-verification.ts"), "utf8");
 const projectChecks = fs.readFileSync(path.join(root, "scripts/run-project-checks.mjs"), "utf8");
 const migration = fs.readFileSync(
   path.join(root, "supabase/migrations/20260714164420_student_verification_priority.sql"),
@@ -115,7 +116,7 @@ const storageMigration = fs.readFileSync(
 assert.match(app, /studentVerification/, "the dashboard must expose the student verification tab");
 assert.match(app, /findStudentIdCandidates/, "the UI must use OCR candidates");
 assert.match(app, /照片暫時無法辨識，請重新上傳清晰的學生證照片/, "photo failures must use a simple user-facing message");
-assert.match(app, /學生證資料已讀取/, "successful OCR must use a simple confirmation");
+assert.match(app, /辨識出的學號：\{studentIdDetails\.value\}/, "the user must be able to confirm the recognized student ID");
 assert.doesNotMatch(studentPanel, /AI 找不到|AI 候選學號|OCR 已辨識學號|<textarea className="ocr-text"/, "technical OCR details must stay out of the user-facing panel");
 assert.match(studentCardRoute, /return NextResponse\.json\(\{ studentNumber: normalized\.usable \? normalized\.studentNumber : "" \}\)/, "the AI route must return only the usable student number");
 assert.doesNotMatch(studentCardRoute, /studentNumber:[^\n]*confidence/, "the AI route must not expose confidence");
@@ -128,6 +129,8 @@ assert.match(migration, /p_cursor_verified boolean/, "the cursor must include ve
 assert.match(migration, /grant execute on function public\.list_books_page[\s\S]*to anon, authenticated/, "catalog RPC must remain public");
 assert.match(app, /student-card-lightbox/, "moderators must be able to enlarge student card images");
 assert.match(app, /reviewStudentVerificationWithStorage/, "student review must use the server storage cleanup flow");
+assert.match(studentVerificationClient, /refreshSession\(\)/, "student review must refresh an expiring auth session");
+assert.match(studentVerificationClient, /response\.status === 401/, "student review must retry once after an auth failure");
 assert.match(storageRoute, /storage[\s\S]*\.remove\(\[verification\.image_path\]\)/, "review route must use the Storage API");
 assert.doesNotMatch(storageMigration, /delete\s+from\s+storage\.objects/i, "student verification migration must not delete storage tables directly");
 

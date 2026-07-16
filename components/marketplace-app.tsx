@@ -4698,8 +4698,8 @@ function StudentVerificationPanel({
             )}
             {studentIdDetails && (
               <div className="student-id-result">
-                <b>學生證資料已讀取</b>
-                <span>請確認後送出審核。</span>
+                <b>辨識出的學號：{studentIdDetails.value}</b>
+                <span>請核對這 8 碼是否與學生證一致，再送出審核。</span>
               </div>
             )}
             <label className="student-id-consent">

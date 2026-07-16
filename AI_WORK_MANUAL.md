@@ -1125,6 +1125,25 @@ hidden or metadata-only, then execute every command printed by the plan.
 printed helper commands backed by tracked files, and add a release-flow test for
 each published command entrypoint.
 
+### LESSON-061: Privileged student review must refresh before Storage cleanup
+
+**Observed problem:** A moderator could load a student-verification request,
+then receive a signed-out error when approving it after the page had remained
+open. The review flow depended on the old access token at action time.
+
+**Cause:** Session validity was checked only when the review panel loaded. The
+Storage cleanup endpoint also performed destructive cleanup before its
+privileged database mutation completed.
+
+**Detection:** Leave the moderator panel open until the access token is near
+expiry, then approve or reject a pending student verification and verify both
+the API response and the Storage/database state.
+
+**Prevention rule:** Refresh the session before sensitive review actions and
+retry once on a 401. Keep the cleanup flow idempotent and never report a
+successful review until both the database state transition and Storage cleanup
+have been handled.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
