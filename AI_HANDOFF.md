@@ -2,70 +2,68 @@
 
 ## 任務目標
 
-縮短管理員審核操作的等待感：管理員按下通過或拒絕後，先立即更新待審核佇列與狀態提示，完整 moderation、risk 與 marketplace 資料在背景同步。使用者端即時通知不在本次範圍。
+修復 marketplace 商品詳情頁交易確認卡在「確認中...」的問題，並讓同類型非同步表單在逾時、失敗或 callback 例外時都能離開 loading、顯示可理解的錯誤並安全重試。
 
 ## 目前狀態與背景
 
-- Branch: `codex/admin-moderation-live-refresh`.
-- Base commit: `69315cf94495cd598111027b5bd392cbff869c53` (`origin/main`).
-- This release changes the admin moderation refresh behavior and adds the Realtime publication needed for admin invalidation events.
-- No protected recovery file is changed.
-- Production deployment is pending local gates, PR checks, staging migration, merge, production migration, and smoke.
+- Branch: `codex/confirmation-loading-fix`.
+- Base commit: `e5db18f00049eb1817e3f4a355d029787bf9c904` (`origin/main`).
+- The original checkout remains dirty and mixed; this release worktree is isolated from it.
+- No database migration, workflow, rollback file, or `.github/CODEOWNERS` change is included.
+- Production deployment is pending PR merge and the required post-merge release proof.
 
 ## 已完成
 
-- Admin moderation mutations no longer wait for the full moderation and marketplace reload before showing completion feedback.
-- Student verification review removes the pending card optimistically, restores it on failure, and refreshes the moderator projections in the background.
-- Admin pages refresh on `student_verifications` Realtime events, on focus/visibility changes, and with a ten-second visible-page fallback interval.
-- Added a versioned migration to publish `student_verifications` changes to Supabase Realtime; payloads remain an invalidation signal and the existing moderator RPC projection remains the source of truth.
-- Added focused admin moderation refresh assertions.
+- Added a 10-second timeout to the active purchase-request lookup.
+- Changed the request lookup error state from a disabled dead end to an enabled `重試確認` action.
+- Added duplicate-submit protection and guaranteed busy-state cleanup for purchase requests.
+- Added `try/catch/finally` recovery to authentication, administrator OTP, profile, account deletion, and password reset callbacks.
+- Added a focused transaction-loading regression check and recorded the reusable prevention rule.
 
 ## 下一步
 
-1. Run release preflight, push, and open the release PR.
-2. Wait for required checks including Staging Migration, then merge after they pass.
-3. Run Production Migration with the merged commit SHA and matching successful staging run ID.
-4. Verify the Vercel production deployment and production smoke.
+1. Wait for the refreshed PR checks and merge PR #103 after all required gates pass.
+2. Run the repository's post-merge production deployment flow.
+3. Verify the deployed commit with `/api/health/release` and the release smoke check.
 
 ## 變更檔案
 
 - `components/marketplace-app.tsx`
-- `app/api/admin/student-verifications/review/route.ts`
-- `lib/marketplace/student-verification.ts`
-- `lib/types.ts`
-- `scripts/check-admin-moderation-refresh.mjs`
-- `supabase/migrations/20260716135138_student_verification_result_delivery.sql`
+- `lib/marketplace/queries.ts`
+- `scripts/check-transaction-loading.mjs`
+- `scripts/run-project-checks.mjs`
 - `package.json`
+- `AI_WORK_MANUAL.md`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260716-admin-moderation-live-refresh.md`
+- `.ai/history/20260716-marketplace-confirmation-loading-recovery.md`
 
 ## 驗證結果
 
-- Admin moderation refresh check: passed (7/7).
-- Admin workbench check: passed (8/8).
-- Typecheck: passed.
+- Transaction loading checks: passed (6/6).
+- TypeScript no-emit check: passed.
 - ESLint: passed.
-- Project checks: passed (28/28).
-- Workflow checks: passed.
+- Project checks: passed (29/29) on the latest `origin/main` base.
 - Production build: passed.
-- Staging and production database operations: pending PR workflow evidence.
+- PR preview checks before the latest base refresh: passed; refreshed PR checks are pending.
+- Production deployment and smoke proof: not verified yet.
 
 ## 風險與注意事項
 
-- The original checkout remains dirty and mixed; this release worktree is intentionally isolated from it.
-- The admin UI uses Realtime as an invalidation signal and keeps a ten-second fallback; it does not expose raw student-verification rows to the browser.
+- A slow Supabase request now fails closed after 10 seconds and exposes retry; it does not infer that no active request exists.
+- The timeout prevents a permanent UI lock but does not replace production network or database monitoring.
 - A Vercel Preview is not production proof.
 - Do not modify the rollback workflows or `.github/CODEOWNERS`.
 
 ## 下一位 AI 工作指引
 
-1. Preserve the exact release commit and production deployment proof.
-2. Keep the original dirty checkout isolated from this release worktree.
-3. Treat any unavailable staging, PR, deployment, or smoke evidence as `NOT VERIFIED`.
-4. Do not change protected recovery files without explicit authorization.
+1. Preserve the latest-base commit and keep the original dirty checkout isolated.
+2. Treat any unavailable staging, PR, deployment, or smoke evidence as `NOT VERIFIED`.
+3. After merge, verify the exact production commit before claiming the fix is online.
+4. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry synchronized.
 
 ## 相關 Commit
 
-- Base commit: `69315cf94495cd598111027b5bd392cbff869c53`.
-- Current implementation commit: pending.
+- Base commit: `e5db18f00049eb1817e3f4a355d029787bf9c904`.
+- Current implementation commit: `2058ec192c579e0c0b693dc2023817045b9de165`.
+- Pull request: #103.

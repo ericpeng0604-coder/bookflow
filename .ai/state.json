@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260716-admin-moderation-live-refresh",
-  "taskTitle": "optimize admin moderation queue responsiveness",
-  "baseCommit": "69315cf94495cd598111027b5bd392cbff869c53",
-  "updatedAt": "2026-07-16T06:07:15.000Z",
+  "taskId": "20260716-marketplace-confirmation-loading-recovery",
+  "taskTitle": "recover stalled marketplace confirmation actions",
+  "baseCommit": "e5db18f00049eb1817e3f4a355d029787bf9c904",
+  "updatedAt": "2026-07-16T15:12:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260716-admin-moderation-live-refresh.md"
+  "historyFile": ".ai/history/20260716-marketplace-confirmation-loading-recovery.md"
 }
