@@ -1565,7 +1565,7 @@ export function MarketplaceApp() {
         contentType: file.type || "image/jpeg",
         upsert: false,
       });
-    if (uploadError) return `學生證上傳失敗：${uploadError.message}`;
+    if (uploadError) return "目前無法上傳學生證，請稍後再試。";
 
     const { error: rawError } = await supabase.rpc("submit_student_verification", {
       image_path: path,
@@ -1575,7 +1575,11 @@ export function MarketplaceApp() {
     });
     if (rawError) {
       await supabase.storage.from("student-verifications").remove([path]);
-      return `學生證提交失敗：${rawError.message}`;
+      const message = rawError.message.toLowerCase();
+      if (message.includes("pending")) return "你已有一筆審核中的學生證，請等待審核完成。";
+      if (message.includes("daily") || message.includes("limit")) return "今日提交次數已達上限，請明天再試。";
+      if (message.includes("active account") || message.includes("auth")) return "請重新登入後再試。";
+      return "目前無法送出學生證審核，請稍後再試。";
     }
 
     setToast("學生證已送出，管理員會人工審核");
@@ -4591,19 +4595,19 @@ function StudentVerificationPanel({
       const { imageQualityFlags, recognizeStudentCardText } = await import("@/lib/marketplace/free-ocr");
       const { text: ocrText } = await Promise.race([
         recognizeStudentCardText(file),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("本機 OCR 較慢，請勾選同意後使用 AI 補強。")), 15000)),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("照片暫時無法辨識，請重新上傳清晰的學生證照片。")), 15000)),
       ]);
       const details = findStudentIdCandidates(ocrText)[0] ?? null;
       setStudentIdOcrText(ocrText);
       setStudentIdFlags(await imageQualityFlags(file, ocrText));
       setStudentIdDetails(details);
       if (!details) {
-        setError("OCR 找不到符合近五年規則的學號，請重新拍攝並確保學生證上的 8 碼學號清楚可見。");
+        setError("照片暫時無法辨識，請重新上傳清晰的學生證照片。");
       }
     } catch (ocrError) {
       const { imageQualityFlags } = await import("@/lib/marketplace/free-ocr");
       setStudentIdFlags(await imageQualityFlags(file, ""));
-      setError(ocrError instanceof Error ? ocrError.message : "OCR 讀取失敗，請重新上傳清楚的學生證照片。");
+      setError(ocrError instanceof Error ? ocrError.message : "照片暫時無法辨識，請重新上傳清晰的學生證照片。");
     } finally {
       setStudentIdBusy(false);
     }
@@ -4621,11 +4625,11 @@ function StudentVerificationPanel({
       const { parseStudentId } = await import("@/lib/marketplace/student-id");
       const result = await recognizeStudentCardWithAi(supabase!, studentIdFile, studentIdOcrText);
       const details = parseStudentId(result.studentNumber);
-      if (!details) throw new Error("AI 找不到符合近五年規則的學號，請重新拍攝學生證。");
-      setStudentIdOcrText((previous) => `${previous}\nAI 候選學號：${details.value}`.trim());
+      if (!details) throw new Error("照片暫時無法辨識，請重新上傳清晰的學生證照片。");
+      setStudentIdOcrText((previous) => `${previous}\n${details.value}`.trim());
       setStudentIdDetails(details);
     } catch (aiError) {
-      setError(aiError instanceof Error ? aiError.message : "AI 學生證辨識失敗，請重新上傳。");
+      setError(aiError instanceof Error ? aiError.message : "目前無法完成辨識，請稍後再試。");
     } finally {
       setStudentAiBusy(false);
     }
@@ -4692,18 +4696,12 @@ function StudentVerificationPanel({
                 <img src={safeImageSource(studentIdPreview)} alt="學生證預覽" />
               </div>
             )}
-            {studentIdFlags && (
-              <div className="ocr-flags">
-                {studentVerificationFlagLabelsForDisplay(studentIdFlags!).map((label) => <span key={label}>{label}</span>)}
-              </div>
-            )}
             {studentIdDetails && (
               <div className="student-id-result">
-                <b>OCR 已辨識學號</b>
-                <span>{studentIdDetails.programLabel} · 民國 {studentIdDetails.admissionYear} 年 · 系所 {studentIdDetails.departmentCode} · {studentIdDetails.classLabel}</span>
+                <b>學生證資料已讀取</b>
+                <span>請確認後送出審核。</span>
               </div>
             )}
-            {studentIdOcrText && <textarea className="ocr-text" readOnly value={studentIdOcrText} aria-label="學生證 OCR 結果" />}
             <label className="student-id-consent">
               <input type="checkbox" checked={studentIdConsent} onChange={(event) => setStudentIdConsent(event.target.checked)} />
               <span>我同意學生證圖片與 OCR 結果僅供身分驗證，必要時送交 AI 辨識服務，審核完成後清除敏感內容。</span>
@@ -4713,7 +4711,7 @@ function StudentVerificationPanel({
             <button className="secondary-action wide" type="button" disabled={studentIdBusy || !studentIdFile || !studentIdDetails || !studentIdConsent} onClick={() => void submitStudentId()}>
               {studentIdBusy ? "OCR 處理中..." : "送交學生身分審核"}
             </button>
-            {!studentIdDetails && studentIdFile && !studentIdBusy && <p className="form-note">找不到有效學號時不能送出，請重新拍攝學生證。</p>}
+            {!studentIdDetails && studentIdFile && !studentIdBusy && <p className="form-note">若無法讀取，請重新上傳清晰的學生證照片。</p>}
           </>
         )}
       </section>
