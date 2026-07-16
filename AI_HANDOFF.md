@@ -2,60 +2,61 @@
 
 ## 任務目標
 
-修復桌面版聊天內容在右側被裁切的問題，並將修正部署到正式環境。
+Show messages as a standalone Header icon.
 
 ## 目前狀態與背景
 
-- Branch: `codex/chat-content-overflow-fix`.
-- Base: `911f8b003db13ae281fa70589260e4937038db2b` (`origin/main`).
-- Target: `https://bookflow-green.vercel.app`.
-- Scope is runtime/UI plus focused regression checks and release metadata; no database migration.
+- Branch: `codex/message-header-icon-deploy`.
+- Base commit: `cee412fe01a58e15415d047f4df38e6def8b4e7d` (`origin/main`).
+- Scope is runtime/UI plus release metadata; no database migration.
 - Protected rollback/recovery files and the original dirty checkout are out of scope.
 
 ## 已完成
 
-- Constrained the nested chat context-card grid so its right column can shrink.
-- Added width constraints and text wrapping to order status, edit action, log, and phrase scroller.
-- Added a focused desktop containment assertion to `check-chat-listing-order-ux.mjs`.
-- Added LESSON-063 to prevent incomplete nested responsive overflow fixes.
+- Added a standalone `MessageCircle` Header button before the notification bell.
+- Kept the existing conversation state, route, unread count, and `trade_message` navigation.
+- Removed only the visible chats tab from the dashboard.
+- Kept the Header icon visible on desktop and mobile, outside the mobile menu.
+- Normalized the handoff contract section titles so release validation accepts UTF-8 handoff files.
 
 ## 下一步
 
-1. Run focused checks, typecheck, lint, project checks, and production build.
-2. Run release scope and preflight checks, then commit and push this branch.
+1. Run focused checks, typecheck, lint, project checks, production build, and browser verification.
+2. Commit and push the clean release worktree.
 3. Open the PR, wait for required checks, merge it, and verify the production commit and release smoke checks.
 
 ## 變更檔案
 
+- `components/marketplace-app.tsx`
 - `app/globals.css`
-- `scripts/check-chat-listing-order-ux.mjs`
-- `AI_WORK_MANUAL.md`
+- `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260716-chat-content-overflow-fix-release.md`
+- `.ai/history/20260716-message-header-icon-release.md`
 
 ## 驗證結果
 
-- `node scripts/check-chat-listing-order-ux.mjs`: passed (24/24).
-- `node scripts/check-chat-switching.mjs`: passed (4/4).
-- `node scripts/check-trade-chat.mjs`: passed (9/9).
-- `node scripts/check-chat-visibility-and-feedback.mjs`: passed (9/9).
-- `pnpm run typecheck`: passed.
-- `pnpm run lint`: passed.
-- `pnpm run check:project`: passed (29/29).
-- `pnpm run build`: passed (22/22 static pages).
-- Production deployment verification: pending PR merge.
+- TypeScript `tsc --noEmit`: passed.
+- ESLint: passed.
+- Project checks: passed (29/29).
+- Chat checks: passed.
+- Production build: passed.
+- Browser verification: passed at 1280, 320, 375, and 390px; message button is icon-only, visible, and does not overflow.
+- Legacy `?view=dashboard&tab=chats` URL loaded without a framework error overlay.
 
 ## 風險與注意事項
 
-- This is a CSS containment fix; it does not alter chat data or database schema.
-- Verify the merged SHA through `/api/health/release`; do not infer production state from a preview deployment.
-- Preserve unrelated changes in the original checkout.
+- No database or RPC changes.
+- Authenticated live unread-count interaction was not exercised because no signed-in browser session was available.
+- Verify the merged SHA through `/api/health/release`; do not infer production state from the preview deployment.
 
 ## 下一位 AI 工作指引
 
-Use the clean worktree, run the checks listed above, and keep the release evidence tied to the merged commit. Do not modify protected recovery files.
+1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching `.ai/history/*.md` in sync.
+2. Preserve unrelated changes in the original checkout.
+3. Do not modify protected recovery files.
+4. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
 
 ## 相關 Commit
 
-- Base commit: `911f8b003db13ae281fa70589260e4937038db2b`.
-- Fix commit: pending until the change is committed.
+- Base commit: `cee412fe01a58e15415d047f4df38e6def8b4e7d`.
+- Fix commit: `451767fddaa9494c82b2de2e3359a7abd90382e9`.

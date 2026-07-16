@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260716-chat-content-overflow-fix",
-  "taskTitle": "contain desktop chat content overflow",
-  "baseCommit": "911f8b003db13ae281fa70589260e4937038db2b",
-  "updatedAt": "2026-07-16T19:05:00.000Z",
+  "taskId": "20260716-message-header-icon-release",
+  "taskTitle": "show messages as a header icon",
+  "baseCommit": "cee412fe01a58e15415d047f4df38e6def8b4e7d",
+  "updatedAt": "2026-07-16T12:50:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260716-chat-content-overflow-fix-release.md"
+  "historyFile": ".ai/history/20260716-message-header-icon-release.md"
 }
