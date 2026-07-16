@@ -97,6 +97,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .mobile-nav { position: absolute; top: 10px; right: max(5vw, 28px); width: min(310px, calc(100vw - 32px)); padding: 10px; display: grid; gap: 5px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 54px rgba(17, 47, 40, .18); }
 .mobile-nav button { width: 100%; min-height: 42px; padding: 10px 12px; border: 0; border-radius: 8px; display: flex; align-items: center; gap: 9px; background: transparent; font-weight: 700; text-align: left; cursor: pointer; }
 .mobile-nav button:hover, .mobile-nav button.active { color: var(--green); background: var(--mint); }
+.mobile-nav-count { margin-left: auto; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 10px; display: inline-grid; place-items: center; background: #db6849; color: white; font-size: 9px; font-weight: 800; }
 .mobile-nav-separator { height: 1px; margin: 5px 4px; background: var(--line); }
 .desktop-account-action, .admin-shortcut { display: none !important; }
 .suspension-banner { max-width: 1120px; margin: 20px auto 0; padding: 13px 18px; border: 1px solid #e6b8ae; border-radius: 10px; background: #fff1ed; color: #8f3f35; display: flex; align-items: center; gap: 11px; }
