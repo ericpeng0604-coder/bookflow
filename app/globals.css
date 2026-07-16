@@ -60,6 +60,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .login-button, .user-chip { border: 1px solid var(--line); border-radius: 9px; background: white; padding: 9px 15px; display: flex; align-items: center; gap: 7px; font-weight: 600; cursor: pointer; }
 .notification-wrap { position: relative; }
+.message-button { position: relative; }
 .notification-button { position: relative; }
 .notification-count { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 10px; display: grid; place-items: center; background: #db6849; color: white; border: 2px solid white; font-size: 9px; font-weight: 800; }
 .notification-panel { position: absolute; z-index: 45; top: calc(100% + 12px); right: 0; width: min(380px, calc(100vw - 30px)); background: white; border: 1px solid var(--line); border-radius: 13px; box-shadow: 0 22px 60px rgba(17, 47, 40, .2); overflow: hidden; }
