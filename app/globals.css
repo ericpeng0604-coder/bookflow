@@ -239,11 +239,11 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .conversation-panel .trade-chat-head { padding: 16px 18px; background: #fffdf8; }
 .conversation-panel .trade-chat-phrases { padding: 12px 18px; }
 .conversation-panel .trade-chat-compose { padding: 12px 18px 16px; }
-.trade-chat { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; overflow: hidden; }
-.trade-chat-head { padding: 12px; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); background: white; }
-.trade-chat-person { display: grid; gap: 3px; }
-.trade-chat-head small { color: var(--muted); font-size: 10px; }
-.trade-chat-actions { display: flex; gap: 5px; align-items: flex-start; }
+.trade-chat { min-width: 0; margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; overflow: hidden; }
+.trade-chat-head { min-width: 0; padding: 12px; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); background: white; }
+.trade-chat-person { min-width: 0; display: grid; gap: 3px; }
+.trade-chat-head small { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade-chat-actions { flex: 0 0 auto; display: flex; gap: 5px; align-items: flex-start; }
 .trade-chat-head button, .message-tools button { border: 0; background: none; color: var(--muted); font-size: 10px; cursor: pointer; display: inline-flex; gap: 3px; align-items: center; }
 .chat-safety-actions { position: relative; }
 .chat-safety-toggle { width: 34px; height: 34px; justify-content: center; border-radius: 8px !important; }

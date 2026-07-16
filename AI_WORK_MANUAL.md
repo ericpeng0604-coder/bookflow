@@ -1143,6 +1143,23 @@ the API response and the Storage/database state.
 retry once on a 401. Keep the cleanup flow idempotent and never report a
 successful review until both the database state transition and Storage cleanup
 have been handled.
+
+### LESSON-062: UI regression checks must assert behavior, not old syntax
+
+**Observed problem:** The project check failed after the mobile chat back
+handler was corrected, because a second static check still required the old
+inline callback expression.
+
+**Cause:** Two checks described the same behavior but were coupled to different
+implementation spellings.
+
+**Detection:** Run the full project check after a small UI refactor and inspect
+failures for stale string-match expectations before changing working code.
+
+**Prevention rule:** Make static checks assert the user-visible contract and
+the critical state transition, using stable helper names or behavior markers;
+update every duplicate check in the same change.
+
 ### LESSON-057: Async action states need independent timeout and retry recovery
 
 **Observed problem:** A marketplace detail action stayed on "確認中..." when
