@@ -655,7 +655,6 @@ export function MarketplaceApp() {
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
   const [activeRequestCheckState, setActiveRequestCheckState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [activeRequestCheckKey, setActiveRequestCheckKey] = useState<string | null>(null);
-  const [chatListCollapsed, setChatListCollapsed] = useState(false);
   const [lifecycleSaving, setLifecycleSaving] = useState(false);
   const [pushState, setPushState] = useState<BrowserPushState>("disabled");
   const [pushSaving, setPushSaving] = useState(false);
@@ -3808,19 +3807,7 @@ export function MarketplaceApp() {
           )}
 
           {dashboardTab === "chats" && (
-            <>
-              <div className="conversation-toolbar">
-                <button
-                  type="button"
-                  className="chat-list-toggle"
-                  aria-expanded={!chatListCollapsed}
-                  aria-controls="conversation-list"
-                  onClick={() => setChatListCollapsed((collapsed) => !collapsed)}
-                >
-                  <Menu size={16} />{chatListCollapsed ? "顯示聊天列表" : "隱藏聊天列表"}
-                </button>
-              </div>
-            <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""} ${chatListCollapsed ? "chat-list-collapsed" : ""}`}>
+            <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""}`}>
               <div className="conversation-list" id="conversation-list">
                 {conversations.map((conversation) => {
                   const book = knownBooks.find((item) => item.id === conversation.bookId);
@@ -3832,6 +3819,7 @@ export function MarketplaceApp() {
                       type="button"
                       className={`conversation-item ${expandedConversationId === conversation.id ? "active" : ""}`}
                       key={conversation.id}
+                      aria-current={expandedConversationId === conversation.id ? "true" : undefined}
                       onClick={() => void openConversation(conversation.id, { preservePageScroll: true })}
                     >
                       <span className="avatar">{profile(otherId)?.name.slice(0, 1) || "聊"}</span>
@@ -3885,7 +3873,6 @@ export function MarketplaceApp() {
                 )}
               </div>
             </div>
-            </>
           )}
 
           {dashboardTab === "requests" && (

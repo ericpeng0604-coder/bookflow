@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260716-marketplace-confirmation-loading-recovery",
-  "taskTitle": "recover stalled marketplace confirmation actions",
-  "baseCommit": "1b125f6245a183b224b56601bffa7e0420214378",
-  "updatedAt": "2026-07-16T07:45:00.000Z",
+  "taskId": "20260716-ig-chat-layout-release",
+  "taskTitle": "implement responsive IG-style chat layout",
+  "baseCommit": "ae7174f6a3f235fcd425c1ebf1f778efe20a549c",
+  "updatedAt": "2026-07-16T08:30:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260716-marketplace-confirmation-loading-recovery-followup.md"
+  "historyFile": ".ai/history/20260716-ig-chat-layout-release.md"
 }
