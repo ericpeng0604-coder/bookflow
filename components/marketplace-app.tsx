@@ -2230,6 +2230,13 @@ export function MarketplaceApp() {
     }
   }
 
+  function closeConversation() {
+    if (currentUser) {
+      window.localStorage.removeItem(lastChatStorageKey(currentUser.id));
+    }
+    setExpandedConversationId(null);
+  }
+
   const keepConversationRead = useCallback((conversationId: string) => {
     setConversations((previous) => previous.map((conversation) =>
       conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation,
@@ -3852,7 +3859,7 @@ export function MarketplaceApp() {
                         profiles={store.profiles}
                         onChanged={reloadAfterUserMutation}
                         onRead={keepConversationRead}
-                        onBack={() => setExpandedConversationId(null)}
+                        onBack={closeConversation}
                         onHide={() => void hideClosedConversation(expandedConversationId)}
                         onOpenBook={openBook}
                         onEditRequest={() => {
