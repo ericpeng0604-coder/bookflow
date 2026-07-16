@@ -7,8 +7,8 @@
 ## 目前狀態與背景
 
 - Branch: `codex/ig-chat-layout`。
-- Base commit: `ae7174f6a3f235fcd425c1ebf1f778efe20a549c` (`origin/main`)。
-- 本發布 worktree 從 `origin/main` 建立，未混入原工作區的學生驗證、OCR 或其他未提交修改。
+- Base commit: `7b322e8b33c1ff103a1b7cf45af70b4f4e967adf` (`origin/main`)。
+- 本發布 worktree 從最新 `origin/main` 建立，未混入原工作區的學生驗證、OCR 或其他未提交修改。
 - 本次沒有資料庫 migration、GitHub workflow、rollback 檔案或 `.github/CODEOWNERS` 變更。
 - 正式部署目標為 `https://bookflow-green.vercel.app`，須依既有 PR、合併 `main`、Vercel 部署流程完成。
 
@@ -66,5 +66,5 @@
 
 ## 相關 Commit
 
-- Base commit: `ae7174f6a3f235fcd425c1ebf1f778efe20a549c`。
+- Base commit: `7b322e8b33c1ff103a1b7cf45af70b4f4e967adf`。
 - Current implementation commit: the final release commit on this branch; verify with `git rev-parse HEAD`。

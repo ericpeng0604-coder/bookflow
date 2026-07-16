@@ -8,7 +8,8 @@ const queries = readFileSync(new URL("../lib/marketplace/queries.ts", import.met
 const checks = [
   ["active request lookup has an independent timeout", /function withTimeout[\s\S]*?Promise\.race\(\[promise, timeout\]\)/.test(queries) && /fetchActiveRequestForBook[\s\S]*?withTimeout\(/.test(queries)],
   ["active request check has a bounded UI recovery", /activeRequestCheckStartedRef[\s\S]*?window\.setTimeout\([\s\S]*?setActiveRequestCheckState\("error"\)/.test(app)],
-  ["active request check does not restart on object identity changes", /\[activeRequestCheckKey, currentUser\?\.id, selectedBook\?\.id, selectedBook\?\.sellerId, selectedBookActiveRequest\?\.id, view\]/.test(app)],
+  ["active request check does not restart on object identity changes", /\[activeRequestCheckRetry, currentUser\?\.id, selectedBook\?\.id, selectedBook\?\.sellerId, selectedBookActiveRequest\?\.id, view\]/.test(app) && !/setActiveRequestCheckKey/.test(app)],
+  ["active request retry restarts through a separate nonce", /activeRequestCheckStartedRef\.current = null[\s\S]*?setActiveRequestCheckRetry\(\(retry\) => retry \+ 1\)/.test(app)],
   ["request lookup errors expose retry", /!\["ready", "error"\]\.includes\(activeRequestCheckState\)[\s\S]*?activeRequestCheckState === "error"[\s\S]*?setActiveRequestCheckState\("idle"\)/.test(app)],
   ["request submission has duplicate guard and finally reset", /requestSavingRef\.current = true[\s\S]*?finally \{[\s\S]*?requestSavingRef\.current = false[\s\S]*?setRequestSaving\(false\)/.test(app)],
   ["request form disables duplicate submission", /<RequestModal[\s\S]*?saving=\{requestSaving\}/.test(app) && /disabled=\{!versionConfirmed \|\| saving\}/.test(app)],
