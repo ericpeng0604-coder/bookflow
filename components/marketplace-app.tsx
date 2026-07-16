@@ -3292,6 +3292,14 @@ export function MarketplaceApp() {
               >
                 我的交易
               </button>
+              <button
+                type="button"
+                className={view === "dashboard" && dashboardTab === "chats" ? "active" : ""}
+                onClick={openMessages}
+              >
+                <MessageCircle size={18} />訊息
+                {unreadMessages > 0 && <span className="mobile-nav-count">{unreadMessages > 9 ? "9+" : unreadMessages}</span>}
+              </button>
               {isModerator && (
                 <button type="button"
                   className={view === "admin" ? "active" : ""}
