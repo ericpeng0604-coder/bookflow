@@ -10,7 +10,7 @@ function git(args, options = {}) {
   return execFileSync("git", args, {
     encoding: "utf8",
     stdio: options.inherit ? "inherit" : ["ignore", "pipe", "pipe"],
-  }).trim();
+  }).replace(/\r?\n+$/, "");
 }
 
 function runNode(args) {

@@ -4,7 +4,7 @@ function git(args) {
   return execFileSync("git", args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
+  }).replace(/\r?\n+$/, "");
 }
 
 function lines(value) {
@@ -67,6 +67,27 @@ function classifyFile(file) {
   return "other";
 }
 
+function isReleaseInfrastructureFile(file) {
+  return (
+    file.startsWith(".github/workflows/")
+    || file.startsWith("scripts/")
+    || file.startsWith("docs/")
+    || file.startsWith(".ai/")
+    || [
+      "AI_HANDOFF.md",
+      "AI_WORK_MANUAL.md",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "eslint.config.mjs",
+    ].includes(file)
+  );
+}
+
+function isReleaseInfrastructure(files) {
+  return files.length > 0 && files.every(isReleaseInfrastructureFile);
+}
+
 export function analyzeReleaseScope(baseRef = "origin/main") {
   const statusEntries = lines(git(["status", "--porcelain=v1"]));
   const statusFiles = unique(statusEntries.map(normalizeStatusEntry));
@@ -79,6 +100,9 @@ export function analyzeReleaseScope(baseRef = "origin/main") {
   const mixedPrScope = substantivePrAreas.length >= 3;
   const hasObservability =
     workingTreeAreas.includes("observability") || prAreas.includes("observability");
+  const releaseInfrastructureWorkingTree = isReleaseInfrastructure(statusFiles);
+  const releaseInfrastructurePr = isReleaseInfrastructure(prFiles);
+  const safeReleaseInfrastructure = releaseInfrastructureWorkingTree || releaseInfrastructurePr;
 
   return {
     statusFiles,
@@ -87,8 +111,10 @@ export function analyzeReleaseScope(baseRef = "origin/main") {
     prAreas,
     hasObservability,
     riskyMixedScope:
-      (hasObservability && (mixedWorkingTree || mixedPrScope))
-      || (mixedWorkingTree && statusFiles.length >= 8),
+      !safeReleaseInfrastructure && (
+        (hasObservability && (mixedWorkingTree || mixedPrScope))
+        || (mixedWorkingTree && statusFiles.length >= 8)
+      ),
   };
 }
 

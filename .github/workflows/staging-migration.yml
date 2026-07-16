@@ -88,3 +88,13 @@ jobs:
           else
             echo "No versioned database migration changed."
           fi
+      - name: Record staging evidence
+        if: ${{ success() }}
+        run: |
+          {
+            echo ""
+            echo "## Staging evidence"
+            echo ""
+            echo "- Commit: \`${{ github.event.pull_request.head.sha || github.sha }}\`"
+            echo "- Workflow run ID: \`${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

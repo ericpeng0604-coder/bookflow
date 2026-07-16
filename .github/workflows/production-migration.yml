@@ -4,13 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       migration_ref:
-        description: Git ref containing the approved migration files
+        description: Full 40-character commit SHA containing the approved migration files
         required: true
-        default: main
+        type: string
+      staging_run_id:
+        description: Successful Staging Migration workflow run ID for the same commit
+        required: true
         type: string
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: production-database-migration
@@ -31,6 +35,41 @@ jobs:
       - uses: supabase/setup-cli@v2
         with:
           version: 2.84.2
+      - name: Validate immutable migration source and staging evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIGRATION_REF: ${{ inputs.migration_ref }}
+          STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$MIGRATION_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "migration_ref must be a full lowercase commit SHA." >&2
+            exit 1
+          fi
+
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [[ "$checked_out_sha" != "$MIGRATION_REF" ]]; then
+            echo "Checked out SHA $checked_out_sha does not match migration_ref $MIGRATION_REF." >&2
+            exit 1
+          fi
+
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${STAGING_RUN_ID}")"
+          run_name="$(jq -r '.name // ""' <<< "$run_json")"
+          run_conclusion="$(jq -r '.conclusion // ""' <<< "$run_json")"
+          run_head_sha="$(jq -r '.head_sha // ""' <<< "$run_json")"
+          if [[ "$run_name" != "Staging Migration" || "$run_conclusion" != "success" || "$run_head_sha" != "$MIGRATION_REF" ]]; then
+            echo "Staging evidence does not match the approved migration SHA." >&2
+            echo "workflow=$run_name conclusion=$run_conclusion head_sha=$run_head_sha" >&2
+            exit 1
+          fi
+
+          {
+            echo "## Approved migration source"
+            echo ""
+            echo "- Migration commit: \`$MIGRATION_REF\`"
+            echo "- Staging Migration run: \`$STAGING_RUN_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Show pending migration history
         env:
           PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
@@ -43,3 +82,12 @@ jobs:
         env:
           PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
         run: supabase migration list --db-url "$PRODUCTION_DATABASE_URL"
+      - name: Require post-migration production proof
+        run: |
+          {
+            echo ""
+            echo "## Next required proof"
+            echo ""
+            echo "Production migration history was recorded for \`${{ inputs.migration_ref }}\`."
+            echo "Run Production Deployment Monitor with the matching deployed SHA after the application deploy."
+          } >> "$GITHUB_STEP_SUMMARY"

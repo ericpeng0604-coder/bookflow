@@ -18,18 +18,31 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Read expected production commit
+        id: expected
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          echo "sha=$(git rev-parse FETCH_HEAD)" >> "$GITHUB_OUTPUT"
       - name: Probe production health
         env:
           RELEASE_BASE_URL: https://bookflow-green.vercel.app
+          EXPECTED_COMMIT: ${{ steps.expected.outputs.sha }}
         run: node scripts/release-smoke.mjs
       - name: Write summary
         if: ${{ success() }}
+        env:
+          EXPECTED_COMMIT: ${{ steps.expected.outputs.sha }}
         run: |
           {
             echo "## Production uptime"
             echo ""
+            echo "- Expected main commit: \`$EXPECTED_COMMIT\`"
             echo "- Homepage, marketplace count, and release health passed."
           } >> "$GITHUB_STEP_SUMMARY"

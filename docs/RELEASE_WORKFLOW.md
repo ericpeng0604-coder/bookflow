@@ -35,8 +35,9 @@ The `main` ruleset must:
 - require a pull request with zero approving reviews for single-maintainer use;
 - block deletion and non-fast-forward updates;
 - require branches to be up to date before merge;
-- require `AI 交接完整性`, `Release Readiness`, `Staging Migration`, and the
-  Vercel Preview status.
+- require `AI 交接完整性`, `Release Readiness`, and `Staging Migration`.
+- require the `Vercel` status when the repository's Vercel integration publishes
+  that context.
 
 The recovery deploy key or GitHub App must retain permission to push the
 auditable rollback and recovery commits.
@@ -57,9 +58,10 @@ supabase migration repair --status applied 20260614000000
 
 Database changes must pass the Staging Migration workflow before the production
 workflow is approved. Application rollback does not reverse database changes.
-The production migration workflow checks out an explicit approved
-`migration_ref`; use the PR branch or commit when the migration must run before
-the PR is merged.
+The production migration workflow checks out an explicit approved full commit
+SHA and requires a successful `Staging Migration` run for that exact SHA. Use
+the PR commit when the migration must run before the PR is merged; do not pass a
+mutable branch name as `migration_ref`.
 
 ## Commands
 
@@ -75,6 +77,11 @@ RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> npm run release:
 `release:smoke` verifies the homepage, `/api/marketplace/count`, and
 `/api/health/release`.
 
+When starting `Production Migration`, pass the exact 40-character commit SHA
+as `migration_ref` and the successful `Staging Migration` workflow run ID as
+`staging_run_id`. The production workflow rejects branch names, mismatched
+staging runs, and unsuccessful staging evidence.
+
 `check:release-scope` stops early when a narrow release is still sitting in a
 dirty checkout, especially when observability files are mixed with unrelated
 UI, SQL, workflow, or tooling changes.
@@ -88,7 +95,8 @@ merge, and when substantive code changes are missing the required
 ## Low-token Codex path
 
 When Codex is preparing or verifying a release, start with `npm run
-release:plan`. It prints a short summary of the current branch, changed areas,
+release:plan` (or `node scripts/release-plan.mjs` when npm is unavailable). It
+prints a short summary of the current branch, changed areas,
 protected recovery-file risk, and the minimum gates required for the change.
 If the active checkout is dirty and the intended release is small, move it into
 a clean worktree before continuing. Then run `npm run check:release-scope`.
@@ -104,19 +112,19 @@ node scripts/check-release-scope.mjs
 node scripts/release-preflight.mjs
 ```
 
-In Codex desktop on Windows, `node` and `npm` may not be on `PATH`. Prefer the
-Codex-safe package scripts first:
+In Codex desktop on Windows, use the repository's `:codex` scripts when the
+bundled Node runtime is needed:
 
 ```text
-pnpm run ai:budget:codex
-pnpm run release:plan:codex
-pnpm run release:preflight:codex
-pnpm run release:watch-pr:codex -- <pr-number-or-url>
-RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> pnpm run release:smoke:codex
+npm run ai:budget:codex
+npm run release:plan:codex
+npm run release:preflight:codex
+npm run release:watch-pr:codex -- <pr-number-or-url>
+RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> npm run release:smoke:codex
 ```
 
-If `pnpm` itself is not available, use the bundled Node executable shown by the
-workspace dependency helper, then run the same script directly:
+If the `:codex` wrapper is unavailable, use the active or bundled Node
+executable, then run the same script directly:
 
 ```text
 <bundled-node.exe> scripts/release-plan.mjs

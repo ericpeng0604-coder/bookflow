@@ -5,7 +5,7 @@ import process from "node:process";
 import { analyzeReleaseScope, formatReleaseScopeStop } from "./lib/release-scope.mjs";
 
 function git(args) {
-  return execFileSync("git", args, { encoding: "utf8" }).trim();
+  return execFileSync("git", args, { encoding: "utf8" }).replace(/\r?\n+$/, "");
 }
 
 function lines(value) {
@@ -50,9 +50,9 @@ const touchedPackage = changedFiles.filter((file) =>
   ["package.json", "package-lock.json", "tsconfig.json", "eslint.config.mjs"].includes(file),
 );
 const isCodexRuntime = process.execPath.toLowerCase().includes("codex-runtimes");
-const packageRunner = isCodexRuntime ? "pnpm run" : "pnpm run";
-const smokeScript = isCodexRuntime ? "release:smoke:codex" : "release:smoke";
-const watchPrScript = isCodexRuntime ? "release:watch-pr:codex" : "release:watch-pr";
+const packageRunner = "npm run";
+const smokeCommand = isCodexRuntime ? "node scripts/release-smoke.mjs" : "npm run release:smoke";
+const watchPrCommand = isCodexRuntime ? "node scripts/release-pr-status.mjs --wait" : "npm run release:watch-pr";
 
 console.log("BookFlow release plan (low-output)");
 console.log(`Branch: ${branch}`);
@@ -68,7 +68,7 @@ if (scope.riskyMixedScope) {
 if (!changedFiles.length) {
   console.log("\nNo local file changes detected.");
   console.log("For an already-merged release, verify production with:");
-  console.log(`  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> ${packageRunner} ${smokeScript}`);
+  console.log(`  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> ${smokeCommand}`);
   process.exit(0);
 }
 
@@ -105,13 +105,13 @@ if (touchedMigrations.length) {
 }
 
 console.log("\nProduction proof after merge:");
-console.log(`  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> ${packageRunner} ${smokeScript}`);
+console.log(`  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> ${smokeCommand}`);
 console.log("  Use /api/health/release for the deployed commit before opening large dashboards.");
 if (scope.hasObservability) {
   console.log("  For Sentry or analytics changes, do not run production smoke until that endpoint reports the merged observability commit.");
 }
 console.log("\nPR check waiting:");
-console.log(`  ${packageRunner} ${watchPrScript} -- <pr-number-or-url>`);
+console.log(`  ${watchPrCommand}${isCodexRuntime ? " <pr-number-or-url>" : " -- <pr-number-or-url>"}`);
 console.log("  Do not use `gh pr checks --watch` in Codex; it repeats the full check table and burns context.");
 if (isCodexRuntime) {
   console.log("  Codex Windows PATH note: use the :codex scripts when plain node is unavailable.");

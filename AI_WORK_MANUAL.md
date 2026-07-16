@@ -1091,6 +1091,40 @@ default branch and query its Code Scanning alerts separately from PR alerts.
 treat a PR result of zero as "no alert in this change" rather than proof that
 the repository is clean.
 
+### LESSON-059: Migration existence checks must assert behavior and provenance
+
+**Observed problem:** A staging RPC probe treated any response other than a
+missing-function error as success, and production migration accepted a mutable
+Git ref without proving that staging had passed for the same source.
+
+**Cause:** Function existence, authorization behavior, migration history, and
+release provenance were collapsed into one shallow check.
+
+**Detection:** Review migration probes for explicit expected status and response
+shape assertions. Review production migration inputs for full commit SHA
+validation and matching staging-run evidence.
+
+**Prevention rule:** Test public and protected RPCs against their expected
+status contract, require immutable migration SHAs, bind production migration to
+a successful staging run for that SHA, and record post-migration production
+proof separately from migration history.
+
+### LESSON-060: Release helpers must preserve status output and point to tracked files
+
+**Observed problem:** The release scope guard truncated the first porcelain
+status path after trimming leading whitespace, and the documented PR watcher
+pointed to a helper file that did not exist.
+
+**Cause:** Shell output formatting and helper names were treated as incidental
+details instead of tested interfaces.
+
+**Detection:** Run the release plan from a worktree whose first changed path is
+hidden or metadata-only, then execute every command printed by the plan.
+
+**Prevention rule:** Preserve Git porcelain leading status characters, keep
+printed helper commands backed by tracked files, and add a release-flow test for
+each published command entrypoint.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
