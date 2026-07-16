@@ -654,7 +654,7 @@ export function MarketplaceApp() {
   const [sellerLifecycle, setSellerLifecycle] = useState<SellerLifecycle | null>(null);
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
   const [activeRequestCheckState, setActiveRequestCheckState] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [activeRequestCheckKey, setActiveRequestCheckKey] = useState<string | null>(null);
+  const [activeRequestCheckRetry, setActiveRequestCheckRetry] = useState(0);
   const [chatListCollapsed, setChatListCollapsed] = useState(false);
   const [lifecycleSaving, setLifecycleSaving] = useState(false);
   const [pushState, setPushState] = useState<BrowserPushState>("disabled");
@@ -1396,18 +1396,15 @@ export function MarketplaceApp() {
       : null;
     if (!supabase || !user || !book || view !== "book" || book.sellerId === user.id) {
       activeRequestCheckStartedRef.current = null;
-      setActiveRequestCheckKey(null);
       setActiveRequestCheckState("idle");
       return;
     }
     if (activeRequest) {
-      setActiveRequestCheckKey(requestCheckKey);
       setActiveRequestCheckState("ready");
       return;
     }
     if (activeRequestCheckStartedRef.current === requestCheckKey) return;
     activeRequestCheckStartedRef.current = requestCheckKey;
-    setActiveRequestCheckKey(requestCheckKey);
     setActiveRequestCheckState("loading");
     let active = true;
     const timeoutId = window.setTimeout(() => {
@@ -1437,7 +1434,7 @@ export function MarketplaceApp() {
       active = false;
       window.clearTimeout(timeoutId);
     };
-  }, [activeRequestCheckKey, currentUser?.id, selectedBook?.id, selectedBook?.sellerId, selectedBookActiveRequest?.id, view]);
+  }, [activeRequestCheckRetry, currentUser?.id, selectedBook?.id, selectedBook?.sellerId, selectedBookActiveRequest?.id, view]);
 
   function clearBookDetailRouteState() {
     setDetailBook(null);
@@ -3617,7 +3614,8 @@ export function MarketplaceApp() {
                       onClick={() => {
                         if (selectedBookActiveRequest) return;
                         if (activeRequestCheckState === "error") {
-                          setActiveRequestCheckKey(null);
+                          activeRequestCheckStartedRef.current = null;
+                          setActiveRequestCheckRetry((retry) => retry + 1);
                           setActiveRequestCheckState("idle");
                           return;
                         }
