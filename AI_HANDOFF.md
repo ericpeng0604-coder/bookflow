@@ -25,9 +25,8 @@
 
 ## 下一步
 
-1. Run local typecheck, lint, project checks, and production build.
-2. Run release preflight, commit, push, and open the release PR.
-3. Wait for required checks, merge after they pass, then verify the Vercel
+1. Run release preflight, push, and open the release PR.
+2. Wait for required checks, merge after they pass, then verify the Vercel
    production deployment commit and production smoke.
 
 ## 變更檔案
@@ -42,8 +41,12 @@
 
 ## 驗證結果
 
-- Focused student-verification check: pending.
-- Typecheck, lint, project checks, and production build: pending.
+- Focused student-verification check: passed.
+- Typecheck: passed.
+- ESLint: passed.
+- Project checks: passed (28/28).
+- Workflow checks: passed.
+- Production build: passed; `.next/BUILD_ID` was generated.
 - Staging and production database operations: not required for this UI/API
   change; the required schema is already in `origin/main`.
 
@@ -57,4 +60,4 @@
 ## 相關 Commit
 
 - Base commit: `bca8cc3`.
-- Current implementation commit before final commit: not committed yet.
+- Current implementation commit: `96a4998`.
