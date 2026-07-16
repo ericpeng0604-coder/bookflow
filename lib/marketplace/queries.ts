@@ -23,6 +23,7 @@ import {
 import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskLevel, RiskModerationSummary, RiskPolicy, RiskProfile, RiskProfileSummary, RiskReviewStatus, SellerLifecycle, StudentVerification, StudentVerificationSummary, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
+const ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS = 10_000;
 
 export type { MarketplaceFilters } from "@/lib/marketplace/filters";
 export type MarketplaceCursor = {
@@ -245,6 +246,7 @@ export async function fetchActiveRequestForBook(
     .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"])
     .order("created_at", { ascending: false })
     .limit(1)
+    .abortSignal(AbortSignal.timeout(ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS))
     .maybeSingle();
   if (error) throw error;
   return data ? mapRequest(data) : null;

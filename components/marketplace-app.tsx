@@ -660,12 +660,14 @@ export function MarketplaceApp() {
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [showCourseSearchGuide, setShowCourseSearchGuide] = useState(false);
   const bookSavingRef = useRef(false);
+  const requestSavingRef = useRef(false);
   const adminOtpRequestedRef = useRef<string | null>(null);
   const imageSearchInputRef = useRef<HTMLInputElement>(null);
   const imageSearchRequestRef = useRef(0);
   const marketplaceCursorRef = useRef<{ sellerVerified: boolean; createdAt: string; id: string } | null>(null);
   const badgeLookupRef = useRef<Set<string>>(new Set());
   const [bookSaving, setBookSaving] = useState(false);
+  const [requestSaving, setRequestSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
   const adminModerationDebounceRef = useRef<number | null>(null);
   const debouncedQuery = useDebouncedValue(query, 300);
@@ -1895,11 +1897,15 @@ export function MarketplaceApp() {
   async function sendRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!currentUser || !selectedBook) return;
+    if (requestSavingRef.current) return;
     if (currentUser.accountStatus === "suspended") {
       setToast("你的帳號目前為唯讀模式，不能送出購買意願");
       return;
     }
-    const formData = new FormData(event.currentTarget);
+    requestSavingRef.current = true;
+    setRequestSaving(true);
+    try {
+      const formData = new FormData(event.currentTarget);
     const message = String(formData.get("message") || "").trim();
     const preferredMeetupLocation = String(formData.get("preferredMeetupLocation") || "")
       .trim()
@@ -1924,6 +1930,9 @@ export function MarketplaceApp() {
           .eq("book_id", selectedBook.id)
           .eq("buyer_id", currentUser.id)
           .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .abortSignal(AbortSignal.timeout(10_000))
           .maybeSingle();
         if (existingError) {
           setToast(`無法確認既有購買意願：${existingError.message}`);
@@ -2020,6 +2029,12 @@ export function MarketplaceApp() {
     setModal(null);
     setEditingRequest(null);
     setToast("購買意願已送出");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "購買意願送出失敗，請稍後再試");
+    } finally {
+      requestSavingRef.current = false;
+      setRequestSaving(false);
+    }
   }
 
   async function saveContactSettings(event: FormEvent<HTMLFormElement>) {
@@ -3573,11 +3588,18 @@ export function MarketplaceApp() {
                     <button type="button"
                       className="primary wide"
                       disabled={Boolean(selectedBookActiveRequest)
-                        || (currentUser && currentUser.id !== selectedBook.sellerId && activeRequestCheckState !== "ready")
+                        || (currentUser
+                          && currentUser.id !== selectedBook.sellerId
+                          && !["ready", "error"].includes(activeRequestCheckState))
                         || selectedBook.status !== "available"
                         || currentUser?.accountStatus === "suspended"}
                       onClick={() => {
                         if (selectedBookActiveRequest) return;
+                        if (activeRequestCheckState === "error") {
+                          setActiveRequestCheckKey(null);
+                          setActiveRequestCheckState("idle");
+                          return;
+                        }
                         requireActive(() => setModal("request"));
                       }}
                     >
@@ -3586,7 +3608,7 @@ export function MarketplaceApp() {
                         : activeRequestCheckState === "loading"
                           ? "確認中..."
                           : activeRequestCheckState === "error"
-                            ? "暫時無法確認"
+                            ? "重試確認"
                             : selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
                     </button>
                   </div>
@@ -4369,6 +4391,7 @@ export function MarketplaceApp() {
         <RequestModal
           book={selectedBook}
           request={editingRequest}
+          saving={requestSaving}
           onClose={() => { setModal(null); setEditingRequest(null); }}
           onOpenChat={() => {
             setModal(null);
@@ -4575,18 +4598,28 @@ function AdminOtpModal({
     event.preventDefault();
     setLoading(true);
     setError("");
-    const message = await onVerify(code);
-    setLoading(false);
-    if (message) setError(message);
+    try {
+      const message = await onVerify(code);
+      if (message) setError(message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "驗證失敗，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function resend() {
     setLoading(true);
     setError("");
-    const message = await onResend();
-    setLoading(false);
-    if (message) setError(message);
-    else setCode("");
+    try {
+      const message = await onResend();
+      if (message) setError(message);
+      else setCode("");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "驗證碼寄送失敗，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -4919,9 +4952,14 @@ function ProfileModal({
     event.preventDefault();
     setError("");
     setSaving(true);
-    const message = await onSubmit(name, department);
-    if (message) setError(message);
-    setSaving(false);
+    try {
+      const message = await onSubmit(name, department);
+      if (message) setError(message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "個人資料更新失敗，請稍後再試");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function requestAccountDeletion() {
@@ -4941,9 +4979,12 @@ function ProfileModal({
     }
     setDeletingAccount(true);
     setError("");
-    const message = await onDeleteAccount();
-    if (message) {
-      setError(message);
+    try {
+      const message = await onDeleteAccount();
+      if (message) setError(message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "帳號刪除失敗，請稍後再試");
+    } finally {
       setDeletingAccount(false);
     }
   }
@@ -5087,9 +5128,12 @@ function LoginModal({
   async function startGoogleLogin() {
     setOauthLoading(true);
     setError("");
-    const message = await onGoogleLogin();
-    if (message) {
-      setError(message);
+    try {
+      const message = await onGoogleLogin();
+      if (message) setError(message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Google 登入失敗，請稍後再試");
+    } finally {
       setOauthLoading(false);
     }
   }
@@ -5098,9 +5142,14 @@ function LoginModal({
     event.preventDefault();
     setLoading(true);
     setError("");
-    const message = await onLogin(email.trim(), password);
-    setLoading(false);
-    if (message) setError(message);
+    try {
+      const message = await onLogin(email.trim(), password);
+      if (message) setError(message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "登入失敗，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function submitSignup(event: FormEvent<HTMLFormElement>) {
@@ -5123,12 +5172,17 @@ function LoginModal({
       return;
     }
     setLoading(true);
-    const message = await onSignUp(name.trim(), department, email.trim(), password);
-    setLoading(false);
-    if (message) setError(message);
-    else {
-      setSignupStep("code");
-      setResendCooldown(60);
+    try {
+      const message = await onSignUp(name.trim(), department, email.trim(), password);
+      if (message) setError(message);
+      else {
+        setSignupStep("code");
+        setResendCooldown(60);
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "註冊失敗，請稍後再試");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -5136,28 +5190,43 @@ function LoginModal({
     event.preventDefault();
     setLoading(true);
     setError("");
-    const message = await onVerifySignup(email.trim(), code.trim());
-    setLoading(false);
-    if (message) setError(message);
+    try {
+      const message = await onVerifySignup(email.trim(), code.trim());
+      if (message) setError(message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "驗證失敗，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function resendCode() {
     if (resendCooldown > 0) return;
     setLoading(true);
     setError("");
-    const message = await onResendSignup(email.trim());
-    setLoading(false);
-    if (message) setError(message);
-    else setResendCooldown(60);
+    try {
+      const message = await onResendSignup(email.trim());
+      if (message) setError(message);
+      else setResendCooldown(60);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "驗證碼寄送失敗，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function submitForgotPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError("");
-    const message = await onRequestReset(email.trim());
-    setLoading(false);
-    if (message) setError(message);
+    try {
+      const message = await onRequestReset(email.trim());
+      if (message) setError(message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "重設密碼信寄送失敗，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -5390,9 +5459,14 @@ function ResetPasswordModal({
       return;
     }
     setLoading(true);
-    const message = await onSubmit(password);
-    setLoading(false);
-    if (message) setError(message);
+    try {
+      const message = await onSubmit(password);
+      if (message) setError(message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "密碼更新失敗，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -5917,12 +5991,14 @@ function ContactSettingsModal({
 function RequestModal({
   book,
   request,
+  saving,
   onClose,
   onOpenChat,
   onSubmit,
 }: {
   book: Book;
   request?: PurchaseRequest | null;
+  saving: boolean;
   onClose: () => void;
   onOpenChat: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -6016,9 +6092,9 @@ function RequestModal({
             <small>送出後，在賣家按下「已完成面交」前，都能回聊天室再修改。</small>
           </div>
         </div>
-        <button className="primary wide" type="submit" disabled={!versionConfirmed}>
+        <button className="primary wide" type="submit" disabled={!versionConfirmed || saving}>
           {request ? <Pencil size={17} /> : <MessageCircle size={17} />}
-          {request ? "儲存訂單修改" : "確認下訂"}
+          {saving ? "送出中..." : request ? "儲存訂單修改" : "確認下訂"}
         </button>
         <p className="form-note">下訂後仍需等待賣家選定，不代表交易完成；若時間地點還沒談好，先用聊聊確認最穩妥。</p>
       </form>
