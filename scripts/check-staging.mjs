@@ -31,16 +31,23 @@ const auth = await fetch(`${base}/auth/v1/settings`, {
 if (!auth.ok) throw new Error(`Staging Auth API returned HTTP ${auth.status}.`);
 
 const rpcProbes = [
-  { name: "is_verified_admin", body: {} },
-  { name: "list_books_page", body: {} },
-  { name: "get_public_student_verification_status", body: { target_user_ids: [] } },
+  { name: "is_verified_admin", body: {}, expectedStatuses: [200], jsonShape: "boolean" },
+  { name: "list_books_page", body: {}, expectedStatuses: [200], jsonShape: "array" },
+  {
+    name: "get_public_student_verification_status",
+    body: { target_user_ids: [] },
+    expectedStatuses: [200],
+    jsonShape: "array",
+  },
   {
     name: "hide_closed_conversation",
     body: { target_conversation_id: "00000000-0000-0000-0000-000000000000" },
+    expectedStatuses: [401, 403],
   },
   {
     name: "list_feedback_for_moderation",
     body: {},
+    expectedStatuses: [401, 403],
   },
   {
     name: "reserve_book_ocr_quota",
@@ -49,6 +56,7 @@ const rpcProbes = [
       request_key: "00000000-0000-4000-8000-000000000000",
       daily_limit: 20,
     },
+    expectedStatuses: [401, 403],
   },
   {
     name: "consume_api_rate_limit",
@@ -58,6 +66,7 @@ const rpcProbes = [
       request_limit: 1,
       window_seconds: 60,
     },
+    expectedStatuses: [401, 403],
   },
   {
     name: "record_textbook_ocr_feedback",
@@ -66,18 +75,18 @@ const rpcProbes = [
       corrected_metadata: {},
       catalog_version: "staging-probe",
     },
+    expectedStatuses: [401, 403],
   },
   {
     name: "anonymize_account_for_deletion",
     body: { target_user_id: "00000000-0000-0000-0000-000000000000" },
+    expectedStatuses: [401, 403],
   },
-  {
-    name: "get_public_trust_badges",
-    body: { target_user_ids: [] },
-  },
+  { name: "get_public_trust_badges", body: { target_user_ids: [] }, expectedStatuses: [200], jsonShape: "array" },
   {
     name: "get_my_review_status",
     body: { target_request_id: "00000000-0000-0000-0000-000000000000" },
+    expectedStatuses: [401, 403],
   },
 ];
 
@@ -88,8 +97,28 @@ for (const rpc of rpcProbes) {
   });
   const body = await response.text();
   if (response.status === 404 || body.includes("PGRST202")) {
-    throw new Error(`Required staging RPC is missing: ${rpc.name}`);
+    throw new Error(`Required staging RPC is missing or has the wrong signature: ${rpc.name}`);
   }
+  if (!rpc.expectedStatuses.includes(response.status)) {
+    throw new Error(
+      `Staging RPC ${rpc.name} returned HTTP ${response.status}; expected ${rpc.expectedStatuses.join(" or ")}: ${body.slice(0, 240)}`,
+    );
+  }
+  if (rpc.jsonShape) {
+    let data;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      throw new Error(`Staging RPC ${rpc.name} returned invalid JSON.`);
+    }
+    if (rpc.jsonShape === "array" && !Array.isArray(data)) {
+      throw new Error(`Staging RPC ${rpc.name} returned a non-array JSON value.`);
+    }
+    if (rpc.jsonShape === "boolean" && typeof data !== "boolean") {
+      throw new Error(`Staging RPC ${rpc.name} returned a non-boolean JSON value.`);
+    }
+  }
+  console.log(`PASS RPC ${rpc.name} (HTTP ${response.status})`);
 }
 
 for (const table of [

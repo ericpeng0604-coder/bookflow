@@ -88,9 +88,13 @@ export function printReleaseEnvironment(report) {
   console.log(`  node_modules: ${report.nodeModules}${report.nodeModulesTarget ? ` -> ${report.nodeModulesTarget}` : ""}`);
   console.log(`  .next cache: ${report.nextCache}`);
 
+  if (report.packageManagerLocks.length > 1) {
+    console.log("  STOP: multiple package-manager lockfiles are present. Keep only the lockfile used by CI.");
+  }
+
   if (report.packageManagerLocks.includes("package-lock.json")) {
-    if (report.packageManager?.startsWith("pnpm")) {
-      console.log("  STOP: package.json declares pnpm in an npm-lock project. Remove that release change unless the package-manager migration is explicit.");
+    if (report.packageManager && !report.packageManager.startsWith("npm")) {
+      console.log("  STOP: package.json declares a non-npm package manager in an npm-lock project. Align the declaration with CI.");
     }
     if (!report.npmOnPath) {
       console.log("  Fallback: use the bundled Node executable for repo scripts, but do not switch this npm-lock project to pnpm just to run release checks.");

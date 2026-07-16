@@ -25,6 +25,7 @@ function runNode(args) {
 for (const file of [
   "scripts/ai-collaboration.mjs",
   "scripts/lib/handoff-contract.mjs",
+  "scripts/run-node.ps1",
   ".ai/templates/handoff.md",
 ]) {
   assert.doesNotMatch(read(file), UNREADABLE_TEXT_PATTERN, `${file} must be readable UTF-8`);
@@ -58,6 +59,9 @@ assert.match(preflight, /check-ci/);
 assert.match(preflight, /release scope is mixed/);
 assert.match(preflight, /AI_HANDOFF\.md, \.ai\/state\.json, and a new \.ai\/history entry/);
 assert.match(preflight, /origin\/main/);
+const releaseScope = read("scripts/lib/release-scope.mjs");
+assert.match(releaseScope, /isReleaseInfrastructure/);
+assert.match(releaseScope, /replace\(\/\\r\?\\n\+\$\//);
 
 const prStatus = read("scripts/release-pr-status.mjs");
 assert.match(prStatus, /--required/);
@@ -73,6 +77,26 @@ assert.match(plan, /check:workflows/);
 assert.match(plan, /release:watch-pr/);
 assert.match(plan, /\/api\/health\/release/);
 assert.match(plan, /release:smoke/);
+const packageScripts = JSON.parse(read("package.json")).scripts;
+assert.match(packageScripts["release:watch-pr"], /release-pr-status\.mjs --wait/);
+assert.match(packageScripts["release:watch-pr:codex"], /release-pr-status\.mjs --wait/);
+assert.ok(read("scripts/release-pr-status.mjs"), "release PR status helper must exist");
+assert.match(plan, /npm run/);
+assert.doesNotMatch(plan, /pnpm run/);
+const stagingCheck = read("scripts/check-staging.mjs");
+assert.match(stagingCheck, /expectedStatuses/);
+assert.match(stagingCheck, /response\.status/);
+assert.match(stagingCheck, /invalid JSON/);
+const productionMigration = read(".github/workflows/production-migration.yml");
+assert.match(productionMigration, /staging_run_id/);
+assert.match(productionMigration, /Staging Migration/);
+assert.match(productionMigration, /full lowercase commit SHA/);
+const uptime = read(".github/workflows/production-uptime-smoke.yml");
+assert.match(uptime, /EXPECTED_COMMIT/);
+assert.match(uptime, /FETCH_HEAD/);
+const packageJson = JSON.parse(read("package.json"));
+assert.equal(packageJson.packageManager ?? null, null, "package.json must use the npm lockfile without a pnpm package-manager declaration");
+assert.match(read("scripts/run-node.ps1"), /node\.exe/);
 
 const doctorOutput = runNode(["scripts/release-doctor.mjs"]);
 assert.match(doctorOutput, /Release environment:/);

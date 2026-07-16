@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260716-simplify-student-card-ai-user-messaging-",
-  "taskTitle": "simplify student card AI user messaging and coverage",
-  "baseCommit": "97eeee5e2b50ba549106f61ad2f326228c12760f",
-  "updatedAt": "2026-07-16T02:57:28.313Z",
+  "owner": "codex",
+  "status": "handoff",
+  "taskId": "20260716-release-flow-hardening",
+  "taskTitle": "harden deployment flow provenance and production proof",
+  "baseCommit": "3fb323823cdf2ecd6a67c666e8af7dd5736b9cd4",
+  "updatedAt": "2026-07-16T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260716-0257-20260716-simplify-student-card-ai-user-m.md"
+  "historyFile": ".ai/history/20260716-release-flow-hardening.md"
 }

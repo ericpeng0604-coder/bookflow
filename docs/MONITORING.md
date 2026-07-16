@@ -3,7 +3,8 @@
 This repo now has two layers of production monitoring:
 
 1. `Production Deployment Monitor` verifies each successful production deploy.
-2. `Production Uptime Smoke` runs every 15 minutes against the live site.
+2. `Production Uptime Smoke` runs every 15 minutes against the live site and
+   compares the deployed commit with the current `main` commit.
 
 Both workflows use `scripts/release-smoke.mjs`, which checks:
 

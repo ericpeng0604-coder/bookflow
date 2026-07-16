@@ -2,7 +2,6 @@
   "name": "campus-books",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@11.7.0",
   "scripts": {
     "predev": "node scripts/dev-environment.mjs --fix-processes",
     "dev": "next dev",
@@ -71,8 +70,8 @@
     "release:plan:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-plan.mjs",
     "release:preflight": "node scripts/release-preflight.mjs",
     "release:preflight:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-preflight.mjs",
-    "release:watch-pr": "node scripts/release-watch-pr.mjs",
-    "release:watch-pr:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-watch-pr.mjs",
+    "release:watch-pr": "node scripts/release-pr-status.mjs --wait",
+    "release:watch-pr:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-pr-status.mjs --wait",
     "release:smoke": "node scripts/release-smoke.mjs",
     "release:smoke:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-smoke.mjs",
     "staging:check": "node scripts/check-staging.mjs"
