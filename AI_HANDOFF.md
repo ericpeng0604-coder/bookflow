@@ -57,6 +57,14 @@
 - A Vercel Preview is not production proof.
 - Do not modify the rollback workflows or `.github/CODEOWNERS`.
 
+## 下一位 AI 工作指引
+
+1. Preserve the exact release commit and production deployment proof.
+2. Keep the original dirty checkout isolated from this release worktree.
+3. Treat any unavailable staging, PR, deployment, or smoke evidence as
+   `NOT VERIFIED`.
+4. Do not change protected recovery files without explicit authorization.
+
 ## 相關 Commit
 
 - Base commit: `bca8cc37688a64c2b69e8165925277cf215a0468`.
