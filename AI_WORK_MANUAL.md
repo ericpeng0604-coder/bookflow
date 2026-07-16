@@ -1143,25 +1143,27 @@ the API response and the Storage/database state.
 retry once on a 401. Keep the cleanup flow idempotent and never report a
 successful review until both the database state transition and Storage cleanup
 have been handled.
-### LESSON-057: Async action states need timeout and retry recovery
+### LESSON-057: Async action states need independent timeout and retry recovery
 
 **Observed problem:** A marketplace detail action stayed on "確認中..." when
 the request lookup did not return, and the error state left the action disabled
 without a retry path.
 
-**Cause:** The UI treated an asynchronous request as eventually completing,
-without a request timeout, an error-state action, or a guaranteed loading reset
-for every callback-based form.
+**Cause:** The first timeout relied on the data-client abort path, which did not
+release the production UI when the underlying thenable stayed pending. The
+effect also depended on object-valued state, so it could restart work when the
+page rerendered.
 
 **Detection:** Exercise slow, offline, rejected, and unexpectedly throwing
 callbacks for every user-facing loading state. Verify that the button leaves
 loading, displays an actionable error, and can be retried without duplicate
 submission.
 
-**Prevention rule:** Every user-facing async action must have a bounded request
-or operation timeout, reset its busy state in `finally`, and expose a safe
-retry or recovery action after failure. Add a focused regression check for the
-loading contract when the path is release-critical.
+**Prevention rule:** Every user-facing async action must have a timeout that is
+independent of the transport abort implementation, reset its busy state in
+`finally`, use stable primitive effect dependencies, and expose a safe retry or
+recovery action after failure. Add a focused regression check for the loading
+contract when the path is release-critical.
 
 ## New Lesson Template
 

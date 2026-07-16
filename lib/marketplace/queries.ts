@@ -25,6 +25,16 @@ import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskLevel,
 export const MARKETPLACE_PAGE_SIZE = 24;
 const ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS = 10_000;
 
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 export type { MarketplaceFilters } from "@/lib/marketplace/filters";
 export type MarketplaceCursor = {
   sellerVerified: boolean;
@@ -238,7 +248,7 @@ export async function fetchActiveRequestForBook(
   bookId: string,
   buyerId: string,
 ): Promise<PurchaseRequest | null> {
-  const { data, error } = await client
+  const query = client
     .from("purchase_requests")
     .select("*")
     .eq("book_id", bookId)
@@ -248,6 +258,11 @@ export async function fetchActiveRequestForBook(
     .limit(1)
     .abortSignal(AbortSignal.timeout(ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS))
     .maybeSingle();
+  const { data, error } = await withTimeout(
+    query,
+    ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS,
+    "確認目前申請狀態逾時，請重試。",
+  );
   if (error) throw error;
   return data ? mapRequest(data) : null;
 }
