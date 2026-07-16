@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: simplify student card AI user messaging and coverage
+- Actor: codex
+- Status: complete
+- Base commit: `97eeee5e2b50ba549106f61ad2f326228c12760f`
+- Archived at: 2026-07-16T02:57:28.311Z
+
+---
 # BookFlow AI Handoff
 
 ## 任務目標

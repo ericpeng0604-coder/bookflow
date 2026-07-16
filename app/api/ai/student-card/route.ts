@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     if (!response.ok) return NextResponse.json({ error: "AI 學生證辨識暫時無法完成" }, { status: 502 });
     const text = payload?.candidates?.[0]?.content?.parts?.map((part: { text?: unknown }) => typeof part.text === "string" ? part.text : "").join("") || "";
     const normalized = extractGeminiStudentCard(parseBookCoverOutputText(text));
-    return NextResponse.json({ studentNumber: normalized.usable ? normalized.studentNumber : "", confidence: normalized.confidence });
+    return NextResponse.json({ studentNumber: normalized.usable ? normalized.studentNumber : "" });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error && error.name === "AbortError" ? "AI 學生證辨識逾時，請稍後重試" : "AI 學生證辨識連線失敗" }, { status: 502 });
   } finally { clearTimeout(timeout); }
