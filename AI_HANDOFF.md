@@ -6,17 +6,18 @@
 
 ## 目前狀態與背景
 
-- Branch: `codex/confirmation-loading-fix-rebase`.
-- Base commit: `1b125f6245a183b224b56601bffa7e0420214378` (`origin/main`).
+- Branch: `codex/confirmation-loading-recovery-followup`.
+- Base commit: `ae7174f6a3f235fcd425c1ebf1f778efe20a549c` (`origin/main`).
 - The original checkout remains dirty and mixed; this release worktree is isolated from it.
 - No database migration, workflow, rollback file, or `.github/CODEOWNERS` change is included.
-- Production deployment is pending PR #104 merge and the required post-merge release proof.
+- Production deployment is pending PR #105 merge and the required post-merge release proof.
 
 ## 已完成
 
 - Added an independent 10-second timeout around the active purchase-request lookup.
 - Added an 8-second UI recovery timeout so a pending data-client thenable cannot keep the action disabled forever.
 - Changed the lookup effect to use stable primitive dependencies and a per-book request key.
+- Changed retry triggering to a separate nonce so setting the request key cannot cleanup the timer that it just created.
 - Changed the request lookup error state from a disabled dead end to an enabled `重試確認` action.
 - Added duplicate-submit protection and guaranteed busy-state cleanup for purchase requests.
 - Added `try/catch/finally` recovery to authentication, administrator OTP, profile, account deletion, and password reset callbacks.
@@ -24,7 +25,7 @@
 
 ## 下一步
 
-1. Wait for the refreshed PR checks and merge PR #104 after all required gates pass.
+1. Wait for the refreshed PR checks and merge PR #105 after all required gates pass.
 2. Run the repository's post-merge production deployment flow.
 3. Verify the deployed commit with `/api/health/release` and the release smoke check.
 
@@ -41,7 +42,7 @@
 
 ## 驗證結果
 
-- Transaction loading checks: passed (8/8).
+- Transaction loading checks: passed (9/9).
 - TypeScript no-emit check: passed.
 - ESLint: passed.
 - Project checks: passed (29/29) on the latest `origin/main` base.
@@ -66,5 +67,5 @@
 ## 相關 Commit
 
 - Base commit: `1b125f6245a183b224b56601bffa7e0420214378`.
-- Current implementation commit: `d60ffb4416e6f9dda06d43d204263e6443d2b763`.
-- Pull request: #104.
+- Current implementation commit: `3dd9749`.
+- Pull request: #105.
