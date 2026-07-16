@@ -235,6 +235,8 @@ function useActionDialog() {
 }
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 120_000;
+const ADMIN_MODERATION_REFRESH_INTERVAL_MS = 10_000;
+const ADMIN_MODERATION_REFRESH_DEBOUNCE_MS = 400;
 const SECONDHAND_CATEGORIES = [ALL_ITEM_CATEGORIES, "3C 電子", "文具用品", "宿舍生活", "服飾配件", "運動休閒", "其他"];
 const DEFAULT_SECONDHAND_CATEGORY = SECONDHAND_CATEGORIES[1];
 
@@ -665,6 +667,7 @@ export function MarketplaceApp() {
   const badgeLookupRef = useRef<Set<string>>(new Set());
   const [bookSaving, setBookSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
+  const adminModerationDebounceRef = useRef<number | null>(null);
   const debouncedQuery = useDebouncedValue(query, 300);
   const debouncedRiskQuery = useDebouncedValue(riskFilters.query, 300);
   const appliedRiskFilters = useMemo(
@@ -954,13 +957,21 @@ export function MarketplaceApp() {
     ]);
   }, [dashboardTab, loadDashboardWorkspace, loadMarketplaceBooks, store.currentUser]);
 
-  const reloadAfterModerationMutation = useCallback(async () => {
+  const reloadAfterModerationMutation = useCallback(() => {
     if (!supabase || !store.currentUser) return;
-    await Promise.all([
+    void Promise.all([
       loadModerationPanel(store.currentUser),
       loadMarketplaceBooks(),
     ]);
   }, [loadMarketplaceBooks, loadModerationPanel, store.currentUser]);
+
+  const refreshModerationInBackground = useCallback(() => {
+    if (!supabase || !store.currentUser) return;
+    void Promise.all([
+      loadModerationPanel(store.currentUser),
+      loadRiskModeration(store.currentUser, appliedRiskFilters),
+    ]);
+  }, [appliedRiskFilters, loadModerationPanel, loadRiskModeration, store.currentUser]);
 
   const openDashboard = useCallback(() => {
     showDashboard();
@@ -1153,6 +1164,57 @@ export function MarketplaceApp() {
     if (!["admin", "moderator"].includes(store.currentUser.role)) return;
     void loadRiskModeration(store.currentUser, appliedRiskFilters);
   }, [view, store.currentUser, appliedRiskFilters, loadRiskModeration]);
+
+  useEffect(() => {
+    if (!supabase || view !== "admin" || !store.currentUser) return;
+    if (!["admin", "moderator"].includes(store.currentUser.role)) return;
+
+    const client = supabase;
+    const user = store.currentUser;
+    const scheduleRefresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (adminModerationDebounceRef.current !== null) {
+        window.clearTimeout(adminModerationDebounceRef.current);
+      }
+      adminModerationDebounceRef.current = window.setTimeout(() => {
+        adminModerationDebounceRef.current = null;
+        void Promise.all([
+          loadModerationPanel(user),
+          loadRiskModeration(user, appliedRiskFilters),
+        ]);
+      }, ADMIN_MODERATION_REFRESH_DEBOUNCE_MS);
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") scheduleRefresh();
+    };
+
+    const channel = client
+      .channel(`admin-moderation:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "student_verifications",
+        },
+        scheduleRefresh,
+      )
+      .subscribe();
+    const interval = window.setInterval(refreshWhenVisible, ADMIN_MODERATION_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+
+    return () => {
+      if (adminModerationDebounceRef.current !== null) {
+        window.clearTimeout(adminModerationDebounceRef.current);
+        adminModerationDebounceRef.current = null;
+      }
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+      void client.removeChannel(channel);
+    };
+  }, [appliedRiskFilters, loadModerationPanel, loadRiskModeration, store.currentUser, view]);
 
   useEffect(() => {
     if (!supabase || view !== "dashboard" || !store.currentUser) return;
@@ -2341,14 +2403,28 @@ export function MarketplaceApp() {
     const note = dialogResult.trim();
     if (decision === "rejected" && !note) return;
 
+    const pendingVerification = studentVerifications.find((item) => item.id === verificationId);
+    if (!pendingVerification) {
+      setToast("這筆學生證已被其他管理員處理，清單即將更新");
+      refreshModerationInBackground();
+      return;
+    }
+    setStudentVerifications((previous) => previous.filter((item) => item.id !== verificationId));
+    setToast("正在送出審核結果…");
+
     try {
       await reviewStudentVerificationWithStorage(supabase, verificationId, decision, note || "");
     } catch (error) {
+      setStudentVerifications((previous) => previous.some((item) => item.id === verificationId)
+        ? previous
+        : [...previous, pendingVerification].sort((left, right) =>
+            new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+          ));
       const message = error instanceof Error ? error.message : "學生證審核失敗";
       setToast(`學生證審核失敗：${message}`);
       return;
     }
-    await reloadAfterModerationMutation();
+    refreshModerationInBackground();
     setToast(decision === "approved" ? "學生證已通過" : "學生證已拒絕");
   }
 
