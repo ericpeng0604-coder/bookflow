@@ -7130,7 +7130,7 @@ function TradeChatPanel({
         </form>
       ) : <p className="chat-readonly">這段訊息已結束，紀錄保持唯讀。你可從書籍頁重新建立訊息。</p>}
       {enlargedImageUrl && (
-        <div className="chat-image-lightbox" role="dialog" aria-modal="true" aria-label="放大的訊息圖片" onMouseDown={() => setEnlargedImageUrl(null)}>
+        <NativeDialog className="chat-image-lightbox" label="放大的訊息圖片" onClose={() => setEnlargedImageUrl(null)}>
           <button type="button" className="chat-image-lightbox-close" onClick={() => setEnlargedImageUrl(null)} aria-label="關閉圖片">
             <X size={24} />
           </button>
@@ -7143,7 +7143,7 @@ function TradeChatPanel({
           >
             <img src={enlargedImageUrl} alt="" />
           </button>
-        </div>
+        </NativeDialog>
       )}
       {actionDialog.dialog && (
         <ActionDialog
