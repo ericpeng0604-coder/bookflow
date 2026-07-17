@@ -233,6 +233,18 @@ export function useMarketplaceNavigation({
     }));
   }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType]);
 
+  const returnToChatListRoute = useCallback(() => {
+    setExpandedConversationId(null);
+    setDashboardTab("chats");
+    setView("chat");
+    const params = new URLSearchParams(window.location.search);
+    params.set("market", listingType);
+    params.set("view", "chat");
+    params.set("tab", "chats");
+    params.delete("conversation");
+    window.history.pushState({}, "", `/?${params.toString()}`);
+  }, [listingType]);
+
   const openDashboard = useCallback(() => {
     setView("dashboard");
   }, []);
@@ -243,6 +255,7 @@ export function useMarketplaceNavigation({
     expandedConversationId,
     openBookRoute,
     openDashboard,
+    returnToChatListRoute,
     returnToMarketRoute,
     selectedId,
     setDashboardTab,

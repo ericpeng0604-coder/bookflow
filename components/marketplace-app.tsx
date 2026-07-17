@@ -328,6 +328,19 @@ const feedbackCategoryLabels: Record<string, string> = {
   other: "其他",
 };
 
+const MAX_BOOK_IMAGES = 6;
+
+type ListingImageItem = {
+  id: string;
+  url: string;
+  file?: File;
+};
+
+type ListingImageSubmission = {
+  items: ListingImageItem[];
+  coverId: string;
+};
+
 const blankBook: Omit<
   Book,
   | "id"
@@ -364,10 +377,16 @@ const blankBook: Omit<
   condition: "書況良好",
   price: 0,
   imageUrl: "",
+  imageUrls: [],
   meetup: "",
   description: "",
   contactMethod: "none",
   contactValue: "",
+};
+
+const bookImageUrls = (book: Pick<Book, "imageUrl" | "imageUrls">) => {
+  const urls = Array.isArray(book.imageUrls) ? book.imageUrls.filter(Boolean) : [];
+  return book.imageUrl ? [book.imageUrl, ...urls.filter((url) => url !== book.imageUrl)] : urls;
 };
 
 const EDUCATION_LEVEL_OPTIONS = [
@@ -657,6 +676,7 @@ export function MarketplaceApp() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const notificationWrapRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatListCollapsed, setChatListCollapsed] = useState(false);
   const [adminOtpEmail, setAdminOtpEmail] = useState("");
@@ -692,6 +712,7 @@ export function MarketplaceApp() {
   const [myBooks, setMyBooks] = useState<Book[]>([]);
   const [requestBooks, setRequestBooks] = useState<Book[]>([]);
   const [detailBook, setDetailBook] = useState<Book | null>(null);
+  const [detailImageIndex, setDetailImageIndex] = useState(0);
   const [bookDetailLoading, setBookDetailLoading] = useState(false);
   const [bookDetailMissing, setBookDetailMissing] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => new Set());
@@ -744,6 +765,7 @@ export function MarketplaceApp() {
     expandedConversationId,
     openBookRoute,
     openDashboard: showDashboard,
+    returnToChatListRoute,
     returnToMarketRoute,
     selectedId,
     setDashboardTab,
@@ -1344,6 +1366,23 @@ export function MarketplaceApp() {
   }, [notificationOpen, store.currentUser, loadNotificationFeed]);
 
   useEffect(() => {
+    if (!notificationOpen) return;
+    const closeFromOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && notificationWrapRef.current?.contains(event.target)) return;
+      setNotificationOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNotificationOpen(false);
+    };
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [notificationOpen]);
+
+  useEffect(() => {
     if (!supabase || !store.currentUser) {
       setShowPushPrompt(false);
       return;
@@ -1558,6 +1597,7 @@ export function MarketplaceApp() {
     ?? requestBooks.find((book) => book.id === selectedId)
     ?? store.books.find((book) => book.id === selectedId)
     ?? null;
+  const selectedBookImages = selectedBook ? bookImageUrls(selectedBook) : [];
   const selectedSellerId = selectedBook?.sellerId ?? null;
   const selectedBookActiveRequest = currentUser && selectedBook
     ? store.requests.find((request) =>
@@ -1572,6 +1612,9 @@ export function MarketplaceApp() {
   currentUserRef.current = currentUser;
   selectedBookRef.current = selectedBook;
   selectedBookActiveRequestRef.current = selectedBookActiveRequest;
+  useEffect(() => {
+    setDetailImageIndex(0);
+  }, [selectedBook?.id]);
   const profile = (id: string) => store.profiles.find((item) => item.id === id);
   const badgeFor = (userId: string, badgeType: "seller" | "buyer") =>
     trustBadges.find((badge) => badge.userId === userId && badge.badgeType === badgeType && badge.status === "approved");
@@ -1659,6 +1702,7 @@ export function MarketplaceApp() {
     const target = filteredBooks.find((book) => book.id === id)
       ?? myBooks.find((book) => book.id === id)
       ?? requestBooks.find((book) => book.id === id);
+    setDetailImageIndex(0);
     openBookRoute(id, target?.listingType || listingType);
   }
 
@@ -1888,7 +1932,7 @@ export function MarketplaceApp() {
     setToast("已安全登出");
   }
 
-  async function saveBook(event: FormEvent<HTMLFormElement>) {
+  async function saveBook(event: FormEvent<HTMLFormElement>, imageSubmission?: ListingImageSubmission) {
     event.preventDefault();
     if (bookSavingRef.current) return;
     bookSavingRef.current = true;
@@ -1902,37 +1946,56 @@ export function MarketplaceApp() {
       }
       const data = new FormData(event.currentTarget);
       const fields = Object.fromEntries(data.entries());
-      const image = data.get("image");
-      let imageUrl = editingBook?.imageUrl ?? "";
-      let uploadedImagePath: string | null = null;
-
-      if (image instanceof File && image.size > 0) {
-        if (!supabase) {
-          setToast("圖片上傳服務尚未完成設定");
-          return;
-        }
-        try {
-          const compressed = await compressBookImage(image);
-          const extension = compressed.name.split(".").pop()?.toLowerCase() || "jpg";
-          const filePath = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
-          const { error: uploadError } = await supabase.storage
-            .from("book-images")
-            .upload(filePath, compressed, { cacheControl: BOOK_IMAGE_CACHE_CONTROL, upsert: false });
-
-          if (uploadError) {
-            setToast(`圖片上傳失敗：${uploadError.message}`);
-            return;
-          }
-
-          imageUrl = supabase.storage.from("book-images").getPublicUrl(filePath).data.publicUrl;
-          uploadedImagePath = filePath;
-        } catch (error) {
-          setToast(error instanceof Error ? error.message : "圖片處理失敗");
-          return;
-        }
+      const imageItems: ListingImageItem[] = imageSubmission?.items
+        .filter((item) => item.file || item.url)
+        .slice(0, MAX_BOOK_IMAGES)
+        ?? (editingBook
+          ? bookImageUrls(editingBook).map((url, index) => ({ id: `existing-${index}`, url }))
+          : []);
+      const uploadedImagePaths: string[] = [];
+      let imageUrls = editingBook ? bookImageUrls(editingBook) : [];
+      let imageUrl = imageUrls[0] ?? "";
+      const cleanupUploadedImages = async () => {
+        if (uploadedImagePaths.length > 0) await supabase?.storage.from("book-images").remove(uploadedImagePaths);
+      };
+      if (imageItems.some((item) => item.file) && !supabase) {
+        setToast("圖片上傳服務尚未完成設定");
+        return;
       }
 
-      if (!imageUrl) {
+      const resolvedImages: ListingImageItem[] = [];
+      try {
+        for (const item of imageItems) {
+          if (!item.file) {
+            resolvedImages.push(item);
+            continue;
+          }
+          const compressed = await compressBookImage(item.file);
+          const extension = compressed.name.split(".").pop()?.toLowerCase() || "jpg";
+          const filePath = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+          const { error: uploadError } = await supabase!.storage
+            .from("book-images")
+            .upload(filePath, compressed, { cacheControl: BOOK_IMAGE_CACHE_CONTROL, upsert: false });
+          if (uploadError) throw uploadError;
+          uploadedImagePaths.push(filePath);
+          resolvedImages.push({
+            ...item,
+            url: supabase!.storage.from("book-images").getPublicUrl(filePath).data.publicUrl,
+          });
+        }
+        const coverId = imageSubmission?.coverId || resolvedImages[0]?.id;
+        const cover = resolvedImages.find((item) => item.id === coverId) ?? resolvedImages[0];
+        imageUrls = cover
+          ? [cover.url, ...resolvedImages.filter((item) => item.id !== cover.id).map((item) => item.url)]
+          : [];
+        imageUrl = imageUrls[0] ?? "";
+      } catch (error) {
+        await cleanupUploadedImages();
+        setToast(error instanceof Error ? error.message : "圖片上傳失敗，請稍後再試");
+        return;
+      }
+
+      if (!imageUrl || imageUrls.length > MAX_BOOK_IMAGES) {
         setToast("請選擇一本書的封面圖片");
         return;
       }
@@ -1958,9 +2021,7 @@ export function MarketplaceApp() {
         price: Number(fields.price),
       });
       if ("error" in validated) {
-        if (uploadedImagePath) {
-          await supabase?.storage.from("book-images").remove([uploadedImagePath]);
-        }
+        await cleanupUploadedImages();
         setToast(validated.error);
         return;
       }
@@ -1987,6 +2048,7 @@ export function MarketplaceApp() {
         condition: String(fields.condition),
         price: clean.price,
         imageUrl,
+        imageUrls,
         meetup: clean.meetup,
         description: clean.description,
         contactMethod: editingBook?.contactMethod ?? "none",
@@ -2037,6 +2099,7 @@ export function MarketplaceApp() {
           condition: payload.condition,
           price: payload.price,
           image_url: payload.imageUrl,
+          image_urls: payload.imageUrls,
           meetup: payload.meetup,
           description: payload.description,
         };
@@ -2046,17 +2109,16 @@ export function MarketplaceApp() {
           : await supabase.from("books").insert(dbPayload);
 
         if (error) {
-          if (uploadedImagePath) {
-            await supabase.storage.from("book-images").remove([uploadedImagePath]);
-          }
+          await cleanupUploadedImages();
           setToast(`刊登儲存失敗：${error.message}`);
           return;
         }
-        if (editingBook && uploadedImagePath) {
-          const oldImagePath = extractStoragePath(editingBook.imageUrl);
-          if (oldImagePath && oldImagePath !== uploadedImagePath) {
-            void supabase.storage.from("book-images").remove([oldImagePath]);
-          }
+        if (editingBook) {
+          const retainedPaths = new Set(imageUrls.map((url) => extractStoragePath(url)).filter(Boolean));
+          const oldImagePaths = bookImageUrls(editingBook)
+            .map((url) => extractStoragePath(url))
+            .filter((path): path is string => Boolean(path) && !retainedPaths.has(path));
+          if (oldImagePaths.length > 0) void supabase.storage.from("book-images").remove(oldImagePaths);
         }
         if (ocrOriginal && JSON.stringify(ocrOriginal) !== JSON.stringify(correctedOcrFields)) {
           await supabase.rpc("record_textbook_ocr_feedback", {
@@ -3320,7 +3382,7 @@ export function MarketplaceApp() {
           {currentUser ? (
             <>
               {isModerator && <button type="button" className="icon-button admin-shortcut" title="管理" onClick={() => setView("admin")}><UserCog size={18} /></button>}
-              <div className="notification-wrap">
+              <div ref={notificationWrapRef} className="notification-wrap">
                 <button type="button"
                   className="icon-button notification-button"
                   title="通知"
@@ -3374,7 +3436,6 @@ export function MarketplaceApp() {
                 )}
               </div>
               <button type="button" className="user-chip desktop-account-action" onClick={openDashboard}><UserRound size={17} />{currentUser.name}</button>
-              <button type="button" className="icon-button desktop-account-action" title="登出" onClick={() => void logout()}><LogOut size={18} /></button>
             </>
           ) : (
             <button type="button" className="login-button desktop-account-action" onClick={() => setModal("login")}><UserRound size={17} /><span>登入／註冊</span></button>
@@ -3764,10 +3825,33 @@ export function MarketplaceApp() {
         <section className="detail-page">
           <button type="button" className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
           <div className="detail-grid">
-            <div className="detail-image">
-              <Image src={selectedBook.imageUrl} alt={selectedBook.title} width={720} height={960} sizes="(max-width: 800px) 100vw, 42vw" priority />
+            <div className="detail-gallery-shell">
+              <div className="detail-image detail-gallery">
+                <Image src={selectedBookImages[detailImageIndex] || selectedBook.imageUrl} alt={selectedBook.title} width={720} height={960} sizes="(max-width: 800px) 100vw, 42vw" priority />
+                {selectedBookImages.length > 1 && (
+                  <>
+                    <button type="button" className="detail-gallery-arrow detail-gallery-arrow-prev" aria-label="上一張照片" onClick={() => setDetailImageIndex((index) => (index - 1 + selectedBookImages.length) % selectedBookImages.length)}>
+                      <ArrowLeft size={18} />
+                    </button>
+                    <button type="button" className="detail-gallery-arrow detail-gallery-arrow-next" aria-label="下一張照片" onClick={() => setDetailImageIndex((index) => (index + 1) % selectedBookImages.length)}>
+                      <ArrowRight size={18} />
+                    </button>
+                    <span className="detail-gallery-count" aria-live="polite">{detailImageIndex + 1} / {selectedBookImages.length}</span>
+                  </>
+                )}
               {selectedBook.lifecycleState === "active" && selectedBook.reviewStatus === "approved" && (
                 <span className={`status ${selectedBook.status}`}>{statusLabels[selectedBook.status]}</span>
+              )}
+              </div>
+              {selectedBookImages.length > 1 && (
+                <div className="detail-gallery-thumbnails" aria-label="商品照片選擇">
+                  {selectedBookImages.map((url, index) => (
+                    <button type="button" key={`${url}-${index}`} className={index === detailImageIndex ? "active" : ""} aria-label={`查看第 ${index + 1} 張照片`} onClick={() => setDetailImageIndex(index)}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={safeImageSource(url)} alt="" />
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
             <div className="detail-content">
@@ -4027,7 +4111,7 @@ export function MarketplaceApp() {
             <>
               {view === "chat" && (
                 <div className="chat-page-toolbar">
-                  <button type="button" className="chat-page-exit" onClick={() => { setExpandedConversationId(null); setDashboardTab("listings"); setView("dashboard"); }}>
+                  <button type="button" className="chat-page-exit" onClick={returnToChatListRoute}>
                     <ArrowLeft size={16} />返回個人中心
                   </button>
                 </div>
@@ -4119,7 +4203,7 @@ export function MarketplaceApp() {
                         onRead={keepConversationRead}
                         onBack={() => {
                           const previousConversationId = expandedConversationId;
-                          setExpandedConversationId(null);
+                          returnToChatListRoute();
                           if (previousConversationId) {
                             window.requestAnimationFrame(() => conversationTriggerRefs.current[previousConversationId]?.focus());
                           }
@@ -5800,7 +5884,7 @@ function BookFormModal({
   userId: string;
   saving: boolean;
   onClose: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  onSubmit: (event: FormEvent<HTMLFormElement>, imageSubmission: ListingImageSubmission) => void | Promise<void>;
 }) {
   const initialListingType = book?.listingType ?? defaultListingType;
   const value = book ?? {
@@ -5808,15 +5892,18 @@ function BookFormModal({
     listingType: initialListingType,
     itemCategory: initialListingType === "secondhand" ? DEFAULT_SECONDHAND_CATEGORY : "book",
   };
-  const [preview, setPreview] = useState(() => safeImageSource(value.imageUrl));
+  const initialImageItems = bookImageUrls(value).map((url, index) => ({ id: `existing-${index}`, url }));
+  const [imageItems, setImageItems] = useState<ListingImageItem[]>(initialImageItems);
+  const [coverId, setCoverId] = useState(initialImageItems[0]?.id || "");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [ocrReferenceFile, setOcrReferenceFile] = useState<File | null>(null);
+  const [imageDragActive, setImageDragActive] = useState(false);
   const [ocrOriginalDraft, setOcrOriginalDraft] = useState<BookOcrDraft | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrMessage, setOcrMessage] = useState("");
   const [showCourseHelp, setShowCourseHelp] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const imageItemsRef = useRef<ListingImageItem[]>(initialImageItems);
   const ocrRequestRef = useRef(0);
   const baseDraft = useMemo(() => ({
     title: value.title,
@@ -5848,7 +5935,7 @@ function BookFormModal({
   const skipDraftPersistenceRef = useRef(true);
   const [draft, setDraft] = useState(baseDraft);
   const draftChanged = JSON.stringify(draft) !== baseDraftSignatureRef.current;
-  const dirty = imageFile !== null || ocrReferenceFile !== null || draftChanged;
+  const dirty = imageItems.length > 0 || draftChanged;
   const isSecondhand = initialListingType === "secondhand";
 
   useEffect(() => {
@@ -5873,8 +5960,10 @@ function BookFormModal({
   }, [baseDraft, book, draftStorageKey, initialListingType, userId]);
 
   useEffect(() => () => {
-    if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
-  }, [preview]);
+    imageItemsRef.current.forEach((item) => {
+      if (item.url.startsWith("blob:")) URL.revokeObjectURL(item.url);
+    });
+  }, []);
 
   useEffect(() => {
     if (skipDraftPersistenceRef.current) {
@@ -5913,23 +6002,76 @@ function BookFormModal({
     onClose();
   }
 
+  function syncOcrFile(items: ListingImageItem[], nextCoverId: string) {
+    setImageFile(items.find((item) => item.id === nextCoverId)?.file ?? null);
+    imageItemsRef.current = items;
+  }
+
   function selectImage(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files || []).slice(0, 2);
-    const file = files[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    const remaining = Math.max(0, MAX_BOOK_IMAGES - imageItems.length);
+    const nextFiles = files.slice(0, remaining);
+    if (nextFiles.length === 0) return;
+    const nextItems = [
+      ...imageItems,
+      ...nextFiles.map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) })),
+    ];
+    const nextCoverId = coverId || nextItems[0]?.id || "";
     ocrRequestRef.current += 1;
     setOcrBusy(false);
     setOcrProgress(0);
-    setImageFile(file);
-    setOcrReferenceFile(files[1] || null);
-    setPreview(URL.createObjectURL(file));
+    setCoverId(nextCoverId);
+    setImageItems(nextItems);
+    syncOcrFile(nextItems, nextCoverId);
     if (!isSecondhand) {
-      setOcrMessage(files[1]
-        ? "正面與背面照片已準備好；系統會合併封面文字與背面 ISBN 線索。"
-        : "照片已準備好；若有背面 ISBN，可一次選擇正反兩張照片提高辨識率。");
+      setOcrMessage(nextItems.length > 1
+        ? "已選取多張照片；目前封面會作為 AI 辨識來源。"
+        : "照片已準備好；請在縮圖上確認封面後再進行辨識。");
       void import("@/lib/marketplace/free-ocr")
         .then(({ warmBookOcr }) => warmBookOcr())
         .catch(() => undefined);
+    }
+    event.target.value = "";
+  }
+
+  function dropImages(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setImageDragActive(false);
+    const input = imageInputRef.current;
+    if (!input || event.dataTransfer.files.length === 0) return;
+    const transfer = new DataTransfer();
+    Array.from(event.dataTransfer.files).forEach((file) => transfer.items.add(file));
+    input.files = transfer.files;
+    selectImage({ target: input } as unknown as React.ChangeEvent<HTMLInputElement>);
+  }
+
+  function chooseCover(itemId: string) {
+    ocrRequestRef.current += 1;
+    setOcrBusy(false);
+    setOcrProgress(0);
+    setCoverId(itemId);
+    syncOcrFile(imageItems, itemId);
+    setOcrMessage(ocrOriginalDraft
+      ? "封面已變更，原有文字仍保留；請重新辨識以更新課本資料。"
+      : "已設定封面；AI 辨識只會使用這張封面照片。");
+  }
+
+  function removeImage(itemId: string) {
+    const removed = imageItems.find((item) => item.id === itemId);
+    if (removed?.url.startsWith("blob:")) URL.revokeObjectURL(removed.url);
+    const nextItems = imageItems.filter((item) => item.id !== itemId);
+    const nextCoverId = itemId === coverId ? (nextItems[0]?.id || "") : coverId;
+    ocrRequestRef.current += 1;
+    setOcrBusy(false);
+    setOcrProgress(0);
+    setImageItems(nextItems);
+    setCoverId(nextCoverId);
+    syncOcrFile(nextItems, nextCoverId);
+    if (ocrOriginalDraft && itemId === coverId) {
+      setOcrMessage(nextCoverId
+        ? "封面已更新，原有文字仍保留；請重新辨識以更新課本資料。"
+        : "封面已移除，請先設定封面才能進行辨識。");
     }
   }
 
@@ -5944,15 +6086,29 @@ function BookFormModal({
     setDraft((previous) => ({ ...previous, [field]: nextValue }));
   }
 
+  async function resolveCoverFileForOcr() {
+    const coverItem = imageItems.find((item) => item.id === coverId);
+    if (!coverItem) return null;
+    if (coverItem.file) return coverItem.file;
+    if (!coverItem.url || coverItem.url.startsWith("blob:")) return null;
+    const response = await fetch(coverItem.url);
+    if (!response.ok) throw new Error("無法讀取目前封面，請重新選擇照片。");
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/")) throw new Error("目前封面不是有效圖片，請重新選擇照片。");
+    return new File([blob], "book-cover.jpg", { type: blob.type });
+  }
+
   async function readBookOcr() {
-    if (!imageFile || isSecondhand) return;
+    if (!coverId || isSecondhand) return;
     const requestId = ++ocrRequestRef.current;
     setOcrBusy(true);
     setOcrProgress(4);
     setOcrMessage("正在準備照片...");
     try {
       const { recognizeBookCover } = await import("@/lib/marketplace/free-ocr");
-      const ocrImageFile = await compressBookOcrImage(imageFile);
+      const ocrSourceFile = imageFile ?? await resolveCoverFileForOcr();
+      if (!ocrSourceFile) throw new Error("請先設定封面，才能進行辨識。");
+      const ocrImageFile = await compressBookOcrImage(ocrSourceFile);
       const primaryResult = await recognizeBookCover(ocrImageFile, (stage, progress) => {
         const percent = Math.max(1, Math.round((progress ?? 0) * 100));
         if (stage === "preparing") {
@@ -5970,22 +6126,12 @@ function BookFormModal({
       });
       if (requestId !== ocrRequestRef.current) return;
       setOcrProgress(84);
-      const referenceResult = ocrReferenceFile
-        ? await recognizeBookCover(await compressBookOcrImage(ocrReferenceFile))
-        : null;
-      if (requestId !== ocrRequestRef.current) return;
-      setOcrProgress(88);
       const candidates = rankTaiwanTextbookCandidates([
         {
           source: "front_ocr",
           confidence: primaryResult.confidence,
           draft: primaryResult.draft,
         },
-        ...(referenceResult ? [{
-          source: "back_ocr" as const,
-          confidence: referenceResult.confidence,
-          draft: referenceResult.draft,
-        }] : []),
       ]);
       const mergedLocalDraft = candidates
         .slice()
@@ -5996,9 +6142,9 @@ function BookFormModal({
             Object.entries(candidate.draft).filter(([, field]) => Boolean(field)),
           ),
         }), {});
-      const localText = [primaryResult.text, referenceResult?.text].filter(Boolean).join("\n");
+      const localText = primaryResult.text;
       const needsAiFallback = !mergedLocalDraft.title
-        || (primaryResult.needsAiFallback && (referenceResult?.needsAiFallback ?? true));
+        || primaryResult.needsAiFallback;
       let ocrDraft = needsAiFallback
         ? {
             title: "",
@@ -6073,12 +6219,16 @@ function BookFormModal({
       onClose={requestClose}
       closeOnBackdrop={false}
     >
-      <form onSubmit={onSubmit} onKeyDown={preventImplicitSubmit} className="form book-form">
+      <form
+        onSubmit={(event) => void onSubmit(event, { items: imageItems, coverId })}
+        onKeyDown={preventImplicitSubmit}
+        className="form book-form"
+      >
         <fieldset disabled={saving} className="book-form-fields">
-          <p className="listing-file-help full">
-            <b>{isSecondhand ? "商品圖片" : "封面圖片"} *</b>
-            <span>{book ? "不選擇新圖片會保留原圖。" : "支援 JPG、PNG、WebP，最大 5MB。"}</span>
-          </p>
+          <div className="listing-photo-heading full">
+            <b>{isSecondhand ? "商品圖片" : "照片與封面"} *</b>
+            <span>{isSecondhand ? "支援 JPG、PNG、WebP，最大 5MB。" : `最多 ${MAX_BOOK_IMAGES} 張；封面會顯示在列表，其他照片可在商品詳情翻閱。`}</span>
+          </div>
           <input
             ref={imageInputRef}
             className="listing-file-input full"
@@ -6088,14 +6238,51 @@ function BookFormModal({
             multiple={!isSecondhand}
             accept="image/jpeg,image/png,image/webp"
             onChange={selectImage}
-            aria-label={isSecondhand ? "選擇商品照片" : "選擇課本封面"}
+            aria-label={isSecondhand ? "選擇商品照片" : "選擇課本照片"}
           />
           <input type="hidden" name="listingType" value={initialListingType} />
           <input type="hidden" name="ocrOriginal" value={ocrOriginalDraft ? JSON.stringify(ocrOriginalDraft) : ""} />
-          {preview && (
-            <div className="image-preview full">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={safeImageSource(preview)} alt={isSecondhand ? "商品圖片預覽" : "書籍封面預覽"} />
+          <div
+            className={`listing-photo-upload full ${imageDragActive ? "is-drag-active" : ""}`}
+            onDragOver={(event) => { event.preventDefault(); setImageDragActive(true); }}
+            onDragLeave={() => setImageDragActive(false)}
+            onDrop={dropImages}
+          >
+            <div className="listing-photo-upload-copy">
+              <ImagePlus size={22} aria-hidden="true" />
+              <strong>{imageItems.length > 0 ? `已選 ${imageItems.length} / ${MAX_BOOK_IMAGES} 張照片` : `一次上傳最多 ${MAX_BOOK_IMAGES} 張照片`}</strong>
+              <small>{imageItems.length > 0 ? `還可新增 ${Math.max(0, MAX_BOOK_IMAGES - imageItems.length)} 張；點選縮圖即可指定封面。` : "可一次多選照片；建議放清楚的正面照。"}</small>
+              <small>支援 JPG、PNG、WebP；單張最大 5MB。</small>
+            </div>
+            <div className="listing-photo-upload-actions">
+              <span className={coverId ? "listing-photo-status is-ready" : "listing-photo-status"}>
+                {coverId ? "封面已設定" : "尚未設定封面"}
+              </span>
+              <button type="button" className="listing-photo-add-button" onClick={() => imageInputRef.current?.click()} disabled={imageItems.length >= MAX_BOOK_IMAGES}>
+                <Plus size={17} />{imageItems.length > 0 ? "繼續新增照片" : "選擇照片"}
+              </button>
+            </div>
+          </div>
+          {imageItems.length > 0 && (
+            <div className="listing-gallery-editor full" aria-label="已選擇的商品照片">
+              {imageItems.map((item, index) => (
+                <div className={`listing-gallery-item ${item.id === coverId ? "is-cover" : ""}`} key={item.id}>
+                  <div className="listing-gallery-labels">
+                    {item.id === coverId && <span className="listing-gallery-cover-badge">封面</span>}
+                    {item.id === coverId && !isSecondhand && <span className="listing-gallery-ai-badge">AI 辨識來源</span>}
+                  </div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={safeImageSource(item.url)} alt={`${isSecondhand ? "商品" : "課本"}照片 ${index + 1}`} />
+                  <div className="listing-gallery-item-actions">
+                    <button type="button" className="gallery-cover-button" onClick={() => chooseCover(item.id)}>
+                      {item.id === coverId ? "封面" : "設為封面"}
+                    </button>
+                    <button type="button" className="gallery-remove-button" aria-label={`刪除第 ${index + 1} 張照片`} onClick={() => removeImage(item.id)}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -6110,10 +6297,10 @@ function BookFormModal({
               </div>
               <div className="photo-assist-actions">
                 <button type="button" className="ghost" onClick={() => imageInputRef.current?.click()}>
-                  <ImagePlus size={16} />{imageFile ? "重新選擇照片" : "選擇封面照片"}
+                  <ImagePlus size={16} />{imageItems.length > 0 ? "新增或更換照片" : "選擇封面照片"}
                 </button>
-                <button type="button" disabled={ocrBusy || !imageFile} onClick={() => void readBookOcr()}>
-                  <Sparkles size={16} />{ocrBusy ? "辨識中..." : "使用照片辨識"}
+                <button type="button" disabled={ocrBusy || !coverId} onClick={() => void readBookOcr()}>
+                  <Sparkles size={16} />{ocrBusy ? "辨識中..." : "使用封面辨識"}
                 </button>
               </div>
               {(ocrBusy || ocrProgress > 0) && (
@@ -6122,7 +6309,7 @@ function BookFormModal({
                   <span>{ocrBusy ? `${ocrProgress}%` : "辨識完成"}</span>
                 </div>
               )}
-              <p>{ocrMessage || "辨識結果只會填入草稿，送出前請再確認。"}</p>
+              <p>{ocrMessage || (coverId ? "AI 辨識只會讀取目前標記為封面的照片，結果只會填入草稿。" : "請先在照片縮圖上設定封面，再使用 AI 辨識。")}</p>
               <p className="ocr-privacy-note">本機辨識不足時，照片可能會短暫用於提高辨識準確度；BookFlow 不會另外保存這次辨識圖片。</p>
             </div>
           )}

@@ -78,6 +78,7 @@ export type Book = {
   condition: string;
   price: number;
   imageUrl: string;
+  imageUrls: string[];
   meetup: string;
   description: string;
   contactMethod: ContactMethod;

@@ -26,6 +26,7 @@ create table public.books (
   condition text not null,
   price integer not null check (price >= 0),
   image_url text not null default '',
+  image_urls text[] not null default '{}' check (cardinality(image_urls) between 0 and 6),
   meetup text not null,
   description text not null default '',
   status public.book_status not null default 'available',
