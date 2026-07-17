@@ -21,11 +21,10 @@
 
 ## 下一步
 
-1. Push the release branch and open the PR.
-2. Wait for Vercel and Staging Migration checks.
-3. Apply and verify the migration in staging.
-4. Obtain explicit production migration approval, merge, and verify the merged SHA in production.
-5. Run release smoke against `https://bookflow-green.vercel.app`.
+1. Resolve the staging migration-history mismatch without adding unrelated feature migrations.
+2. Re-run Staging Migration for the exact release SHA.
+3. Obtain explicit production migration approval, merge, and verify the merged SHA in production.
+4. Run release smoke against `https://bookflow-green.vercel.app`.
 
 ## 變更檔案
 
@@ -51,10 +50,13 @@
 - Production build: passed.
 - `git diff --check`: passed.
 - Full `node scripts/run-project-checks.mjs`: baseline failure in `check-listing-navigation-ui.mjs`, which expects NativeDialog support absent from `origin/main`; no unrelated listing/modal changes were added.
+- Staging Migration run `29565884248`: failed before applying this migration because remote history contains `20260717003854` and `20260717004057`, absent from the clean `origin/main` release base.
 
 ## 風險與注意事項
 
 - The migration must pass Staging Migration before production approval.
+- Do not add the unrelated student-card or active-user-RPC migrations just to mask the staging history mismatch.
+- Do not repair staging migration history without explicit database-release authorization.
 - Authenticated live message interaction still needs staging and production smoke verification.
 - Do not infer production state from a preview deployment; verify `/api/health/release` against the merged SHA.
 - Original dirty checkout, OCR, student-verification, monitoring, workflow, and homepage changes are out of scope.
@@ -62,8 +64,9 @@
 ## 下一位 AI 工作指引
 
 1. Keep this handoff, `.ai/state.json`, and `.ai/history/20260717-message-phase2-release.md` synchronized.
-2. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
-3. Do not modify protected rollback files.
+2. Resolve the migration history mismatch within the explicitly approved release scope.
+3. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
+4. Do not modify protected rollback files.
 
 ## 相關 Commit
 
