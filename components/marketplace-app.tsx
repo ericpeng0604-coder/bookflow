@@ -4030,23 +4030,28 @@ export function MarketplaceApp() {
                   <button type="button" className="chat-page-exit" onClick={() => { setExpandedConversationId(null); setDashboardTab("listings"); setView("dashboard"); }}>
                     <ArrowLeft size={16} />返回個人中心
                   </button>
-                  <div className="chat-page-title"><MessageCircle size={18} />訊息</div>
-                  <span className="chat-page-count">{conversations.length}{conversationHasMore ? "+" : ""} 個對話</span>
                 </div>
               )}
-              <div className="conversation-toolbar">
+            <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""} ${chatListCollapsed ? "chat-list-collapsed" : ""}`}>
+              <div className="conversation-list-shell">
+              <div className="conversation-list-header">
+                <div className="conversation-list-heading">
+                  <MessageCircle size={18} aria-hidden="true" />
+                  <h2>訊息 <span>{conversations.length}{conversationHasMore ? "+" : ""}</span></h2>
+                </div>
                 <button
                   type="button"
                   className="chat-list-toggle"
                   aria-expanded={!chatListCollapsed}
                   aria-controls="conversation-list"
+                  aria-label={chatListCollapsed ? "顯示訊息列表" : "隱藏訊息列表"}
+                  title={chatListCollapsed ? "顯示訊息列表" : "隱藏訊息列表"}
                   onClick={() => setChatListCollapsed((collapsed) => !collapsed)}
                 >
-                  <Menu size={16} />{chatListCollapsed ? "顯示訊息列表" : "隱藏訊息列表"}
+                  <Menu size={16} aria-hidden="true" />
+                  <span className="chat-list-toggle-label">{chatListCollapsed ? "顯示列表" : "隱藏列表"}</span>
                 </button>
               </div>
-            <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""} ${chatListCollapsed ? "chat-list-collapsed" : ""}`}>
-              <div className="conversation-list-shell">
               <div className="conversation-list" id="conversation-list" aria-label="訊息對話清單">
                 {conversations.map((conversation) => {
                   const book = knownBooks.find((item) => item.id === conversation.bookId);
@@ -4057,7 +4062,8 @@ export function MarketplaceApp() {
                     <button
                       type="button"
                       ref={(element) => { conversationTriggerRefs.current[conversation.id] = element; }}
-                      className={`conversation-item ${expandedConversationId === conversation.id ? "active" : ""}`}
+                      className={`conversation-item ${expandedConversationId === conversation.id ? "active" : ""} ${conversation.unreadCount > 0 ? "unread" : ""}`}
+                      aria-current={expandedConversationId === conversation.id ? "page" : undefined}
                       key={conversation.id}
                       onClick={() => void openConversation(conversation.id)}
                     >
@@ -6544,6 +6550,7 @@ function TradeChatPanel({
   const [safetyMenuOpen, setSafetyMenuOpen] = useState(false);
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
+  const [contextDetailsOpen, setContextDetailsOpen] = useState(false);
   const [showQuickPhrases, setShowQuickPhrases] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -6954,7 +6961,7 @@ function TradeChatPanel({
         </div>
       </div>
       {book && (
-        <div className={`chat-context-card ${contextOpen ? "is-open" : "is-collapsed"}`}>
+        <div className={`chat-context-card ${contextOpen ? "is-open" : "is-collapsed"} ${contextDetailsOpen ? "details-open" : ""}`}>
           <button
             className="chat-context-toggle"
             type="button"
@@ -6979,6 +6986,15 @@ function TradeChatPanel({
                   <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
                   <p>{isSeller ? `${senderName(request.buyerId)} 已送出購買意願` : "你已送出購買意願"}</p>
                   <RequestCoordinationPanel request={request} viewer={isSeller ? "seller" : "buyer"} />
+                  <button
+                    type="button"
+                    className="chat-context-details-toggle"
+                    aria-expanded={contextDetailsOpen}
+                    onClick={() => setContextDetailsOpen((open) => !open)}
+                  >
+                    <ChevronDown size={14} aria-hidden="true" />
+                    {contextDetailsOpen ? "收合交易詳情" : "查看交易詳情"}
+                  </button>
                   {canEditRequestFromChat && (
                     <button type="button" className="chat-inline-edit" onClick={onEditRequest}>
                       <Pencil size={14} />
