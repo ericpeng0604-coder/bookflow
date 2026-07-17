@@ -1954,7 +1954,7 @@ export function MarketplaceApp() {
           : []);
       const uploadedImagePaths: string[] = [];
       let imageUrls = editingBook ? bookImageUrls(editingBook) : [];
-      let imageUrl = imageUrls[0] ?? "";
+      let imageUrl: string | undefined;
       const cleanupUploadedImages = async () => {
         if (uploadedImagePaths.length > 0) await supabase?.storage.from("book-images").remove(uploadedImagePaths);
       };
@@ -6271,8 +6271,7 @@ function BookFormModal({
                     {item.id === coverId && <span className="listing-gallery-cover-badge">封面</span>}
                     {item.id === coverId && !isSecondhand && <span className="listing-gallery-ai-badge">AI 辨識來源</span>}
                   </div>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={safeImageSource(item.url)} alt={`${isSecondhand ? "商品" : "課本"}照片 ${index + 1}`} />
+                  <Image src={safeImageSource(item.url)} alt={`${isSecondhand ? "商品" : "課本"}照片 ${index + 1}`} width={320} height={400} unoptimized />
                   <div className="listing-gallery-item-actions">
                     <button type="button" className="gallery-cover-button" onClick={() => chooseCover(item.id)}>
                       {item.id === coverId ? "封面" : "設為封面"}
