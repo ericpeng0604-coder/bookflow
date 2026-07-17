@@ -28,19 +28,19 @@ export function mapChatError(error: unknown): Error {
   if (message.includes("Duplicate message")) return new Error("請勿重複傳送相同訊息");
   if (message.includes("Message content required")) return new Error("訊息不可為空");
   if (message.includes("Up to five images")) return new Error("每則訊息最多 5 張圖片");
-  if (message.includes("Active conversation required")) return new Error("這個聊天室已結束或無法使用");
+  if (message.includes("Active conversation required")) return new Error("這段訊息已結束或無法使用");
   if (message.includes("Conversation is blocked")) return new Error("你與對方已互相封鎖，無法傳送訊息");
   if (message.includes("Message too long")) return new Error("訊息不可超過 500 字");
   if (message.includes("Only your message can be recalled")) {
     return new Error("只能收回 10 分鐘內自己送出的訊息");
   }
-  if (message.includes("Conversation participant required")) return new Error("無法更新聊聊已讀狀態");
+  if (message.includes("Conversation participant required")) return new Error("無法更新訊息已讀狀態");
   if (message.includes("JWT expired") || message.includes("Invalid JWT")) return new Error("登入已過期，請重新登入");
-  if (message.includes("invalid input syntax for type uuid")) return new Error("聊天室資料異常，請重新整理");
+  if (message.includes("invalid input syntax for type uuid")) return new Error("訊息資料異常，請重新整理");
   if (message.includes("部分圖片無法載入")) return new Error(message);
   if (message.includes("訊息已送出但無法取得伺服器回應")) return new Error(message);
   if (error instanceof Error && message) return error;
-  return new Error("聊聊操作失敗，請稍後再試");
+  return new Error("訊息操作失敗，請稍後再試");
 }
 
 export function mapTradeMessage(row: Record<string, unknown>): TradeMessage {
@@ -69,7 +69,7 @@ function validateChatImagePaths(conversationId: string, paths: string[]) {
       throw new Error("圖片路徑格式不正確");
     }
     if (!path.startsWith(`${conversationId}/`)) {
-      throw new Error("圖片路徑與目前聊天室不符");
+      throw new Error("圖片路徑與目前訊息不符");
     }
   }
 }
@@ -85,7 +85,7 @@ export async function fetchTradeMessages(
   cursor?: { createdAt: string; id: string } | null,
 ): Promise<TradeMessagePage> {
   if (!isUuid(conversationId)) {
-    throw new Error("聊天室資料異常，請重新整理");
+    throw new Error("訊息資料異常，請重新整理");
   }
 
   let query = client
@@ -124,7 +124,7 @@ export async function sendTradeMessage(
   imagePaths: string[] = [],
 ) {
   if (!isUuid(conversationId)) {
-    throw new Error("聊天室資料異常，請重新整理");
+    throw new Error("訊息資料異常，請重新整理");
   }
 
   validateChatImagePaths(conversationId, imagePaths);
@@ -161,13 +161,14 @@ export async function uploadChatImages(
   conversationId: string,
   userId: string,
   files: File[],
+  onProgress?: (completed: number, total: number) => void,
 ) {
   if (files.length === 0) return [] as string[];
   if (files.length > MAX_CHAT_IMAGES_PER_MESSAGE) {
     throw new Error("每則訊息最多 5 張圖片");
   }
   if (!isUuid(conversationId) || !isUuid(userId)) {
-    throw new Error("聊天室資料異常，請重新整理");
+    throw new Error("訊息資料異常，請重新整理");
   }
 
   const paths: string[] = [];
@@ -186,6 +187,7 @@ export async function uploadChatImages(
       });
       if (error) throw mapChatError(error);
       paths.push(path);
+      onProgress?.(paths.length, files.length);
     }
     return paths;
   } catch (error) {

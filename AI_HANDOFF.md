@@ -1,60 +1,37 @@
 # BookFlow AI Handoff
 
-## 任務目標
+## Scope
 
-Add the existing messages entry to the mobile hamburger menu.
+Deploy only the second-phase professional message experience from `origin/main` `b7441fb87b63c5a57c719ae41bfc9349cf846841`.
 
-## 目前狀態與背景
+## Included
 
-- Branch: `codex/message-menu-deploy`.
-- Base commit: `ae41267c50328b330018e9522f2e8b650adeb99d` (`origin/main`).
-- Scope is runtime/UI plus release metadata; no database migration.
-- Protected rollback/recovery files and the original dirty checkout are out of scope.
+- Standalone `view=chat` message route with desktop full-height workspace and mobile viewport handling.
+- Conversation summaries with last-message preview, sender, activity time, unread count, and pagination.
+- Realtime conversation ordering and unread updates with stale-response protection.
+- Date separators, grouped messages, hidden message actions, retry states, upload progress, and removable image previews.
+- Collapsible transaction context on mobile, focus restoration, Escape handling, `aria-live`, and visible-label migration from 聊聊／聊天／聊天室 to 訊息.
+- RPC migration `supabase/migrations/20260717100000_chat_message_summary.sql`.
 
-## 已完成
+## Verification
 
-- Added a `訊息` item with the existing `MessageCircle` icon to the mobile menu.
-- Reused `openMessages()` and the existing `unreadMessages` state; no new data request or route was added.
-- Kept the existing Header icon, chat route, legacy URL support, dashboard tab type, and `trade_message` navigation unchanged.
-- Added only the small mobile unread badge styling needed by the new menu item.
-
-## 下一步
-
-1. Open the PR, wait for required checks, and merge it.
-2. Verify the production commit and release smoke checks.
-
-## 變更檔案
-
-- `components/marketplace-app.tsx`
-- `app/globals.css`
-- `AI_HANDOFF.md`
-- `.ai/state.json`
-- `.ai/history/20260716-message-menu-release.md`
-
-## 驗證結果
-
-- TypeScript `tsc --noEmit`: passed.
-- ESLint: passed.
-- Project checks: passed (29/29).
-- Chat checks: passed.
+- TypeScript: passed.
+- Targeted ESLint: passed with no errors.
+- `node scripts/check-chat-professional-ux.mjs`: passed 13/13.
 - Production build: passed.
-- Browser verification: passed at 320, 375, and 390px; menu `訊息` button was visible, retained its icon, and did not overflow.
-- Legacy `?view=dashboard&tab=chats` support remains covered by the existing route implementation.
+- `git diff --check`: passed.
+- Full `node scripts/run-project-checks.mjs`: baseline failure in `check-listing-navigation-ui.mjs`, which expects NativeDialog support absent from `origin/main`; no unrelated listing/modal changes were added.
 
-## 風險與注意事項
+## Release gates
 
-- No database or RPC changes.
-- Authenticated live unread-count interaction was not exercised because no signed-in browser session was available.
-- Verify the merged SHA through `/api/health/release`; do not infer production state from the preview deployment.
+1. Open the PR from `codex/message-phase2-production-clean`.
+2. Wait for Vercel and Staging Migration checks.
+3. Apply the new RPC migration to staging and verify the authenticated message flow.
+4. Obtain explicit production migration approval, then merge.
+5. Verify `https://bookflow-green.vercel.app/api/health/release` against the merged SHA and run release smoke.
 
-## 下一位 AI 工作指引
+## Safety
 
-1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching `.ai/history/*.md` in sync.
-2. Preserve unrelated changes in the original checkout.
-3. Do not modify protected recovery files.
-4. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
-
-## 相關 Commit
-
-- Base commit: `cee412fe01a58e15415d047f4df38e6def8b4e7d`.
-- Feature commit: `571fe1561e21a9d27a48ed777c34316b2ddf33ad`.
+- Original dirty checkout is preserved and not used for release.
+- Protected rollback files are unchanged.
+- No unrelated OCR, student-verification, monitoring, workflow, or homepage changes are included.

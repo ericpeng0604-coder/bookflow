@@ -106,6 +106,8 @@ export function mapConversation(row: Record<string, unknown>): Conversation {
     status: String(row.status || "active") as Conversation["status"],
     closedReason: String(row.closed_reason || ""),
     lastMessageAt: String(row.last_message_at || row.created_at),
+    lastMessageSenderId: row.last_message_sender_id ? String(row.last_message_sender_id) : null,
+    lastMessagePreview: String(row.last_message_preview || ""),
     unreadCount: Number(row.unread_count || 0),
     createdAt: String(row.created_at),
   };

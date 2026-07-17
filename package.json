@@ -57,6 +57,7 @@
     "check:notification-delivery": "node --experimental-strip-types scripts/check-notification-delivery.mjs",
     "check:trade-chat": "node scripts/check-trade-chat.mjs",
     "check:chat-listing-order-ux": "node scripts/check-chat-listing-order-ux.mjs",
+    "check:chat-professional-ux": "node scripts/check-chat-professional-ux.mjs",
     "check:chat-listing-order-ux:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/check-chat-listing-order-ux.mjs",
     "check:home-accessibility": "node scripts/check-home-accessibility.mjs",
     "check:site-hardening": "node --experimental-strip-types scripts/check-site-quality-hardening.mjs",
