@@ -22,6 +22,11 @@ Never add that trailer to an unrelated commit.
 Before starting work, read `AI_WORK_MANUAL.md` and apply its recorded lessons,
 quality gates, and incident-prevention rules.
 
+Before trusting handoff or history state, run `node scripts/check-memory.mjs`.
+Then use `node scripts/ai-lookup.mjs <task keywords>` to open only the relevant
+lesson windows. Use `--deep` only when the first pass identifies a concrete
+reason to inspect `.ai/history` or global rollout summaries.
+
 ## Deploy And Environment Guardrails
 
 When the user asks for deploy, merge, production confirmation, or other

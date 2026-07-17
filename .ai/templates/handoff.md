@@ -6,8 +6,11 @@
 
 ## 目前狀態與背景
 
+- Task ID: `<task-id>`.
+- Task: `<task-title>`.
 - Branch: `<branch>`.
 - Base commit: `<base-commit>`.
+- History: `.ai/history/<date-task>.md` or `pending`.
 - No database migration is included unless listed here.
 - No GitHub workflow or protected recovery file is changed unless explicitly listed here.
 - Do not add `Rollback-Workflow-Approved: true` unless this is an authorized rollback/recovery change.
