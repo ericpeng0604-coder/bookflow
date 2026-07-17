@@ -10,7 +10,7 @@
 - Task: `ship chat and book gallery UI`.
 - Branch: `codex/chatroom-ui-final`.
 - Base commit: `00ebb7a9bcb8e065218ed989ad9e0cc4f9bf8dbc`.
-- History: `.ai/history/20260717-1520-20260717-ship-chat-and-book-gallery-ui.md`.
+- History: `.ai/history/20260717-1548-listing-form-presentation-release.md`.
 - Database migration included: `supabase/migrations/20260717151328_book_gallery.sql`.
 - No GitHub workflow or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
