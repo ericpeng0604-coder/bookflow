@@ -6,12 +6,12 @@
 
 ## 目前狀態與背景
 
-- Task ID: `20260717-ship-chat-and-book-gallery-ui`.
-- Task: `ship chat and book gallery UI`.
-- Branch: `codex/chatroom-ui-final`.
-- Base commit: `00ebb7a9bcb8e065218ed989ad9e0cc4f9bf8dbc`.
-- History: `.ai/history/20260717-1548-listing-form-presentation-release.md`.
-- Database migration included: `supabase/migrations/20260717151328_book_gallery.sql`.
+- Task ID: `20260718-fix-listing-photo-card-layout`.
+- Task: `fix listing photo card text width`.
+- Branch: `codex/fix-listing-photo-card-layout`.
+- Base commit: `b789ae4e7d5616392862dde2165ac78e998e56cf`.
+- History: `.ai/history/20260718-fix-listing-photo-card-layout.md`.
+- Database migration included: none.
 - No GitHub workflow or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
 
@@ -23,30 +23,27 @@
 - 聊天返回明確移除 `conversation`，回到 `view=chat&tab=chats`。
 - 移除桌面帳號名稱旁的登出按鈕，保留選單內登出入口。
 - 刊登表單補上照片／課本資料／交易資訊分區導覽，並改善手機版文字與照片上傳卡排版。
+- 修正照片上傳說明卡的父層 grid 欄位可縮到零寬，避免正式站中文字一字一行。
 
 ## 下一步
 
-1. 等待 PR 品質、Vercel 與資料庫 migration 檢查。
-2. 合併後確認 production smoke。
+1. 等待 PR 品質與 Vercel 檢查。
+2. 合併後確認 production smoke 與 release SHA。
 
 ## 變更檔案
 
-- `components/marketplace-app.tsx`
-- `components/marketplace/navigation-state.ts`
 - `app/globals.css`
-- `lib/types.ts`
-- `lib/marketplace/mappers.ts`
-- `supabase/schema.sql`
-- `supabase/migrations/20260717151328_book_gallery.sql`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
+- `.ai/history/20260718-fix-listing-photo-card-layout.md`
 
 ## 驗證結果
 
 - TypeScript check: passed.
 - Targeted listing, OCR, chat, and notification checks: passed.
 - ESLint for modified source: passed; CSS was ignored by ESLint configuration.
-- Production build: passed.
+- Listing navigation and upload UI check: passed.
+- Production build: NOT VERIFIED (CI Quality and build pending).
 - Local browser interaction: NOT VERIFIED on this clean release worktree.
 
 ## 風險與注意事項
@@ -61,5 +58,5 @@
 
 ## 相關 Commit
 
-- Base commit: `00ebb7a`.
-- Current implementation commit before final commit: `00ebb7a`.
+- Base commit: `b789ae4`.
+- Current implementation commit before final commit: `4099a17`.

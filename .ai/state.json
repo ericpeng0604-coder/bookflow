@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260717-ship-chat-and-book-gallery-ui",
-  "taskTitle": "ship chat and book gallery UI",
-  "baseCommit": "00ebb7a9bcb8e065218ed989ad9e0cc4f9bf8dbc",
-  "updatedAt": "2026-07-17T15:48:00.000Z",
+  "taskId": "20260718-fix-listing-photo-card-layout",
+  "taskTitle": "fix listing photo card text width",
+  "baseCommit": "b789ae4e7d5616392862dde2165ac78e998e56cf",
+  "updatedAt": "2026-07-18T12:30:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260717-1548-listing-form-presentation-release.md"
+  "historyFile": ".ai/history/20260718-fix-listing-photo-card-layout.md"
 }
