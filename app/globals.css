@@ -576,6 +576,32 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .book-form { grid-template-columns: 1fr 1fr; }
 .book-form-fields { display: contents; }
 .book-form-fields:disabled { opacity: .72; }
+.listing-section-nav { position: sticky; top: 0; z-index: 4; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px; border: 1px solid #d8e7df; border-radius: 13px; background: rgba(255, 253, 247, .96); box-shadow: 0 8px 18px rgba(18, 58, 45, .08); }
+.listing-section-nav button { min-height: 40px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; gap: 7px; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.listing-section-nav button span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: #e7f1ec; color: var(--green); font-size: 11px; }
+.listing-section-nav button:hover, .listing-section-nav button.active { background: #e5f4ed; color: var(--green-dark); }
+.listing-section-nav button.active span { background: var(--green); color: white; }
+.listing-form-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 18px; border: 1px solid #d9e6df; border-radius: 16px; background: rgba(255, 255, 255, .6); scroll-margin-top: 18px; }
+.listing-form-section-heading { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 11px; padding-bottom: 4px; }
+.listing-form-section-heading h3 { margin: 0 0 3px; color: var(--ink); font-size: 18px; }
+.listing-form-section-heading p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.listing-form-section-kicker { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; background: #e7f4ee; color: var(--green); font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.listing-photo-guide { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px 16px; border: 1px solid #c4ddd2; border-radius: 14px; background: linear-gradient(135deg, #f1faf6, #fbfdfb); }
+.listing-photo-guide.has-images { border-color: #8bbca9; background: linear-gradient(135deg, #eaf7f1, #f8fcfa); }
+.listing-photo-guide.is-dragging { border-color: var(--green); border-style: dashed; background: #e0f4eb; box-shadow: 0 0 0 3px rgba(30, 99, 79, .12); }
+.listing-photo-guide-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.listing-photo-guide-icon { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 12px; background: var(--green); color: white; box-shadow: 0 7px 16px rgba(30, 99, 79, .16); }
+.listing-photo-guide-main > span:last-child { display: grid; flex: 1 1 auto; gap: 3px; min-width: 0; max-width: 100%; }
+.listing-photo-guide-main strong { color: var(--green-dark); font-size: 15px; }
+.listing-photo-guide-main small, .listing-photo-guide-meta small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.listing-photo-guide-meta { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 10px; max-width: 360px; }
+.listing-photo-cover-status { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+.listing-photo-cover-status.ready { background: #d7f0e5; color: var(--green-dark); }
+.listing-photo-cover-status.needs-cover { background: #fff1d8; color: #94621e; }
+.listing-photo-remaining { color: var(--green-dark); font-size: 11px; font-weight: 800; }
+.listing-photo-add-button { min-height: 36px; padding: 7px 12px; border: 1px solid #b9d6ca; border-radius: 9px; display: inline-flex; align-items: center; gap: 6px; background: white; color: var(--green); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.listing-photo-add-button:hover { border-color: var(--green); background: #f4fbf7; }
+.listing-photo-add-button:disabled { opacity: .5; cursor: not-allowed; }
 .photo-assist { border: 1px solid #cfe2da; border-radius: 10px; background: #f4faf7; padding: 13px; display: grid; gap: 11px; }
 .photo-assist > div:first-child { display: flex; gap: 10px; align-items: flex-start; color: var(--green); }
 .photo-assist > div:first-child span { display: grid; gap: 3px; }
@@ -585,6 +611,8 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .photo-assist-actions button { border: 0; border-radius: 8px; min-height: 38px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px; background: var(--green); color: white; font-weight: 800; cursor: pointer; }
 .photo-assist-actions button.ghost { border: 1px solid #cfe2da; background: white; color: var(--green); }
 .photo-assist-actions button:disabled { opacity: .55; cursor: not-allowed; }
+.ocr-cover-note { margin: 0; color: var(--green-dark); font-size: 12px; line-height: 1.5; }
+.ocr-cover-note.needs-refresh { color: #94621e; font-weight: 700; }
 .ocr-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .ocr-progress progress { width: 100%; height: 9px; overflow: hidden; border: 0; border-radius: 999px; background: #dce9e3; accent-color: var(--green); }
 .ocr-progress progress::-webkit-progress-bar { background: #dce9e3; border-radius: 999px; }
@@ -811,6 +839,16 @@ footer { position: relative; border-top: 1px solid var(--line); padding: 35px ma
   .row-actions, .request-actions { width: 100%; justify-content: flex-end; }
   .book-form { grid-template-columns: 1fr; }
   .form .full { grid-column: auto; }
+  .listing-section-nav { top: -1px; gap: 4px; }
+  .listing-section-nav button { min-height: 38px; gap: 4px; font-size: 11px; }
+  .listing-section-nav button span { width: 20px; height: 20px; }
+  .listing-form-section { grid-template-columns: 1fr; gap: 13px; padding: 14px; }
+  .listing-form-section-heading { gap: 8px; }
+  .listing-form-section-heading h3 { font-size: 16px; }
+  .listing-photo-guide { grid-template-columns: 1fr; gap: 12px; padding: 13px; }
+  .listing-photo-guide-meta { justify-content: flex-start; max-width: none; }
+  .listing-photo-guide-meta small { flex: 1 1 100%; }
+  .listing-photo-add-button { width: 100%; justify-content: center; }
   .listing-photo-heading { display: grid; gap: 5px; }
   .listing-photo-heading span { text-align: left; }
   .listing-photo-upload { align-items: stretch; flex-direction: column; gap: 14px; }
