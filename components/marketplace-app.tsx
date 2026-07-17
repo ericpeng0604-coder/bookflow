@@ -341,6 +341,8 @@ type ListingImageSubmission = {
   coverId: string;
 };
 
+type ListingFormSection = "photos" | "book" | "trade";
+
 const blankBook: Omit<
   Book,
   | "id"
@@ -5895,14 +5897,19 @@ function BookFormModal({
   const initialImageItems = bookImageUrls(value).map((url, index) => ({ id: `existing-${index}`, url }));
   const [imageItems, setImageItems] = useState<ListingImageItem[]>(initialImageItems);
   const [coverId, setCoverId] = useState(initialImageItems[0]?.id || "");
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [imageDragActive, setImageDragActive] = useState(false);
+  const [ocrCompletedCoverId, setOcrCompletedCoverId] = useState<string | null>(null);
   const [ocrOriginalDraft, setOcrOriginalDraft] = useState<BookOcrDraft | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrMessage, setOcrMessage] = useState("");
   const [showCourseHelp, setShowCourseHelp] = useState(false);
+  const [activeListingSection, setActiveListingSection] = useState<ListingFormSection>("photos");
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const photoSectionRef = useRef<HTMLElement>(null);
+  const bookSectionRef = useRef<HTMLElement>(null);
+  const tradeSectionRef = useRef<HTMLElement>(null);
   const imageItemsRef = useRef<ListingImageItem[]>(initialImageItems);
   const ocrRequestRef = useRef(0);
   const baseDraft = useMemo(() => ({
@@ -5937,6 +5944,8 @@ function BookFormModal({
   const draftChanged = JSON.stringify(draft) !== baseDraftSignatureRef.current;
   const dirty = imageItems.length > 0 || draftChanged;
   const isSecondhand = initialListingType === "secondhand";
+  const ocrNeedsRefresh = Boolean(ocrOriginalDraft && coverId && ocrCompletedCoverId !== coverId);
+  const hasCoverImage = Boolean(coverId && imageItems.some((item) => item.id === coverId && item.url));
 
   useEffect(() => {
     let hydratedBase = baseDraft;
@@ -6003,7 +6012,7 @@ function BookFormModal({
   }
 
   function syncOcrFile(items: ListingImageItem[], nextCoverId: string) {
-    setImageFile(items.find((item) => item.id === nextCoverId)?.file ?? null);
+    setCoverFile(items.find((item) => item.id === nextCoverId)?.file ?? null);
     imageItemsRef.current = items;
   }
 
@@ -6106,7 +6115,7 @@ function BookFormModal({
     setOcrMessage("正在準備照片...");
     try {
       const { recognizeBookCover } = await import("@/lib/marketplace/free-ocr");
-      const ocrSourceFile = imageFile ?? await resolveCoverFileForOcr();
+      const ocrSourceFile = coverFile ?? await resolveCoverFileForOcr();
       if (!ocrSourceFile) throw new Error("請先設定封面，才能進行辨識。");
       const ocrImageFile = await compressBookOcrImage(ocrSourceFile);
       const primaryResult = await recognizeBookCover(ocrImageFile, (stage, progress) => {
@@ -6188,6 +6197,7 @@ function BookFormModal({
         return next;
       });
       setOcrOriginalDraft(ocrDraft);
+      setOcrCompletedCoverId(coverId);
       setOcrProgress(100);
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
         ? `已填入可辨識的欄位，送出前請再確認。${aiFallbackError ? ` ${aiFallbackError}` : ""}`
@@ -6211,6 +6221,11 @@ function BookFormModal({
     event.preventDefault();
   }
 
+  function scrollToListingSection(section: React.RefObject<HTMLElement | null>, sectionName: ListingFormSection) {
+    setActiveListingSection(sectionName);
+    section.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <>
     <ModalShell
@@ -6224,42 +6239,67 @@ function BookFormModal({
         onKeyDown={preventImplicitSubmit}
         className="form book-form"
       >
+        <nav className="listing-section-nav full" aria-label="刊登表單分區">
+          <button type="button" className={activeListingSection === "photos" ? "active" : ""} aria-current={activeListingSection === "photos" ? "step" : undefined} onClick={() => scrollToListingSection(photoSectionRef, "photos")}>
+            <span>1</span>照片與封面
+          </button>
+          <button type="button" className={activeListingSection === "book" ? "active" : ""} aria-current={activeListingSection === "book" ? "step" : undefined} onClick={() => scrollToListingSection(bookSectionRef, "book")}>
+            <span>2</span>課本資料
+          </button>
+          <button type="button" className={activeListingSection === "trade" ? "active" : ""} aria-current={activeListingSection === "trade" ? "step" : undefined} onClick={() => scrollToListingSection(tradeSectionRef, "trade")}>
+            <span>3</span>交易資訊
+          </button>
+        </nav>
         <fieldset disabled={saving} className="book-form-fields">
-          <div className="listing-photo-heading full">
-            <b>{isSecondhand ? "商品圖片" : "照片與封面"} *</b>
-            <span>{isSecondhand ? "支援 JPG、PNG、WebP，最大 5MB。" : `最多 ${MAX_BOOK_IMAGES} 張；封面會顯示在列表，其他照片可在商品詳情翻閱。`}</span>
+          <section ref={photoSectionRef} id="listing-photo-section" className="listing-form-section full">
+          <div className="listing-form-section-heading">
+            <span className="listing-form-section-kicker">STEP 1</span>
+            <div>
+              <h3>照片與封面</h3>
+              <p>先選照片，再指定一張作為列表封面與 AI 辨識來源。</p>
+            </div>
           </div>
+          <p className="listing-file-help full">
+            <b>{isSecondhand ? "商品圖片" : "課本照片"} *</b>
+            <span>最多 {MAX_BOOK_IMAGES} 張；第一張或標記「封面」的照片會顯示在列表。</span>
+          </p>
           <input
             ref={imageInputRef}
             className="listing-file-input full"
             name="image"
-            required={!book}
+            required={!book && imageItems.length === 0}
             type="file"
-            multiple={!isSecondhand}
+            multiple
             accept="image/jpeg,image/png,image/webp"
             onChange={selectImage}
-            aria-label={isSecondhand ? "選擇商品照片" : "選擇課本照片"}
+            aria-label={isSecondhand ? "新增商品照片" : "新增課本照片"}
           />
           <input type="hidden" name="listingType" value={initialListingType} />
           <input type="hidden" name="ocrOriginal" value={ocrOriginalDraft ? JSON.stringify(ocrOriginalDraft) : ""} />
           <div
-            className={`listing-photo-upload full ${imageDragActive ? "is-drag-active" : ""}`}
-            onDragOver={(event) => { event.preventDefault(); setImageDragActive(true); }}
-            onDragLeave={() => setImageDragActive(false)}
+            className={`listing-photo-guide full ${imageItems.length > 0 ? "has-images" : ""} ${imageDragActive ? "is-dragging" : ""}`}
+            onDragEnter={(event) => { event.preventDefault(); setImageDragActive(true); }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={(event) => {
+              if (event.currentTarget === event.target) setImageDragActive(false);
+            }}
             onDrop={dropImages}
           >
-            <div className="listing-photo-upload-copy">
-              <ImagePlus size={22} aria-hidden="true" />
-              <strong>{imageItems.length > 0 ? `已選 ${imageItems.length} / ${MAX_BOOK_IMAGES} 張照片` : `一次上傳最多 ${MAX_BOOK_IMAGES} 張照片`}</strong>
-              <small>{imageItems.length > 0 ? `還可新增 ${Math.max(0, MAX_BOOK_IMAGES - imageItems.length)} 張；點選縮圖即可指定封面。` : "可一次多選照片；建議放清楚的正面照。"}</small>
-              <small>支援 JPG、PNG、WebP；單張最大 5MB。</small>
+            <div className="listing-photo-guide-main">
+              <span className="listing-photo-guide-icon"><ImagePlus size={22} aria-hidden="true" /></span>
+              <span>
+                <strong>{imageItems.length > 0 ? `已選 ${imageItems.length} / ${MAX_BOOK_IMAGES} 張照片` : `一次上傳最多 ${MAX_BOOK_IMAGES} 張照片`}</strong>
+                <small>{imageItems.length > 0 ? "可以繼續新增照片，或在下方縮圖指定封面。" : "可一次多選照片；建議第一張放清楚的正面照。"}</small>
+              </span>
             </div>
-            <div className="listing-photo-upload-actions">
-              <span className={coverId ? "listing-photo-status is-ready" : "listing-photo-status"}>
+            <div className="listing-photo-guide-meta">
+              <span className={`listing-photo-cover-status ${coverId ? "ready" : "needs-cover"}`}>
                 {coverId ? "封面已設定" : "尚未設定封面"}
               </span>
+              <small className="listing-photo-remaining">還可新增 {Math.max(0, MAX_BOOK_IMAGES - imageItems.length)} 張</small>
+              <small>封面會顯示在商品列表，其餘照片在商品詳情頁翻閱</small>
               <button type="button" className="listing-photo-add-button" onClick={() => imageInputRef.current?.click()} disabled={imageItems.length >= MAX_BOOK_IMAGES}>
-                <Plus size={17} />{imageItems.length > 0 ? "繼續新增照片" : "選擇照片"}
+                <Plus size={16} aria-hidden="true" />{imageItems.length > 0 ? "繼續新增照片" : "選擇照片"}
               </button>
             </div>
           </div>
@@ -6267,11 +6307,12 @@ function BookFormModal({
             <div className="listing-gallery-editor full" aria-label="已選擇的商品照片">
               {imageItems.map((item, index) => (
                 <div className={`listing-gallery-item ${item.id === coverId ? "is-cover" : ""}`} key={item.id}>
-                  <div className="listing-gallery-labels">
+                  <div className="listing-gallery-labels" aria-hidden="true">
                     {item.id === coverId && <span className="listing-gallery-cover-badge">封面</span>}
                     {item.id === coverId && !isSecondhand && <span className="listing-gallery-ai-badge">AI 辨識來源</span>}
                   </div>
-                  <Image src={safeImageSource(item.url)} alt={`${isSecondhand ? "商品" : "課本"}照片 ${index + 1}`} width={320} height={400} unoptimized />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.url} alt={`${isSecondhand ? "商品" : "課本"}照片 ${index + 1}`} />
                   <div className="listing-gallery-item-actions">
                     <button type="button" className="gallery-cover-button" onClick={() => chooseCover(item.id)}>
                       {item.id === coverId ? "封面" : "設為封面"}
@@ -6296,12 +6337,19 @@ function BookFormModal({
               </div>
               <div className="photo-assist-actions">
                 <button type="button" className="ghost" onClick={() => imageInputRef.current?.click()}>
-                  <ImagePlus size={16} />{imageItems.length > 0 ? "新增或更換照片" : "選擇封面照片"}
+                  <ImagePlus size={16} />{hasCoverImage ? "重新選擇照片" : "選擇封面照片"}
                 </button>
-                <button type="button" disabled={ocrBusy || !coverId} onClick={() => void readBookOcr()}>
+                <button type="button" disabled={ocrBusy || !hasCoverImage} onClick={() => void readBookOcr()}>
                   <Sparkles size={16} />{ocrBusy ? "辨識中..." : "使用封面辨識"}
                 </button>
               </div>
+              <p className={`ocr-cover-note ${ocrNeedsRefresh ? "needs-refresh" : ""}`}>
+                {ocrNeedsRefresh
+                  ? "封面已變更，原有文字仍保留；請重新辨識以更新課本資料。"
+                  : coverId
+                    ? "AI 辨識來源：目前標記為封面的照片。"
+                    : "請先在照片縮圖上選擇「設為封面」。"}
+              </p>
               {(ocrBusy || ocrProgress > 0) && (
                 <div className="ocr-progress" aria-live="polite">
                   <progress value={ocrProgress} max={100} aria-label="照片辨識進度" />
@@ -6313,6 +6361,16 @@ function BookFormModal({
             </div>
           )}
 
+          </section>
+
+          <section ref={bookSectionRef} id="listing-book-section" className="listing-form-section full">
+            <div className="listing-form-section-heading">
+              <span className="listing-form-section-kicker">STEP 2</span>
+              <div>
+                <h3>課本資料</h3>
+                <p>先確認 AI 帶入的內容，再補充課程與版本資訊。</p>
+              </div>
+            </div>
           <label className="full">
             {isSecondhand ? "商品名稱" : "書名"} *
             <input name="title" required maxLength={LISTING_FIELD_LIMITS.title} value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} placeholder={isSecondhand ? "例如：小米檯燈、藍牙耳機" : "例如：資料結構：使用 C++"} />
@@ -6384,6 +6442,16 @@ function BookFormModal({
             </>
           )}
 
+          </section>
+
+          <section ref={tradeSectionRef} id="listing-trade-section" className="listing-form-section full">
+            <div className="listing-form-section-heading">
+              <span className="listing-form-section-kicker">STEP 3</span>
+              <div>
+                <h3>交易資訊</h3>
+                <p>讓買家快速了解價格、書況與面交方式。</p>
+              </div>
+            </div>
           <label>
             {isSecondhand ? "物況" : "書況"} *
             <select name="condition" required value={draft.condition} onChange={(event) => updateDraft("condition", event.target.value)}>
@@ -6398,6 +6466,7 @@ function BookFormModal({
           <label className="full">面交地點 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
           <label className="full">{isSecondhand ? "商品說明" : "書況說明"} *<textarea name="description" required maxLength={LISTING_FIELD_LIMITS.description} rows={3} value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} /></label>
           <button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button>
+          </section>
         </fieldset>
       </form>
     </ModalShell>
