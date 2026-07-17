@@ -9,7 +9,7 @@
 - Branch: `codex/message-phase2-production-clean`.
 - This release is isolated from the original dirty checkout.
 - No GitHub workflow or protected recovery file is changed.
-- A database migration is included for conversation summary RPCs.
+- Three migrations are included: two pre-existing staging-history compatibility migrations and the message summary RPC migration.
 
 ## 已完成
 
@@ -18,11 +18,12 @@
 - Added date separators, grouped messages, hidden actions, retry states, upload progress, removable image previews, mobile transaction-context collapse, focus restoration, Escape handling, and `aria-live`.
 - Replaced visible 聊聊／聊天／聊天室 labels with 訊息.
 - Added `20260717100000_chat_message_summary.sql`.
+- Restored the two migrations already present in staging but absent from `origin/main`: `20260717003854_student_card_ai_quota.sql` and `20260717004057_harden_active_user_rpc.sql`.
 
 ## 下一步
 
-1. Resolve the staging migration-history mismatch without adding unrelated feature migrations.
-2. Re-run Staging Migration for the exact release SHA.
+1. Re-run Staging Migration for the exact release SHA.
+2. Verify the message RPC and authenticated message flow in staging.
 3. Obtain explicit production migration approval, merge, and verify the merged SHA in production.
 4. Run release smoke against `https://bookflow-green.vercel.app`.
 
@@ -36,6 +37,8 @@
 - `lib/types.ts`
 - `app/globals.css`
 - `supabase/migrations/20260717100000_chat_message_summary.sql`
+- `supabase/migrations/20260717003854_student_card_ai_quota.sql`
+- `supabase/migrations/20260717004057_harden_active_user_rpc.sql`
 - `scripts/check-chat-professional-ux.mjs`
 - `package.json`
 - `AI_HANDOFF.md`
@@ -51,12 +54,12 @@
 - `git diff --check`: passed.
 - Full `node scripts/run-project-checks.mjs`: baseline failure in `check-listing-navigation-ui.mjs`, which expects NativeDialog support absent from `origin/main`; no unrelated listing/modal changes were added.
 - Staging Migration run `29565884248`: failed before applying this migration because remote history contains `20260717003854` and `20260717004057`, absent from the clean `origin/main` release base.
+- The two missing migration files were copied unchanged from the original workspace into this release branch; no related application/runtime files were included.
 
 ## 風險與注意事項
 
 - The migration must pass Staging Migration before production approval.
-- Do not add the unrelated student-card or active-user-RPC migrations just to mask the staging history mismatch.
-- Do not repair staging migration history without explicit database-release authorization.
+- The two compatibility migrations are included because staging already records them; do not add their unrelated runtime feature changes.
 - Authenticated live message interaction still needs staging and production smoke verification.
 - Do not infer production state from a preview deployment; verify `/api/health/release` against the merged SHA.
 - Original dirty checkout, OCR, student-verification, monitoring, workflow, and homepage changes are out of scope.
