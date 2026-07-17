@@ -2,63 +2,77 @@
 
 ## 任務目標
 
-Fix the mobile chat header and safety menu clipping reported in the chat UI.
+只部署第二階段專業化訊息功能，基於最新 `origin/main` `0f4643fc4aff8da1e3490b00651242826b1a3849`。
 
 ## 目前狀態與背景
 
-- Branch: `codex/mobile-chat-report-fix`.
-- Base commit: `b7441fb87b63c5a57c719ae41bfc9349cf846841` (`origin/main`).
-- Target: `https://bookflow-green.vercel.app`.
-- Runtime/UI and static regression-check changes only; no database migration.
-- Protected rollback/recovery files and the original dirty checkout are out of scope.
+- Branch: `codex/message-phase2-production-clean`.
+- The branch includes the already-merged mainline mobile chat report-menu fix as its current base.
+- The original dirty checkout remains isolated.
+- Three migrations are included: two staging-history compatibility migrations and the message summary RPC migration.
 
 ## 已完成
 
-- Changed the mobile control label from `返回聊聊` to `返回訊息`.
-- Changed the mobile chat header to a compact three-column horizontal layout.
-- Allowed the chat safety menu to escape the chat panel overflow clip while keeping the message log scrollable.
-- Added regression checks for the horizontal header and unclipped safety menu.
-
-## 驗證結果
-
-- `node scripts/check-chat-listing-order-ux.mjs`: passed (26/26).
-- `node scripts/check-chat-visibility-and-feedback.mjs`: passed (11/11).
-- `node scripts/run-project-checks.mjs`: passed (29/29).
-- TypeScript `tsc --noEmit`: passed.
-- Production build: passed; 22/22 static pages generated.
-- `git diff --check`: passed; only CRLF normalization warnings remain.
-- ESLint direct check: NOT VERIFIED in the release worktree because the existing dependency tree lacks `eslint-plugin-react-hooks`; the previously validated clean chat worktree's standalone lint passed before this release patch.
-- Browser auth flow: NOT VERIFIED because no signed-in browser session was available; source checks cover the mobile layout contract.
+- Added standalone `view=chat` message route with desktop full-height and mobile viewport handling.
+- Added conversation preview, sender, activity time, unread count, pagination, realtime sorting, and unread updates.
+- Added date separators, grouped messages, hidden actions, retry states, upload progress, removable image previews, mobile transaction-context collapse, focus restoration, Escape handling, and `aria-live`.
+- Replaced visible 聊聊／聊天／聊天室 labels with 訊息.
+- Restored the two migrations already present in staging but absent from the previous clean base: `20260717003854_student_card_ai_quota.sql` and `20260717004057_harden_active_user_rpc.sql`.
+- Added `20260717100000_chat_message_summary.sql`.
 
 ## 下一步
 
-1. Run release scope and preflight checks.
-2. Commit and push the clean branch, then open the PR.
-3. Wait for required checks and merge the PR.
-4. Verify the merged SHA through `/api/health/release` and run release smoke against production.
-
-## 風險與注意事項
-
-- No database or RPC changes.
-- Do not include unrelated files from the original dirty checkout.
-- Do not modify rollback/recovery workflows or `.github/CODEOWNERS`.
+1. Confirm the merge conflict resolution and rerun local release checks.
+2. Re-run Staging Migration for the exact release SHA if the merge changes the migration SHA.
+3. Obtain explicit production migration approval, merge, and verify the merged SHA in production.
+4. Run release smoke against `https://bookflow-green.vercel.app`.
 
 ## 變更檔案
 
-- `app/globals.css`
 - `components/marketplace-app.tsx`
-- `scripts/check-chat-listing-order-ux.mjs`
-- `scripts/check-chat-visibility-and-feedback.mjs`
+- `components/marketplace/navigation-state.ts`
+- `lib/marketplace/mappers.ts`
+- `lib/marketplace/queries.ts`
+- `lib/marketplace/trade-chat.ts`
+- `lib/types.ts`
+- `app/globals.css`
+- `supabase/migrations/20260717003854_student_card_ai_quota.sql`
+- `supabase/migrations/20260717004057_harden_active_user_rpc.sql`
+- `supabase/migrations/20260717100000_chat_message_summary.sql`
+- `scripts/check-chat-professional-ux.mjs`
+- `package.json`
+- `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260717-mobile-chat-report-menu-release.md`
+- `.ai/history/20260717-message-phase2-release.md`
+- `.ai/history/20260717-message-phase2-migration-drift-fix.md`
+
+## 驗證結果
+
+- TypeScript: passed before the base synchronization.
+- Targeted ESLint: passed before the base synchronization.
+- `node scripts/check-chat-professional-ux.mjs`: passed 13/13 before the base synchronization.
+- Production build: passed before the base synchronization.
+- Staging Migration run `29566925528`: passed, including migration history and RPC/RLS verification.
+- Production Migration run `29567007842`: passed for SHA `213b7513dd6c1a74f3ed7d7487236ab720dac917`.
+- The PR currently needs merge-conflict resolution after `origin/main` advanced with the mobile chat report-menu fix.
+
+## 風險與注意事項
+
+- If the merge changes the release SHA, rerun production migration only after a new successful staging run for that exact SHA.
+- Do not add unrelated runtime code for the compatibility migrations.
+- Verify `/api/health/release` against the merged SHA; do not infer production state from a preview.
+- Do not modify protected rollback files.
 
 ## 下一位 AI 工作指引
 
-1. Keep the original dirty checkout untouched.
-2. Verify required PR checks before merge.
-3. Compare `/api/health/release` with the merged SHA and run production release smoke.
+1. Resolve only the three merge conflicts: state metadata, handoff metadata, and the mobile back-button label.
+2. Preserve the already-merged mainline mobile chat report-menu changes.
+3. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD`, TypeScript, message UX checks, build, and diff check.
+4. If the final SHA differs from `213b7513...`, rerun staging and production migration gates before merge.
 
 ## 相關 Commit
 
-- Base commit: `b7441fb87b63c5a57c719ae41bfc9349cf846841`.
-- Current commit: verify the branch tip with `git rev-parse HEAD` before and after merge.
+- Previous release base: `b7441fb87b63c5a57c719ae41bfc9349cf846841`.
+- Current main base: `0f4643fc4aff8da1e3490b00651242826b1a3849`.
+- Feature commit: `369a472b21a491f72f6db70ddf95d60c0d931cf8`.
+- Migration-history fix commit: `213b7513dd6c1a74f3ed7d7487236ab720dac917`.

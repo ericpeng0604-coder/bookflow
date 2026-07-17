@@ -289,22 +289,53 @@ export async function fetchUnreadNotificationCount(client: SupabaseClient) {
   return Number(data || 0);
 }
 
-export async function fetchConversations(client: SupabaseClient): Promise<Conversation[]> {
+export type ConversationCursor = {
+  lastMessageAt: string;
+  id: string;
+};
+
+export type ConversationPage = {
+  conversations: Conversation[];
+  hasMore: boolean;
+  nextCursor: ConversationCursor | null;
+};
+
+export async function fetchConversationsPage(
+  client: SupabaseClient,
+  cursor: ConversationCursor | null = null,
+  limit = 30,
+): Promise<ConversationPage> {
+  let usedFallback = false;
   let { data, error } = await client.rpc("list_my_conversations_page", {
-    p_limit: 30,
-    p_cursor_last_message_at: null,
-    p_cursor_id: null,
+    p_limit: limit,
+    p_cursor_last_message_at: cursor?.lastMessageAt || null,
+    p_cursor_id: cursor?.id || null,
   });
   if (error && ["PGRST202", "42883"].includes(error.code || "")) {
+    usedFallback = true;
     const fallback = await client.rpc("list_my_conversations");
     data = fallback.data;
     error = fallback.error;
   }
   if (error) {
-    if (["PGRST202", "42883"].includes(error.code || "")) return [] as Conversation[];
+    if (["PGRST202", "42883"].includes(error.code || "")) return { conversations: [], hasMore: false, nextCursor: null };
     throw error;
   }
-  return (data ?? []).map((row: Record<string, unknown>) => mapConversation(row));
+  const conversations = (data ?? [])
+    .slice(0, usedFallback ? limit : undefined)
+    .map((row: Record<string, unknown>) => mapConversation(row));
+  const lastConversation = conversations[conversations.length - 1];
+  return {
+    conversations,
+    hasMore: !usedFallback && conversations.length >= limit,
+    nextCursor: lastConversation
+      ? { lastMessageAt: lastConversation.lastMessageAt, id: lastConversation.id }
+      : null,
+  };
+}
+
+export async function fetchConversations(client: SupabaseClient): Promise<Conversation[]> {
+  return (await fetchConversationsPage(client)).conversations;
 }
 
 export async function fetchFavoriteIds(client: SupabaseClient, limit = 100) {
@@ -498,6 +529,7 @@ export type WorkspaceTabData = {
   contacts?: Record<string, TradeContact>;
   sellerLifecycle?: SellerLifecycle | null;
   conversations?: Conversation[];
+  conversationPage?: ConversationPage;
   favoriteIds?: string[];
   trustBadges?: TrustBadge[];
   studentVerification?: StudentVerificationSummary | null;
@@ -519,10 +551,11 @@ export async function loadWorkspaceTabData(
   }
 
   if (tab === "chats") {
-    const [conversations, requests] = await Promise.all([
-      fetchConversations(client),
+    const [conversationPage, requests] = await Promise.all([
+      fetchConversationsPage(client),
       fetchUserRequests(client),
     ]);
+    const conversations = conversationPage.conversations;
     const profileIds = conversations.flatMap((item) => [item.buyerId, item.sellerId]);
     const bookIds = [...new Set(conversations.map((item) => item.bookId))];
     const [partyProfiles, requestBooks] = await Promise.all([
@@ -530,7 +563,7 @@ export async function loadWorkspaceTabData(
       fetchBooksByIds(client, bookIds),
     ]);
     const trustBadges = await fetchPublicTrustBadges(client, [...new Set(profileIds)]);
-    return { conversations, requests, partyProfiles, requestBooks, trustBadges };
+    return { conversations, conversationPage, requests, partyProfiles, requestBooks, trustBadges };
   }
 
   if (tab === "favorites") {

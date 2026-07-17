@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Conversation, ListingType, Profile } from "@/lib/types";
 
-export type MarketplaceView = "home" | "book" | "dashboard" | "admin";
+export type MarketplaceView = "home" | "book" | "dashboard" | "chat" | "admin";
 export type DashboardTab = "listings" | "chats" | "requests" | "received" | "favorites" | "studentVerification";
 export type AdminWorkspace = "overview" | "listings" | "reports" | "feedback" | "studentVerification" | "risk" | "hiddenListings" | "permissions";
 
@@ -55,6 +55,10 @@ export function buildMarketplaceUrl({
   if (view === "book" && selectedId) {
     params.set("view", "book");
     params.set("book", selectedId);
+  } else if (view === "chat" && currentUser) {
+    params.set("view", "chat");
+    params.set("tab", "chats");
+    if (expandedConversationId) params.set("conversation", expandedConversationId);
   } else if (view === "dashboard" && currentUser) {
     params.set("view", "dashboard");
     params.set("tab", dashboardTab);
@@ -114,16 +118,34 @@ export function useMarketplaceNavigation({
       return;
     }
 
-    if (targetView === "dashboard") {
+    if (targetView === "chat") {
       if (!currentUser) return;
-      setView("dashboard");
-      const targetTab = params.get("tab");
-      if (isDashboardTab(targetTab)) setDashboardTab(targetTab);
+      setDashboardTab("chats");
+      setExpandedConversationId(params.get("conversation"));
+      setView("chat");
       const targetConversation = params.get("conversation");
-      setExpandedConversationId(targetConversation);
       if (targetConversation && options?.openConversation) {
         void handlersRef.current.onConversationRoute(targetConversation);
       }
+      return;
+    }
+
+    if (targetView === "dashboard") {
+      if (!currentUser) return;
+      const targetTab = params.get("tab");
+      if (targetTab === "chats") {
+        setDashboardTab("chats");
+        setExpandedConversationId(params.get("conversation"));
+        setView("chat");
+        const targetConversation = params.get("conversation");
+        if (targetConversation && options?.openConversation) {
+          void handlersRef.current.onConversationRoute(targetConversation);
+        }
+        return;
+      }
+      setView("dashboard");
+      if (isDashboardTab(targetTab)) setDashboardTab(targetTab);
+      setExpandedConversationId(null);
       return;
     }
 
@@ -174,7 +196,7 @@ export function useMarketplaceNavigation({
   }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType, ready, selectedId, view]);
 
   useEffect(() => {
-    if (view !== "dashboard" || dashboardTab !== "chats" || expandedConversationId || !currentUser) return;
+    if ((view !== "dashboard" && view !== "chat") || dashboardTab !== "chats" || expandedConversationId || !currentUser) return;
     const lastChatId = window.localStorage.getItem(lastChatStorageKey(currentUser.id));
     if (!lastChatId || !conversations.some((conversation) => conversation.id === lastChatId)) return;
     setExpandedConversationId(lastChatId);

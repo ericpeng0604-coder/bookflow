@@ -149,6 +149,8 @@ export type Conversation = {
   status: ConversationStatus;
   closedReason: string;
   lastMessageAt: string;
+  lastMessageSenderId: string | null;
+  lastMessagePreview: string;
   unreadCount: number;
   createdAt: string;
 };
