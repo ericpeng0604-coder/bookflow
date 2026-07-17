@@ -33,6 +33,8 @@ const checks = [
   ["live purchase request fix migration replaces the broken function", livePurchaseRequestFixMigration.includes("create or replace function public.create_purchase_request") && livePurchaseRequestFixMigration.includes("from public.books") && !livePurchaseRequestFixMigration.includes("marketplace_listings")],
   ["seller can cancel reserved handoff in migration", sellerCancelMigration.includes("actor = target_book.seller_id") && sellerCancelMigration.includes("target.status in ('reserved', 'awaiting_confirmation')")],
   ["chat context and safety menu have styles", css.includes(".chat-context-card") && css.includes(".chat-safety-menu")],
+  ["mobile chat header stays horizontal", app.includes("返回訊息") && css.includes("grid-template-columns: auto minmax(0, 1fr) auto") && css.includes(".chat-mobile-back { white-space: nowrap; }")],
+  ["chat safety menu escapes chat clipping", css.includes(".conversation-panel .trade-chat") && css.includes("overflow: visible")],
   ["mobile chat long text has wrapping styles", css.includes(".trade-chat-bubble p") && css.includes("overflow-wrap: anywhere") && css.includes(".chat-new-message-button")],
 ];
 

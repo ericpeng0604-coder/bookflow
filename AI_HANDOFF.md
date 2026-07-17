@@ -2,59 +2,63 @@
 
 ## 任務目標
 
-Add the existing messages entry to the mobile hamburger menu.
+Fix the mobile chat header and safety menu clipping reported in the chat UI.
 
 ## 目前狀態與背景
 
-- Branch: `codex/message-menu-deploy`.
-- Base commit: `ae41267c50328b330018e9522f2e8b650adeb99d` (`origin/main`).
-- Scope is runtime/UI plus release metadata; no database migration.
+- Branch: `codex/mobile-chat-report-fix`.
+- Base commit: `b7441fb87b63c5a57c719ae41bfc9349cf846841` (`origin/main`).
+- Target: `https://bookflow-green.vercel.app`.
+- Runtime/UI and static regression-check changes only; no database migration.
 - Protected rollback/recovery files and the original dirty checkout are out of scope.
 
 ## 已完成
 
-- Added a `訊息` item with the existing `MessageCircle` icon to the mobile menu.
-- Reused `openMessages()` and the existing `unreadMessages` state; no new data request or route was added.
-- Kept the existing Header icon, chat route, legacy URL support, dashboard tab type, and `trade_message` navigation unchanged.
-- Added only the small mobile unread badge styling needed by the new menu item.
-
-## 下一步
-
-1. Open the PR, wait for required checks, and merge it.
-2. Verify the production commit and release smoke checks.
-
-## 變更檔案
-
-- `components/marketplace-app.tsx`
-- `app/globals.css`
-- `AI_HANDOFF.md`
-- `.ai/state.json`
-- `.ai/history/20260716-message-menu-release.md`
+- Changed the mobile control label from `返回聊聊` to `返回訊息`.
+- Changed the mobile chat header to a compact three-column horizontal layout.
+- Allowed the chat safety menu to escape the chat panel overflow clip while keeping the message log scrollable.
+- Added regression checks for the horizontal header and unclipped safety menu.
 
 ## 驗證結果
 
+- `node scripts/check-chat-listing-order-ux.mjs`: passed (26/26).
+- `node scripts/check-chat-visibility-and-feedback.mjs`: passed (11/11).
+- `node scripts/run-project-checks.mjs`: passed (29/29).
 - TypeScript `tsc --noEmit`: passed.
-- ESLint: passed.
-- Project checks: passed (29/29).
-- Chat checks: passed.
-- Production build: passed.
-- Browser verification: passed at 320, 375, and 390px; menu `訊息` button was visible, retained its icon, and did not overflow.
-- Legacy `?view=dashboard&tab=chats` support remains covered by the existing route implementation.
+- Production build: passed; 22/22 static pages generated.
+- `git diff --check`: passed; only CRLF normalization warnings remain.
+- ESLint direct check: NOT VERIFIED in the release worktree because the existing dependency tree lacks `eslint-plugin-react-hooks`; the previously validated clean chat worktree's standalone lint passed before this release patch.
+- Browser auth flow: NOT VERIFIED because no signed-in browser session was available; source checks cover the mobile layout contract.
+
+## 下一步
+
+1. Run release scope and preflight checks.
+2. Commit and push the clean branch, then open the PR.
+3. Wait for required checks and merge the PR.
+4. Verify the merged SHA through `/api/health/release` and run release smoke against production.
 
 ## 風險與注意事項
 
 - No database or RPC changes.
-- Authenticated live unread-count interaction was not exercised because no signed-in browser session was available.
-- Verify the merged SHA through `/api/health/release`; do not infer production state from the preview deployment.
+- Do not include unrelated files from the original dirty checkout.
+- Do not modify rollback/recovery workflows or `.github/CODEOWNERS`.
+
+## 變更檔案
+
+- `app/globals.css`
+- `components/marketplace-app.tsx`
+- `scripts/check-chat-listing-order-ux.mjs`
+- `scripts/check-chat-visibility-and-feedback.mjs`
+- `.ai/state.json`
+- `.ai/history/20260717-mobile-chat-report-menu-release.md`
 
 ## 下一位 AI 工作指引
 
-1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching `.ai/history/*.md` in sync.
-2. Preserve unrelated changes in the original checkout.
-3. Do not modify protected recovery files.
-4. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
+1. Keep the original dirty checkout untouched.
+2. Verify required PR checks before merge.
+3. Compare `/api/health/release` with the merged SHA and run production release smoke.
 
 ## 相關 Commit
 
-- Base commit: `cee412fe01a58e15415d047f4df38e6def8b4e7d`.
-- Feature commit: `571fe1561e21a9d27a48ed777c34316b2ddf33ad`.
+- Base commit: `b7441fb87b63c5a57c719ae41bfc9349cf846841`.
+- Current commit: verify the branch tip with `git rev-parse HEAD` before and after merge.
