@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: ship chat and book gallery UI
+- Actor: codex
+- Status: complete
+- Base commit: `0a05bcc3dd59f0bde52600ca514749da264254f5`
+- Archived at: 2026-07-17T15:20:12.821Z
+
+---
 # BookFlow AI Handoff
 
 ## 任務目標
@@ -58,5 +67,5 @@
 
 ## 相關 Commit
 
-- Base commit: `0a05bcc3dd59f0bde52600ca514749da264254f5`.
+- Base commit: `fb276a7b93b91bca158d8ddd69a9ba2e68a6fb30`.
 - Current implementation commit before final commit: `0a05bcc`.

@@ -57,6 +57,9 @@ export function mapBook(row: Record<string, unknown>): Book {
     condition: String(row.condition),
     price: Number(row.price),
     imageUrl: String(row.image_url),
+    imageUrls: Array.isArray(row.image_urls)
+      ? row.image_urls.filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
+      : [],
     meetup: String(row.meetup),
     description: String(row.description || ""),
     contactMethod: String(row.contact_method || "none") as ContactMethod,
