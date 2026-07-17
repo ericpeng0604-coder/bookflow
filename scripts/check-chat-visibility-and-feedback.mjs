@@ -13,6 +13,8 @@ const migration = readFileSync(
 const checks = [
   ["signup is the default auth view", app.includes('useState<"login" | "signup" | "forgot">("signup")')],
   ["mobile chat has a back control", app.includes('className="chat-mobile-back"') && app.includes("onBack={closeConversation}") && app.includes("function closeConversation()")],
+  ["mobile chat back label is horizontal and concise", app.includes("返回訊息") && css.includes("grid-template-columns: auto minmax(0, 1fr) auto")],
+  ["mobile chat safety menu is not clipped", css.includes(".conversation-panel .trade-chat") && css.includes("overflow: visible")],
   ["mobile chat switches between list and full-screen thread", app.includes('className="chat-mobile-back"') && app.includes("onBack={closeConversation}") && app.includes("window.localStorage.removeItem(lastChatStorageKey(currentUser.id))") && css.includes(".conversation-layout.conversation-open .conversation-list { display: none; }") && css.includes(".conversation-layout:not(.conversation-open) .conversation-panel { display: none; }")],
   ["closed chat exposes per-user hide", app.includes('conversation.status === "closed"') && app.includes('rpc("hide_closed_conversation"')],
   ["hidden chats are excluded from both list RPCs", (migration.match(/conversation_user_preferences/g) || []).length >= 5],

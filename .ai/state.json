@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260716-message-menu-release",
-  "taskTitle": "add messages to mobile navigation",
-  "baseCommit": "ae41267c50328b330018e9522f2e8b650adeb99d",
-  "updatedAt": "2026-07-16T13:30:00.000Z",
+  "taskId": "20260717-mobile-chat-report-menu-release",
+  "taskTitle": "fix mobile chat report menu and header layout",
+  "baseCommit": "b7441fb87b63c5a57c719ae41bfc9349cf846841",
+  "updatedAt": "2026-07-17T05:08:17.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260716-message-menu-release.md"
+  "historyFile": ".ai/history/20260717-mobile-chat-report-menu-release.md"
 }

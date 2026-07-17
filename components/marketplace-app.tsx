@@ -6669,7 +6669,7 @@ function TradeChatPanel({
   return (
     <div className="trade-chat">
       <div className="trade-chat-head">
-        <button className="chat-mobile-back" type="button" onClick={onBack}><ArrowLeft size={17} />返回聊聊</button>
+        <button className="chat-mobile-back" type="button" onClick={onBack}><ArrowLeft size={17} />返回訊息</button>
         <div className="trade-chat-person"><b>{senderName(otherUserId)}</b><small>每則最多 5 張圖片、每張 5MB；請勿傳送密碼、驗證碼或其他敏感資料。</small></div>
         <div className="trade-chat-actions chat-safety-actions">
           <button
