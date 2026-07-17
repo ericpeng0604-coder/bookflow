@@ -14,6 +14,10 @@ import {
   renderHandoffDraft,
   UNREADABLE_TEXT_PATTERN,
 } from "./lib/handoff-contract.mjs";
+import {
+  syncHandoffMetadata,
+  validateMemoryContract,
+} from "./lib/memory-contract.mjs";
 
 const ROOT = findGitRoot();
 const STATE_PATH = join(ROOT, ".ai", "state.json");
@@ -176,6 +180,17 @@ function archiveHandoff(state, actor, statusLabel) {
   mkdirSync(HISTORY_DIR, { recursive: true });
   const filename = `${timestampForFile()}-${taskSlug(state.taskId)}.md`;
   const path = join(HISTORY_DIR, filename);
+  if (existsSync(path)) {
+    fail(`History file already exists: ${filename}`);
+  }
+  const historyFile = relative(ROOT, path).replaceAll("\\", "/");
+  const synchronizedHandoff = syncHandoffMetadata(readHandoff(), {
+    taskId: state.taskId,
+    taskTitle: state.taskTitle,
+    branch: git(["branch", "--show-current"]) || "(detached)",
+    baseCommit: state.baseCommit,
+    historyFile,
+  });
   const metadata = [
     "# AI Handoff Archive",
     "",
@@ -189,7 +204,7 @@ function archiveHandoff(state, actor, statusLabel) {
     "",
   ].join("\n");
   try {
-    writeFileSync(path, `${metadata}${readHandoff()}`, {
+    writeFileSync(path, `${metadata}${synchronizedHandoff}`, {
       encoding: "utf8",
       flag: "wx",
       mode: 0o600,
@@ -200,7 +215,15 @@ function archiveHandoff(state, actor, statusLabel) {
     }
     throw error;
   }
-  return relative(ROOT, path).replaceAll("\\", "/");
+  writeFileSync(HANDOFF_PATH, synchronizedHandoff, "utf8");
+  return historyFile;
+}
+
+function validateProjectMemoryContract() {
+  const result = validateMemoryContract(ROOT);
+  if (result.errors.length > 0) {
+    fail(`project memory contract failed:\n- ${result.errors.join("\n- ")}`);
+  }
 }
 
 function printStatus(state = readState()) {
@@ -355,6 +378,7 @@ function checkLocal() {
   if (state.historyFile && !existsSync(join(ROOT, state.historyFile))) {
     fail(`historyFile is set but missing: ${state.historyFile}`);
   }
+  validateProjectMemoryContract();
   console.log("AI handoff local check passed.");
 }
 
@@ -377,6 +401,7 @@ function checkCi(base, head) {
   const state = readState();
   validateState(state);
   validateHandoff(readHandoff());
+  validateProjectMemoryContract();
   if (!TERMINAL_STATUSES.has(state.status)) {
     fail("PR handoff status must be idle or handoff before opening or merging a release PR.");
   }
@@ -419,6 +444,7 @@ function draft(title) {
   const historyFile = state?.historyFile || `.ai/history/${timestampForFile()}-${taskSlug(taskTitle)}.md`;
   process.stdout.write(
     renderHandoffDraft({
+      taskId: state?.taskId || taskSlug(taskTitle),
       title: taskTitle,
       branch,
       baseCommit,

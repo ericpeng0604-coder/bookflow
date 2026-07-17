@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260717-message-phase2-release",
-  "taskTitle": "deploy second-phase professional messages",
-  "baseCommit": "0f4643fc4aff8da1e3490b00651242826b1a3849",
-  "updatedAt": "2026-07-17T08:40:00.000Z",
+  "taskId": "20260717-memory-consistency-hardening",
+  "taskTitle": "harden project memory consistency",
+  "baseCommit": "08b609752e95635d38502b8e778594760e4ee634",
+  "updatedAt": "2026-07-17T09:29:25.353Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260717-message-phase2-migration-drift-fix.md"
+  "historyFile": ".ai/history/20260717-memory-consistency-hardening.md"
 }

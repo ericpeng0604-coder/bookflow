@@ -15,6 +15,18 @@ lesson.
    connection details.
 6. Prefer updating an existing lesson over creating a duplicate.
 
+## Fast Memory Routing
+
+1. Run `node scripts/check-memory.mjs` before trusting handoff or history state.
+2. Run `node scripts/ai-lookup.mjs <task keywords>` to search global memory and
+   the active project memory files with concise line-level results.
+3. Read only the relevant lesson windows returned by the lookup. Use `--deep`
+   only when a concrete result requires `.ai/history` or rollout evidence.
+4. Treat `.ai/state.json` as the structured source of current task metadata;
+   `AI_HANDOFF.md` must match its task, branch, base commit, and history file.
+5. Run `node scripts/ai-improve.mjs "problem"` when a repeated failure should
+   become a durable check, helper, or lesson.
+
 ## Definition of Done
 
 - Review the final diff and preserve unrelated existing work.
@@ -29,7 +41,7 @@ lesson.
 
 ## Recorded Lessons
 
-### LESSON-058: Supabase Storage objects require the Storage API
+### LESSON-064: Supabase Storage objects require the Storage API
 
 **Observed problem:** Student verification review failed with `Direct deletion
 from storage tables is not allowed`.
@@ -1057,7 +1069,7 @@ statements.
 privilege changes, and only grant or revoke privileges for the signature that
 the migration creates or otherwise proves exists.
 
-### LESSON-057: Student-card OCR needs a consented vision fallback
+### LESSON-065: Student-card OCR needs a consented vision fallback
 
 **Observed problem:** Rotated and oblique student-card photos produced valid
 student IDs for only some orientations with local numeric OCR.
@@ -1160,7 +1172,7 @@ failures for stale string-match expectations before changing working code.
 the critical state transition, using stable helper names or behavior markers;
 update every duplicate check in the same change.
 
-### LESSON-057: Async action states need independent timeout and retry recovery
+### LESSON-066: Async action states need independent timeout and retry recovery
 
 **Observed problem:** A marketplace detail action stayed on "確認中..." when
 the request lookup did not return, and the error state left the action disabled
@@ -1199,6 +1211,24 @@ overflow.
 **Prevention rule:** For responsive grid fixes, set `min-width: 0` on every
 nested grid/flex item that can contain user text, cap intrinsic columns, and
 assert the critical containment rules in a focused regression check.
+
+### LESSON-067: Published memory commands and metadata need one enforced contract
+
+**Observed problem:** Project instructions told agents to run low-output memory
+helpers that were missing, duplicate lesson IDs accumulated, and contradictory
+handoff commits and history paths still passed the local handoff check.
+
+**Cause:** Package scripts, lesson identifiers, handoff prose, and structured
+state were validated independently instead of as one executable contract.
+
+**Detection:** Run `node scripts/check-memory.mjs` and require it to resolve
+every published script target, reject duplicate lesson IDs, verify Git
+provenance, and compare handoff metadata with `.ai/state.json`.
+
+**Prevention rule:** Keep `check-memory.mjs` and its regression tests in the
+project check suite, and call the same contract from `ai-collaboration.mjs`.
+A memory command or handoff fact is not trustworthy merely because it is
+documented or syntactically valid.
 
 ## New Lesson Template
 

@@ -24,6 +24,8 @@
     "ai:complete": "node scripts/ai-collaboration.mjs complete",
     "ai:block": "node scripts/ai-collaboration.mjs block",
     "ai:check": "node scripts/ai-collaboration.mjs check",
+    "check:memory": "node scripts/check-memory.mjs",
+    "check:memory:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/check-memory.mjs",
     "ai:budget": "node scripts/context-budget.mjs",
     "ai:budget:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/context-budget.mjs",
     "ai:lookup": "node scripts/ai-lookup.mjs",

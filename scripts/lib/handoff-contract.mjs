@@ -31,6 +31,7 @@ export function missingHandoffSections(markdown) {
 }
 
 export function renderHandoffDraft({
+  taskId = "<task-id>",
   title = "<任務標題>",
   branch = "<branch>",
   baseCommit = "<base-commit>",
@@ -45,8 +46,11 @@ ${title}
 
 ## 目前狀態與背景
 
+- Task ID: \`${taskId}\`.
+- Task: \`${title}\`.
 - Branch: \`${branch}\`.
 - Base commit: \`${baseCommit}\`.
+- History: \`${historyFile}\`.
 - No database migration is included unless listed here.
 - No GitHub workflow or protected recovery file is changed unless explicitly listed here.
 - Do not add \`Rollback-Workflow-Approved: true\` unless this is an authorized rollback/recovery change.

@@ -2,77 +2,79 @@
 
 ## 任務目標
 
-只部署第二階段專業化訊息功能，基於最新 `origin/main` `0f4643fc4aff8da1e3490b00651242826b1a3849`。
+修復專案記憶入口與一致性問題，並發布自動檢查，避免工具遺失、lesson
+編號重複或 handoff/state 互相矛盾後仍被 AI 當成可信狀態。
 
 ## 目前狀態與背景
 
-- Branch: `codex/message-phase2-production-clean`.
-- The branch includes the already-merged mainline mobile chat report-menu fix as its current base.
-- The original dirty checkout remains isolated.
-- Three migrations are included: two staging-history compatibility migrations and the message summary RPC migration.
+- Task ID: `20260717-memory-consistency-hardening`.
+- Task: `harden project memory consistency`.
+- Branch: `codex/memory-consistency-hardening`.
+- Base commit: `08b609752e95635d38502b8e778594760e4ee634`.
+- History: `.ai/history/20260717-memory-consistency-hardening.md`.
+- This clean worktree was created from the latest fetched `origin/main`.
+- No database migration or protected recovery file is changed.
+- Do not add `Rollback-Workflow-Approved: true`.
 
 ## 已完成
 
-- Added standalone `view=chat` message route with desktop full-height and mobile viewport handling.
-- Added conversation preview, sender, activity time, unread count, pagination, realtime sorting, and unread updates.
-- Added date separators, grouped messages, hidden actions, retry states, upload progress, removable image previews, mobile transaction-context collapse, focus restoration, Escape handling, and `aria-live`.
-- Replaced visible 聊聊／聊天／聊天室 labels with 訊息.
-- Restored the two migrations already present in staging but absent from the previous clean base: `20260717003854_student_card_ai_quota.sql` and `20260717004057_harden_active_user_rpc.sql`.
-- Added `20260717100000_chat_message_summary.sql`.
+- Restored the missing low-output lookup and improvement helpers.
+- Added one memory contract for script targets, lesson IDs, Git provenance, readability, and handoff/state alignment.
+- Connected the contract and its regression tests to the project check runner and AI handoff validator.
+- Added concise AI startup routing and removed duplicate lesson identifiers.
 
 ## 下一步
 
-1. Confirm the merge conflict resolution and rerun local release checks.
-2. Re-run Staging Migration for the exact release SHA if the merge changes the migration SHA.
-3. Obtain explicit production migration approval, merge, and verify the merged SHA in production.
-4. Run release smoke against `https://bookflow-green.vercel.app`.
+1. Run focused and project checks in this clean worktree.
+2. Commit only the listed memory-consistency files and run release preflight.
+3. Push, open a PR, wait for required checks, and merge to `main`.
+4. Confirm the merged `main` contains the memory contract; no Vercel or Supabase deployment proof is required.
 
 ## 變更檔案
 
-- `components/marketplace-app.tsx`
-- `components/marketplace/navigation-state.ts`
-- `lib/marketplace/mappers.ts`
-- `lib/marketplace/queries.ts`
-- `lib/marketplace/trade-chat.ts`
-- `lib/types.ts`
-- `app/globals.css`
-- `supabase/migrations/20260717003854_student_card_ai_quota.sql`
-- `supabase/migrations/20260717004057_harden_active_user_rpc.sql`
-- `supabase/migrations/20260717100000_chat_message_summary.sql`
-- `scripts/check-chat-professional-ux.mjs`
-- `package.json`
+- `AGENTS.md`
+- `AI_WORK_MANUAL.md`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260717-message-phase2-release.md`
-- `.ai/history/20260717-message-phase2-migration-drift-fix.md`
+- `.ai/templates/handoff.md`
+- `.ai/history/20260717-memory-consistency-hardening.md`
+- `package.json`
+- `scripts/ai-collaboration.mjs`
+- `scripts/ai-lookup.mjs`
+- `scripts/ai-improve.mjs`
+- `scripts/check-memory.mjs`
+- `scripts/run-project-checks.mjs`
+- `scripts/lib/handoff-contract.mjs`
+- `scripts/lib/memory-contract.mjs`
+- `tests/memory-contract.test.mjs`
 
 ## 驗證結果
 
-- TypeScript: passed before the base synchronization.
-- Targeted ESLint: passed before the base synchronization.
-- `node scripts/check-chat-professional-ux.mjs`: passed 13/13 before the base synchronization.
-- Production build: passed before the base synchronization.
-- Staging Migration run `29566925528`: passed, including migration history and RPC/RLS verification.
-- Production Migration run `29567007842`: passed for SHA `213b7513dd6c1a74f3ed7d7487236ab720dac917`.
-- The PR currently needs merge-conflict resolution after `origin/main` advanced with the mobile chat report-menu fix.
+- `node scripts/check-memory.mjs`: passed; 66 unique lessons, 83 script targets, handoff/state aligned.
+- `node scripts/ai-collaboration.mjs check`: passed.
+- `node --test tests/memory-contract.test.mjs`: passed, 4/4.
+- `node scripts/run-project-checks.mjs`: passed, 31/31.
+- TypeScript typecheck: passed.
+- ESLint: passed with zero warnings.
+- Next.js production build: passed.
+- Windows Codex runtime path for `check-memory.mjs`: passed.
+- `node scripts/release-preflight.mjs`: passed on the clean release commit.
+- `node scripts/ai-collaboration.mjs check-ci origin/main HEAD`: passed.
+- Production website deployment: not required for repository-only AI tooling.
 
 ## 風險與注意事項
 
-- If the merge changes the release SHA, rerun production migration only after a new successful staging run for that exact SHA.
-- Do not add unrelated runtime code for the compatibility migrations.
-- Verify `/api/health/release` against the merged SHA; do not infer production state from a preview.
-- Do not modify protected rollback files.
+- This change affects repository AI coordination and CI checks, not application runtime behavior.
+- The contract must remain executable on Node 22 in GitHub Actions and through the Windows Codex runtime helper.
+- A passing memory contract proves coordination consistency, not production application behavior.
 
 ## 下一位 AI 工作指引
 
-1. Resolve only the three merge conflicts: state metadata, handoff metadata, and the mobile back-button label.
-2. Preserve the already-merged mainline mobile chat report-menu changes.
-3. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD`, TypeScript, message UX checks, build, and diff check.
-4. If the final SHA differs from `213b7513...`, rerun staging and production migration gates before merge.
+1. Run `node scripts/check-memory.mjs` before trusting this handoff.
+2. Start memory searches with `node scripts/ai-lookup.mjs <task keywords>` and use `--deep` only for a concrete history need.
+3. Preserve all protected recovery files.
 
 ## 相關 Commit
 
-- Previous release base: `b7441fb87b63c5a57c719ae41bfc9349cf846841`.
-- Current main base: `0f4643fc4aff8da1e3490b00651242826b1a3849`.
-- Feature commit: `369a472b21a491f72f6db70ddf95d60c0d931cf8`.
-- Migration-history fix commit: `213b7513dd6c1a74f3ed7d7487236ab720dac917`.
+- Base commit: `08b609752e95635d38502b8e778594760e4ee634`.
+- Current implementation commit before final commit: `not committed yet`.

@@ -6,6 +6,8 @@ import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const checks = [
+  { file: "check-memory.mjs" },
+  { file: "memory-contract.test.mjs", test: true },
   { file: "check-filters.mjs" },
   { file: "check-free-ocr-book-covers.mjs", stripTypes: true },
   { file: "check-mobile-book-ocr.mjs" },
@@ -39,9 +41,12 @@ const checks = [
 
 for (const check of checks) {
   console.log(`\n==> ${check.file}`);
-  const args = check.stripTypes
-    ? ["--experimental-strip-types", join(root, "scripts", check.file)]
-    : [join(root, "scripts", check.file)];
+  const path = join(root, check.test ? "tests" : "scripts", check.file);
+  const args = check.test
+    ? ["--test", path]
+    : check.stripTypes
+      ? ["--experimental-strip-types", path]
+      : [path];
   const result = spawnSync(process.execPath, args, {
     cwd: root,
     stdio: "inherit",
