@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260718-deploy-unified-chat-confirmed-orders",
-  "taskTitle": "deploy unified chat and confirmed orders",
-  "baseCommit": "99706bddf27a54e97dda5e8fedfb0eef6166acdc",
-  "updatedAt": "2026-07-18T04:24:33.310Z",
+  "taskId": "20260718-release-candidate-toolkit",
+  "taskTitle": "implement local release candidate and deployment evidence toolkit",
+  "baseCommit": "b789ae4e7d5616392862dde2165ac78e998e56cf",
+  "updatedAt": "2026-07-18T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260718-deploy-unified-chat-confirmed-orders.md"
+  "historyFile": ".ai/history/20260718-release-candidate-toolkit.md"
 }
