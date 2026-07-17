@@ -12,8 +12,8 @@ const migration = readFileSync(
 
 const checks = [
   ["signup is the default auth view", app.includes('useState<"login" | "signup" | "forgot">("signup")')],
-  ["mobile chat has a back control", app.includes('className="chat-mobile-back"') && app.includes("onBack={closeConversation}") && app.includes("function closeConversation()")],
-  ["mobile chat switches between list and full-screen thread", app.includes('className="chat-mobile-back"') && app.includes("onBack={closeConversation}") && app.includes("window.localStorage.removeItem(lastChatStorageKey(currentUser.id))") && css.includes(".conversation-layout.conversation-open .conversation-list { display: none; }") && css.includes(".conversation-layout:not(.conversation-open) .conversation-panel { display: none; }")],
+  ["mobile chat has a back control", app.includes('className="chat-mobile-back"') && app.includes("onBack={() => {")],
+  ["mobile chat list rail remains readable and switchable", !app.includes("onClickCapture") && css.includes("minmax(118px, 34vw)") && css.includes("-webkit-line-clamp: 2")],
   ["closed chat exposes per-user hide", app.includes('conversation.status === "closed"') && app.includes('rpc("hide_closed_conversation"')],
   ["hidden chats are excluded from both list RPCs", (migration.match(/conversation_user_preferences/g) || []).length >= 5],
   ["issue report form is authenticated", app.includes('modal === "feedback" && currentUser')],

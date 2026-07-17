@@ -6276,10 +6276,20 @@ function RequestModal({
   onOpenChat: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const [message, setMessage] = useState(request?.message || REQUEST_PHRASES[0]);
+  const initialMessage = request?.message || REQUEST_PHRASES[0];
+  const initialPreferredMeetupLocation = request?.preferredMeetupLocation || "";
+  const initialPreferredMeetupTime = request?.preferredMeetupTime || "";
+  const [message, setMessage] = useState(initialMessage);
   const [versionConfirmed, setVersionConfirmed] = useState(book.listingType !== "book");
-  const [preferredMeetupLocation, setPreferredMeetupLocation] = useState(request?.preferredMeetupLocation || "");
-  const [preferredMeetupTime, setPreferredMeetupTime] = useState(request?.preferredMeetupTime || "");
+  const [preferredMeetupLocation, setPreferredMeetupLocation] = useState(initialPreferredMeetupLocation);
+  const [preferredMeetupTime, setPreferredMeetupTime] = useState(initialPreferredMeetupTime);
+
+  useEffect(() => {
+    setMessage(initialMessage);
+    setPreferredMeetupLocation(initialPreferredMeetupLocation);
+    setPreferredMeetupTime(initialPreferredMeetupTime);
+    setVersionConfirmed(book.listingType !== "book");
+  }, [book.listingType, initialMessage, initialPreferredMeetupLocation, initialPreferredMeetupTime]);
   const versionDetails = [
     book.publisher && `出版社：${book.publisher}`,
     book.edition && `版本：${book.edition}`,
@@ -6917,7 +6927,7 @@ function TradeChatPanel({
   return (
     <div className="trade-chat">
       <div className="trade-chat-head">
-        <button className="chat-mobile-back" type="button" onClick={onBack}><ArrowLeft size={17} />返回訊息列表</button>
+        <button className="chat-mobile-back" type="button" onClick={onBack}><ArrowLeft size={17} />返回訊息</button>
         <div className="trade-chat-person"><b>{senderName(otherUserId)}</b><small>每則最多 5 張圖片、每張 5MB；請勿傳送密碼、驗證碼或其他敏感資料。</small></div>
         <div className="trade-chat-actions chat-safety-actions">
           <button

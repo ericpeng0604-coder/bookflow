@@ -5,8 +5,8 @@
   "status": "handoff",
   "taskId": "20260717-message-phase2-release",
   "taskTitle": "deploy second-phase professional messages",
-  "baseCommit": "b7441fb87b63c5a57c719ae41bfc9349cf846841",
-  "updatedAt": "2026-07-17T00:00:00.000Z",
+  "baseCommit": "0f4643fc4aff8da1e3490b00651242826b1a3849",
+  "updatedAt": "2026-07-17T08:40:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
   "historyFile": ".ai/history/20260717-message-phase2-migration-drift-fix.md"
 }
