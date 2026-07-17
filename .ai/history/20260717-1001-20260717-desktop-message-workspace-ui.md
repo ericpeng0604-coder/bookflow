@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: desktop message workspace UI
+- Actor: codex
+- Status: complete
+- Base commit: `b386a51ded21b59fdd7589e7db9feef321ac8dfc`
+- Archived at: 2026-07-17T10:01:32.137Z
+
+---
 # BookFlow AI Handoff
 
 ## 任務目標

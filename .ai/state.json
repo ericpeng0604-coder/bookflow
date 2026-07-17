@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "handoff",
-  "taskId": "20260717-memory-consistency-hardening",
-  "taskTitle": "harden project memory consistency",
-  "baseCommit": "08b609752e95635d38502b8e778594760e4ee634",
-  "updatedAt": "2026-07-17T09:29:25.353Z",
+  "owner": "none",
+  "status": "idle",
+  "taskId": "20260717-desktop-message-workspace-ui",
+  "taskTitle": "desktop message workspace UI",
+  "baseCommit": "b386a51ded21b59fdd7589e7db9feef321ac8dfc",
+  "updatedAt": "2026-07-17T10:01:32.138Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260717-memory-consistency-hardening.md"
+  "historyFile": ".ai/history/20260717-1001-20260717-desktop-message-workspace-ui.md"
 }
