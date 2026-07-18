@@ -71,6 +71,7 @@ import type {
   BookOcrDraft,
 } from "@/lib/marketplace/free-ocr";
 import { reviewStudentVerificationWithStorage } from "@/lib/marketplace/student-verification";
+import { normalizeBookImageUrls } from "@/lib/marketplace/mappers";
 import {
   deleteChatImageUploads,
   fetchTradeMessages,
@@ -389,8 +390,7 @@ const blankBook: Omit<
 };
 
 const bookImageUrls = (book: Pick<Book, "imageUrl" | "imageUrls">) => {
-  const urls = Array.isArray(book.imageUrls) ? book.imageUrls.filter(Boolean) : [];
-  return book.imageUrl ? [book.imageUrl, ...urls.filter((url) => url !== book.imageUrl)] : urls;
+  return normalizeBookImageUrls(book.imageUrl, book.imageUrls);
 };
 
 const EDUCATION_LEVEL_OPTIONS = [
@@ -1492,25 +1492,37 @@ export function MarketplaceApp() {
       ...hiddenBooks,
       ...store.books,
     ].find((book) => book.id === selectedId);
-    if (knownBook) {
+    const needsGalleryHydration = !knownBook || bookImageUrls(knownBook).length <= 1;
+    if (knownBook && !needsGalleryHydration) {
       setDetailBook(knownBook);
       setBookDetailMissing(false);
       setBookDetailLoading(false);
       return;
     }
-    setDetailBook(null);
-    setBookDetailMissing(false);
-    setBookDetailLoading(true);
+    if (knownBook) {
+      setDetailBook(knownBook);
+      setBookDetailMissing(false);
+      setBookDetailLoading(false);
+    } else {
+      setDetailBook(null);
+      setBookDetailMissing(false);
+      setBookDetailLoading(true);
+    }
     const client = supabase;
     const bookId = selectedId;
     void runGuarded("book-detail", async (signal) => {
       try {
         const book = await fetchBookById(client, bookId);
         if (signal.aborted) return;
-        setDetailBook(book);
-        setBookDetailMissing(!book);
+        if (book) {
+          setDetailBook(book);
+          setBookDetailMissing(false);
+        } else if (!knownBook) {
+          setDetailBook(null);
+          setBookDetailMissing(true);
+        }
       } catch (error) {
-        if (!isAbortError(error)) {
+        if (!isAbortError(error) && !knownBook) {
           setDetailBook(null);
           setBookDetailMissing(true);
         }
@@ -1602,7 +1614,14 @@ export function MarketplaceApp() {
     ?? requestBooks.find((book) => book.id === selectedId)
     ?? store.books.find((book) => book.id === selectedId)
     ?? null;
-  const selectedBookImages = selectedBook ? bookImageUrls(selectedBook) : [];
+  const selectedBookImages = useMemo(
+    () => (selectedBook ? bookImageUrls(selectedBook) : []),
+    [selectedBook],
+  );
+  const selectedBookImageSources = useMemo(
+    () => selectedBookImages.map((url) => safeImageSource(url)).filter(Boolean),
+    [selectedBookImages],
+  );
   const selectedSellerId = selectedBook?.sellerId ?? null;
   const selectedBookActiveRequest = currentUser && selectedBook
     ? store.requests.find((request) =>
@@ -1620,6 +1639,21 @@ export function MarketplaceApp() {
   useEffect(() => {
     setDetailImageIndex(0);
   }, [selectedBook?.id]);
+
+  useEffect(() => {
+    const preloadedImages = selectedBookImageSources.map((source) => {
+      const image = new window.Image();
+      image.decoding = "async";
+      image.src = source;
+      return image;
+    });
+    return () => {
+      for (const image of preloadedImages) {
+        image.onload = null;
+        image.onerror = null;
+      }
+    };
+  }, [selectedBookImageSources]);
   const profile = (id: string) => store.profiles.find((item) => item.id === id);
   const badgeFor = (userId: string, badgeType: "seller" | "buyer") =>
     trustBadges.find((badge) => badge.userId === userId && badge.badgeType === badgeType && badge.status === "approved");
@@ -3853,7 +3887,20 @@ export function MarketplaceApp() {
           <div className="detail-grid">
             <div className="detail-gallery-shell">
               <div className="detail-image detail-gallery">
-                <Image src={selectedBookImages[detailImageIndex] || selectedBook.imageUrl} alt={selectedBook.title} width={720} height={960} sizes="(max-width: 800px) 100vw, 42vw" priority />
+                {safeImageSource(selectedBookImages[detailImageIndex] || selectedBook.imageUrl) ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    className="detail-gallery-main-image"
+                    src={safeImageSource(selectedBookImages[detailImageIndex] || selectedBook.imageUrl)}
+                    alt={selectedBook.title}
+                    loading="eager"
+                    decoding="async"
+                  />
+                ) : (
+                  <div className="detail-gallery-image-fallback" role="img" aria-label={selectedBook.title}>
+                    <BookOpen size={36} aria-hidden="true" />
+                  </div>
+                )}
                 {selectedBookImages.length > 1 && (
                   <>
                     <button type="button" className="detail-gallery-arrow detail-gallery-arrow-prev" aria-label="上一張照片" onClick={() => setDetailImageIndex((index) => (index - 1 + selectedBookImages.length) % selectedBookImages.length)}>
@@ -4791,6 +4838,7 @@ export function MarketplaceApp() {
             <Link href="/terms">使用條款</Link>
             <Link href="/safety">交易安全</Link>
           </nav>
+          <small className="footer-version">v{APP_VERSION}</small>
         </div>
       </footer>
 

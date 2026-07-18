@@ -2,78 +2,74 @@
 
 ## 任務目標
 
-發布聊天室相關修改，統一新版訊息入口，新增已確認訂單分頁，並以可辨識的版本標記驗證測試與正式部署 provenance。
+修復手機多圖商品詳情、圖片切換卡頓、低調 footer 版本標示與隱藏列表 UI，並透過既有 release 流程部署正式站。
 
 ## 目前狀態與背景
 
-- Task ID: `20260718-deploy-unified-chat-confirmed-orders`.
-- Task: `deploy unified chat and confirmed orders`.
-- Branch: `codex/chat-unified-confirmed-orders-release`.
-- Base commit: `99706bddf27a54e97dda5e8fedfb0eef6166acdc`.
-- History: `.ai/history/20260718-deploy-unified-chat-confirmed-orders.md`.
-- Database migration included: none.
-- Supabase RLS and database schema are unchanged.
-- No GitHub workflow or protected recovery file is changed.
-- Do not add `Rollback-Workflow-Approved: true`.
+- Task ID: `20260718-mobile-gallery-version-release`.
+- Task: `fix mobile multi-image details and release versioning`.
+- Branch: `codex/release-candidate-toolkit`.
+- Base commit: `b789ae4e7d5616392862dde2165ac78e998e56cf`.
+- History: `.ai/history/20260718-mobile-gallery-version-release.md`.
+- No database migration is included in the current changes.
+- Protected recovery files are unchanged.
 
 ## 已完成
 
-- 所有訊息入口統一導向 `view=chat&tab=chats`，並正規化舊的 dashboard chat URL。
-- 直接開啟 conversation URL 時，以 URL 狀態優先，避免舊 dashboard shell 或 legacy chat markup 顯示。
-- 新增 `confirmedOrders` tab，將 `reserved`、`awaiting_confirmation`、`completed` 從原意願列表分類到已確認訂單。
-- 保留既有交易、聯絡、確認面交、完成交易、評價與新版訊息操作。
-- 顯示 `APP_VERSION` 版本 badge，支援 `NEXT_PUBLIC_APP_VERSION` 覆寫。
-- 保留既有 mobile 列表／聊天室切換與 responsive chat layout。
+- 統一整理 `image_url` 與 `image_urls`：封面優先、移除空值與重複網址，並相容舊單圖資料。
+- 商品詳情若只拿到封面，背景補抓完整 gallery。
+- 手機版加入主圖、數量、左右切換、可橫向滑動縮圖、安全 fallback 與最多六張預載入。
+- footer 版本由 `package.json` 注入，以低對比小字顯示。
+- 新增 gallery 與隱藏列表 UI regression checks。
+- 新增 `release:version:patch`，每次正式部署將 patch 版本加 `0.0.1` 並同步 lockfile。
 
 ## 下一步
 
-1. 使用本 branch 建立 PR，等待 CI 與 Vercel checks。
-2. 合併後確認正式站部署 commit 與合併版本一致。
-3. 以正式站 release health、首頁與聊天室 smoke test 完成證據鏈。
+1. 推送 branch 並建立 PR，等待 CI 與 Vercel。
+2. 通過必要 gate 後合併至 `main`，等待正式部署。
+3. 用合併後完整 SHA 驗證 `/api/health/release` 與 production smoke。
 
 ## 變更檔案
 
 - `app/globals.css`
 - `components/marketplace-app.tsx`
-- `components/marketplace/navigation-state.ts`
-- `lib/app-version.ts`
-- `lib/marketplace/queries.ts`
-- `package.json`
-- `scripts/check-chat-switching.mjs`
-- `scripts/check-confirmed-orders.mjs`
-- `scripts/check-home-accessibility.mjs`
-- `scripts/check-site-version.mjs`
+- `lib/marketplace/mappers.ts`
+- `next.config.ts`
+- `scripts/check-book-gallery.mjs`
+- `scripts/bump-version.mjs`
+- `scripts/check-chat-listing-order-ux.mjs`
 - `scripts/run-project-checks.mjs`
+- `package.json`
+- `package-lock.json`
+- `docs/RELEASE_WORKFLOW.md`
+- `AI_WORK_MANUAL.md`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260718-deploy-unified-chat-confirmed-orders.md`
+- `.ai/history/20260718-mobile-gallery-version-release.md`
 
 ## 驗證結果
 
-- Project checks: passed, 33/33.
-- Chat switching checks: passed, 5/5.
-- Confirmed orders checks: passed, 12/12.
-- Site version checks: passed, 4/4.
-- TypeScript typecheck: passed.
-- ESLint for changed source: passed; CSS is ignored by the repository ESLint configuration.
-- `git diff --check`: passed.
-- Production build: CI verification required; local build not run while the active Next dev server owns the shared `.next` output.
-- Production browser smoke: pending PR merge and deployment.
+- Memory contract: passed.
+- Project checks: passed, 34/34.
+- Book gallery check: passed, 7/7.
+- Chat/listing order UX check: passed, 25/25.
+- TypeScript、ESLint、production build: passed。
+- Local browser auth smoke reached the Google account chooser with process-local public Supabase configuration; no credentials were stored.
 
 ## 風險與注意事項
 
-- No database migration, table, RLS, transaction state transition, notification, or protected recovery workflow changes are included.
-- Do not carry unrelated dirty-checkout files into this release.
-- If the deployed commit differs from the merged commit or smoke test fails, do not claim production deployment complete.
+- No database migration or protected recovery file change is included.
+- Existing Node `MODULE_TYPELESS_PACKAGE_JSON` warnings are non-blocking and pre-existing; all required gates passed。
+- 若正式站尚未套用既有 gallery migration，發布前需先完成該 migration 的 staging/production parity。
 
 ## 下一位 AI 工作指引
 
-1. Keep this handoff, `.ai/state.json`, and the matching history file synchronized.
-2. Wait for required CI and Vercel checks before merging.
-3. After merge, verify `/api/health/release`, production commit provenance, and the canonical chat route in the browser.
+1. 保持 `AI_HANDOFF.md`、`.ai/state.json` 與指定 history file 同步。
+2. 使用 `node scripts/release-pr-status.mjs --wait <pr>` 低輸出等待 PR checks。
+3. 部署後用正式站 `/api/health/release` 與 `release:smoke` 驗證 exact merged SHA。
 
 ## 相關 Commit
 
-- Base commit: `99706bddf27a54e97dda5e8fedfb0eef6166acdc`.
-- Feature commit: `bd07178537a1c6cd74478b6a712776614b84023b`.
-- Release metadata commit: `f2aff912c6c0a27511de0c3e25b4ee2410586aa6`.
+- Base commit: `b789ae4e7d5616392862dde2165ac78e998e56cf`.
+- Feature commit: `d816a8d`.
+- Release candidate commit: `bf9bf21459a6bc785ed8a45f098fe450946008f3`.

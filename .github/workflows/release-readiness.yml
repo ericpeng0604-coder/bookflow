@@ -27,7 +27,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run check:all
+      - run: npm run release:local
+      - name: Upload local release evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-local-evidence-${{ github.sha }}
+          path: .ai/artifacts/release-runs
+          if-no-files-found: error
 
   handoff:
     name: AI handoff

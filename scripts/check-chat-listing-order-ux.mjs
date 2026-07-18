@@ -34,6 +34,7 @@ const checks = [
   ["seller can cancel reserved handoff in migration", sellerCancelMigration.includes("actor = target_book.seller_id") && sellerCancelMigration.includes("target.status in ('reserved', 'awaiting_confirmation')")],
   ["chat context and safety menu have styles", css.includes(".chat-context-card") && css.includes(".chat-safety-menu")],
   ["mobile chat long text has wrapping styles", css.includes(".trade-chat-bubble p") && css.includes("overflow-wrap: anywhere") && css.includes(".chat-new-message-button")],
+  ["collapsed chat list keeps a compact restore control", css.includes("grid-template-columns: 56px minmax(0, 1fr)") && css.includes(".conversation-layout.chat-list-collapsed .chat-list-toggle") && css.includes("width: 38px")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);

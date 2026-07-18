@@ -66,6 +66,11 @@ mutable branch name as `migration_ref`.
 ## Commands
 
 ```text
+npm run release:local:quick
+npm run release:version:patch
+npm run release:local
+npm run release:prepare
+npm run release:watch -- --pr <pr-number-or-url>
 npm run release:plan
 npm run check:release-scope
 npm run release:preflight
@@ -73,6 +78,33 @@ npm run check:all
 npm run check:workflows
 RELEASE_BASE_URL=https://example.com EXPECTED_COMMIT=<full-sha> npm run release:smoke
 ```
+
+### Local release candidate flow
+
+Run `npm run release:local:quick` whenever the local site reaches a testable
+state. It runs the memory contract, regression tests, project checks, typecheck,
+and lint without the production build. It records a report under
+`.ai/artifacts/release-runs/` and stops at the first failed gate.
+
+For every production deployment, run `npm run release:version:patch` once before
+the final local gates. It increments the patch version by `0.0.1`, updates the
+lockfile, and the footer receives the same version from `package.json`.
+
+Before deployment, run `npm run release:local` without `--quick`. That final
+pass includes the production build and is the only local report accepted by
+`release:prepare`. Every report is tied to the changed-file content fingerprint,
+so a later edit makes the previous evidence stale.
+
+After the intended changes are committed on a clean release branch, run
+`npm run release:prepare`. It rejects untracked files, protected recovery files,
+possible secrets, unreadable text, mixed release scope, and stale local reports.
+It creates a release-candidate manifest, but it never commits, pushes, merges,
+or deploys. The manifest remains non-deployable until the PR, staging (when
+applicable), Vercel, and production smoke gates pass for the same commit.
+
+Use `npm run release:watch -- --pr <number-or-url>` for compact PR gate waiting.
+After deployment, use `npm run release:watch -- --production <full-sha>` with
+`RELEASE_BASE_URL` set to verify the exact deployed commit.
 
 `release:smoke` verifies the homepage, `/api/marketplace/count`, and
 `/api/health/release`.
