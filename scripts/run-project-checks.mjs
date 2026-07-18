@@ -22,6 +22,8 @@ const checks = [
   { file: "check-transaction-loading.mjs" },
   { file: "check-risk-warning.mjs" },
   { file: "check-chat-switching.mjs" },
+  { file: "check-confirmed-orders.mjs" },
+  { file: "check-site-version.mjs" },
   { file: "check-notification-refresh.mjs" },
   { file: "check-browser-push.mjs" },
   { file: "check-capacity-optimization.mjs" },

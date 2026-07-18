@@ -38,6 +38,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, type MouseEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-data";
+import { APP_VERSION } from "@/lib/app-version";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import {
   type AdminWorkspace,
@@ -265,6 +266,7 @@ const CHAT_PHRASES = [
 
 const HIDDEN_REQUEST_MESSAGES = new Set(["通用語句提供選擇"]);
 const REQUEST_COORDINATION_MAX_LENGTH = 120;
+const CONFIRMED_ORDER_STATUSES = new Set<RequestStatus>(["reserved", "awaiting_confirmation", "completed"]);
 
 const statusLabels: Record<BookStatus, string> = {
   available: "販售中",
@@ -765,6 +767,7 @@ export function MarketplaceApp() {
     adminWorkspace,
     dashboardTab,
     expandedConversationId,
+    openChatRoute,
     openBookRoute,
     openDashboard: showDashboard,
     returnToChatListRoute,
@@ -934,7 +937,7 @@ export function MarketplaceApp() {
   }, []);
 
   const loadDashboardWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
-    const tabs = tab === "requests" || tab === "received" || tab === "chats" || tab === "studentVerification"
+    const tabs = tab === "requests" || tab === "received" || tab === "chats" || tab === "confirmedOrders" || tab === "studentVerification"
       ? [tab]
       : [tab, "requests" as const];
     await Promise.all(tabs.map((targetTab) => loadUserWorkspace(user, targetTab)));
@@ -1145,13 +1148,13 @@ export function MarketplaceApp() {
   }, [dashboardTab, loadDashboardWorkspace, setDashboardTab, showDashboard, store.currentUser, view]);
 
   const openDashboardTab = useCallback((tab: DashboardTab) => {
-    setDashboardTab(tab);
     if (tab === "chats") {
-      setView("chat");
+      openChatRoute();
       return;
     }
+    setDashboardTab(tab);
     showDashboard();
-  }, [setDashboardTab, setView, showDashboard]);
+  }, [openChatRoute, setDashboardTab, showDashboard]);
 
   function openMessages() {
     setNotificationOpen(false);
@@ -1160,7 +1163,7 @@ export function MarketplaceApp() {
       if (currentUser && ((view === "dashboard" && dashboardTab === "chats") || view === "chat")) {
         void loadDashboardWorkspace(currentUser, "chats");
       }
-      openDashboardTab("chats");
+      openChatRoute();
     });
   }
 
@@ -2448,7 +2451,7 @@ export function MarketplaceApp() {
       return;
     }
     await loadUserWorkspace(currentUser, "chats");
-    openDashboardTab("chats");
+    openChatRoute(String(data));
     void openConversation(String(data));
   }
 
@@ -2462,7 +2465,7 @@ export function MarketplaceApp() {
       return;
     }
     await loadUserWorkspace(currentUser, "chats");
-    openDashboardTab("chats");
+    openChatRoute(String(data));
     void openConversation(String(data));
   }
 
@@ -3081,8 +3084,12 @@ export function MarketplaceApp() {
       return;
     }
     if (notification.type === "trade_message") {
-      openMessages();
-      if (notification.conversationId) void openConversation(notification.conversationId);
+      if (notification.conversationId) {
+        openChatRoute(notification.conversationId);
+        void openConversation(notification.conversationId);
+      } else {
+        openMessages();
+      }
       return;
     }
     if (notification.bookId) {
@@ -3123,12 +3130,23 @@ export function MarketplaceApp() {
   const knownBooks = supabase
     ? [...favoriteBookCache, ...marketplaceBooks, ...myBooks, ...requestBooks, ...pendingReviews, ...hiddenBooks]
     : store.books;
+  const requestBookSource = supabase ? [...myBooks, ...requestBooks, ...marketplaceBooks] : store.books;
   const favoriteBooks = uniqueFavoriteBooks(knownBooks, favoriteIds);
-  const myRequests = currentUser ? store.requests.filter((request) => request.buyerId === currentUser.id) : [];
+  const confirmedOrders = currentUser
+    ? store.requests.filter((request) => {
+        if (!CONFIRMED_ORDER_STATUSES.has(request.status)) return false;
+        const book = requestBookSource.find((item) => item.id === request.bookId);
+        return request.buyerId === currentUser.id || book?.sellerId === currentUser.id;
+      })
+    : [];
+  const myRequests = currentUser
+    ? store.requests.filter((request) => request.buyerId === currentUser.id && !CONFIRMED_ORDER_STATUSES.has(request.status))
+    : [];
   const activeMyRequestCount = myRequests.filter((request) => request.status !== "expired").length;
   const receivedRequests = currentUser
     ? store.requests.filter((request) =>
-        (supabase ? myBooks : store.books).some((book) => book.id === request.bookId && book.sellerId === currentUser.id),
+        !CONFIRMED_ORDER_STATUSES.has(request.status)
+        && requestBookSource.some((book) => book.id === request.bookId && book.sellerId === currentUser.id),
       )
     : [];
   const activeReceivedRequestCount = receivedRequests.filter((request) => request.status !== "expired").length;
@@ -3345,6 +3363,9 @@ export function MarketplaceApp() {
     void runImageSearch(file);
   }
 
+  const isStandaloneChatRoute = view === "chat"
+    || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "chat");
+
   return (
     <main className={isSecondhandMode ? "theme-secondhand" : undefined}>
       <input
@@ -3442,6 +3463,9 @@ export function MarketplaceApp() {
           ) : (
             <button type="button" className="login-button desktop-account-action" onClick={() => setModal("login")}><UserRound size={17} /><span>登入／註冊</span></button>
           )}
+          <span className="site-version" title="目前載入的網站版本" aria-label={`網站版本 ${APP_VERSION}`}>
+            {APP_VERSION}
+          </span>
           <button type="button"
             className={"mobile-menu " + (mobileMenuOpen ? "active" : "")}
             aria-label={mobileMenuOpen ? "關閉選單" : "開啟選單"}
@@ -3502,7 +3526,7 @@ export function MarketplaceApp() {
               </button>
               <button
                 type="button"
-                className={view === "dashboard" && dashboardTab === "chats" ? "active" : ""}
+                className={view === "chat" || (view === "dashboard" && dashboardTab === "chats") ? "active" : ""}
                 onClick={openMessages}
               >
                 <MessageCircle size={18} />訊息
@@ -3978,64 +4002,69 @@ export function MarketplaceApp() {
         </section>
       )}
 
-      {(view === "dashboard" || view === "chat") && currentUser && (
-        <section className={`dashboard ${view === "chat" ? "chat-route-page" : ""}`}>
-          <div className="dashboard-head">
-            <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
-            <div className="dashboard-head-actions">
-              <button type="button" className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => setModal("profile"))}><UserRound size={18} />個人資料</button>
-              <button type="button" className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm(listingType))}><Plus size={18} />{isSecondhandMode ? "刊登二手物品" : "刊登課本"}</button>
-            </div>
-          </div>
-          {currentUser.accountStatus === "suspended" && (
-            <div className="readonly-notice"><Ban size={18} /><div><b>唯讀模式</b><span>{currentUser.suspensionReason || "你可以查看既有交易，但暫時不能新增或修改資料。"}</span></div></div>
-          )}
-          {activeAvailableListings.length > 0 && confirmationDue && (
-            <div className="listing-confirmation-panel">
-              <div>
-                <b>定期確認課本仍在販售</b>
-                <span>
-                  {nextConfirmationAt
-                    ? `目前 ${activeAvailableListings.length} 本公開販售中，下次確認日為 ${dateLabel(nextConfirmationAt)}。`
-                    : `目前 ${activeAvailableListings.length} 本公開販售中。`}
-                  每 30 天確認一次；最後確認後滿 120 天仍未處理，才會暫時封存。
-                </span>
+      {(view === "dashboard" || isStandaloneChatRoute) && currentUser && (
+        <section className={`dashboard ${isStandaloneChatRoute ? "chat-route-page" : ""}`}>
+          {view === "dashboard" && !isStandaloneChatRoute && (
+            <>
+              <div className="dashboard-head">
+                <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
+                <div className="dashboard-head-actions">
+                  <button type="button" className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => setModal("profile"))}><UserRound size={18} />個人資料</button>
+                  <button type="button" className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm(listingType))}><Plus size={18} />{isSecondhandMode ? "刊登二手物品" : "刊登課本"}</button>
+                </div>
               </div>
-              <button type="button" className="primary" disabled={lifecycleSaving} onClick={() => void confirmAllListings()}>
-                <CheckCheck size={17} />全部仍在販售
-              </button>
-            </div>
-          )}
-          {archivedListings.length > 0 && (
-            <div className="archived-review-panel">
-              <div>
-                <b>有 {archivedListings.length} 本課本因逾期暫時封存</b>
-                <span>勾選後選擇恢復販售或正式下架；系統不會自動讓舊書重新公開。</span>
+              {currentUser.accountStatus === "suspended" && (
+                <div className="readonly-notice"><Ban size={18} /><div><b>唯讀模式</b><span>{currentUser.suspensionReason || "你可以查看既有交易，但暫時不能新增或修改資料。"}</span></div></div>
+              )}
+              {activeAvailableListings.length > 0 && confirmationDue && (
+                <div className="listing-confirmation-panel">
+                  <div>
+                    <b>定期確認課本仍在販售</b>
+                    <span>
+                      {nextConfirmationAt
+                        ? `目前 ${activeAvailableListings.length} 本公開販售中，下次確認日為 ${dateLabel(nextConfirmationAt)}。`
+                        : `目前 ${activeAvailableListings.length} 本公開販售中。`}
+                      每 30 天確認一次；最後確認後滿 120 天仍未處理，才會暫時封存。
+                    </span>
+                  </div>
+                  <button type="button" className="primary" disabled={lifecycleSaving} onClick={() => void confirmAllListings()}>
+                    <CheckCheck size={17} />全部仍在販售
+                  </button>
+                </div>
+              )}
+              {archivedListings.length > 0 && (
+                <div className="archived-review-panel">
+                  <div>
+                    <b>有 {archivedListings.length} 本課本因逾期暫時封存</b>
+                    <span>勾選後選擇恢復販售或正式下架；系統不會自動讓舊書重新公開。</span>
+                  </div>
+                  <div className="archived-review-actions">
+                    <button type="button"
+                      disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
+                      onClick={() => void reviewArchivedListings("keep")}
+                    >
+                      <RotateCcw size={16} />恢復勾選項目
+                    </button>
+                    <button type="button"
+                      className="danger"
+                      disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
+                      onClick={() => void reviewArchivedListings("withdraw")}
+                    >
+                      <Trash2 size={16} />勾選項目已下架
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="dashboard-tabs">
+                <button type="button" className={dashboardTab === "studentVerification" ? "active" : ""} onClick={() => setDashboardTab("studentVerification")}>學生身分驗證</button>
+                <button type="button" className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
+                <button type="button" className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 {activeMyRequestCount > 0 && <span>{activeMyRequestCount}</span>}</button>
+                <button type="button" className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
+                <button type="button" className={dashboardTab === "confirmedOrders" ? "active" : ""} onClick={() => setDashboardTab("confirmedOrders")}>已確認訂單 {confirmedOrders.length > 0 && <span>{confirmedOrders.length}</span>}</button>
+                <button type="button" className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
               </div>
-              <div className="archived-review-actions">
-                <button type="button"
-                  disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
-                  onClick={() => void reviewArchivedListings("keep")}
-                >
-                  <RotateCcw size={16} />恢復勾選項目
-                </button>
-                <button type="button"
-                  className="danger"
-                  disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
-                  onClick={() => void reviewArchivedListings("withdraw")}
-                >
-                  <Trash2 size={16} />勾選項目已下架
-                </button>
-              </div>
-            </div>
+            </>
           )}
-          <div className="dashboard-tabs">
-            <button type="button" className={dashboardTab === "studentVerification" ? "active" : ""} onClick={() => setDashboardTab("studentVerification")}>學生身分驗證</button>
-            <button type="button" className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
-            <button type="button" className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 {activeMyRequestCount > 0 && <span>{activeMyRequestCount}</span>}</button>
-            <button type="button" className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
-            <button type="button" className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
-          </div>
 
           {dashboardTab === "studentVerification" && (
             <StudentVerificationPanel
@@ -4111,7 +4140,7 @@ export function MarketplaceApp() {
 
           {dashboardTab === "chats" && (
             <>
-              {view === "chat" && (
+              {isStandaloneChatRoute && (
                 <div className="chat-page-toolbar">
                   <button type="button" className="chat-page-exit" onClick={returnToChatListRoute}>
                     <ArrowLeft size={16} />返回個人中心
@@ -4340,6 +4369,71 @@ export function MarketplaceApp() {
                 );
               })}
               {receivedRequests.length === 0 && <EmptyDashboard text="目前還沒有人送出購買意願" />}
+            </div>
+          )}
+
+          {dashboardTab === "confirmedOrders" && (
+            <div className="dashboard-list confirmed-orders-list">
+              {confirmedOrders.map((request) => {
+                const book = requestBookSource.find((item) => item.id === request.bookId);
+                if (!book || !currentUser) return null;
+                const isBuyer = request.buyerId === currentUser.id;
+                const otherParty = profile(isBuyer ? book.sellerId : request.buyerId);
+                const contact = contacts[request.id];
+                return (
+                  <div className="request-row confirmed-order-row" key={request.id}>
+                    <div className="request-icon"><CheckCheck /></div>
+                    <div className="request-main">
+                      <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
+                      {!isBuyer && badgeFor(request.buyerId, "buyer") && <span className="trust-badge inline"><ShieldCheck size={13} />推薦買家</span>}
+                      <h3>{book.title}</h3>
+                      <p className="confirmed-order-party">{isBuyer ? "賣家" : "買家"}：{otherParty?.name || "交易對方"} · {money(book.price)}</p>
+                      {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
+                      {contact ? (
+                        <div className="contact-box">
+                          <Check size={16} />
+                          {isBuyer ? "賣家" : "買家"}{contact.method === "line" ? " LINE ID" : " Email"}：<b>{contact.value}</b>
+                        </div>
+                      ) : (
+                        <div className="contact-note">尚未分享額外聯絡方式，請使用新版訊息確認交易細節。</div>
+                      )}
+                      <RequestCoordinationPanel request={request} viewer={isBuyer ? "buyer" : "seller"} />
+                      {!isBuyer && sellerRequestNextStep(request) && <p className="order-next-step">{sellerRequestNextStep(request)}</p>}
+                      {isBuyer && request.status === "reserved" && <p className="order-next-step">賣家已選定你，請使用訊息確認面交細節。</p>}
+                      {isBuyer && request.status === "awaiting_confirmation" && <p className="order-next-step">面交完成後，請確認已收到商品。</p>}
+                      <OrderTimeline request={request} />
+                    </div>
+                    <div className="request-actions">
+                      <button type="button" onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />訊息</button>
+                      {isBuyer && ["reserved", "awaiting_confirmation"].includes(request.status) && (
+                        <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消訂單</button>
+                      )}
+                      {isBuyer && ["reserved", "awaiting_confirmation"].includes(request.status) && (
+                        <button type="button" onClick={() => {
+                          setEditingRequest(request);
+                          setSelectedId(request.bookId);
+                          setDetailBook(null);
+                          setModal("request");
+                        }}><Pencil size={16} />編輯</button>
+                      )}
+                      {!isBuyer && request.status === "reserved" && (
+                        <button type="button" className="accept" onClick={() => void sellerConfirmHandoff(request.id)}><CheckCheck size={16} />已完成面交</button>
+                      )}
+                      {!isBuyer && ["reserved", "awaiting_confirmation"].includes(request.status) && (
+                        <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消保留</button>
+                      )}
+                      {isBuyer && request.status === "awaiting_confirmation" && (
+                        <button type="button" className="accept" onClick={() => void buyerConfirmTrade(request.id)}><CheckCheck size={16} />確認收到</button>
+                      )}
+                      {request.status === "completed" && (
+                        <button type="button" className="review-action" onClick={() => void openTradeReview(request)}><ShieldCheck size={16} />評價交易</button>
+                      )}
+                    </div>
+                    <small>{timeAgo(request.updatedAt || request.createdAt)}</small>
+                  </div>
+                );
+              })}
+              {confirmedOrders.length === 0 && <EmptyDashboard text="目前沒有已確認訂單" />}
             </div>
           )}
 

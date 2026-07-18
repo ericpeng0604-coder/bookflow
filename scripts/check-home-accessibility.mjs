@@ -31,7 +31,7 @@ const checks = [
   ["book list semantics", homeBlock.includes("<ul") && homeBlock.includes("<li")],
   ["empty state live region", homeBlock.includes('className="empty"') && homeBlock.includes("aria-live")],
   ["load more busy state", homeBlock.includes("aria-busy={marketplaceLoading}")],
-  ["current view survives browser refresh", navigation.includes('params.set("view", "dashboard")') && navigation.includes('params.set("tab", dashboardTab)') && navigation.includes('params.set("conversation", expandedConversationId)')],
+  ["current view survives browser refresh", navigation.includes('params.set("view", "dashboard")') && navigation.includes('params.set("tab", dashboardTab)') && navigation.includes("buildChatUrl(listingType, expandedConversationId)")],
   ["route restore avoids stale URL overwrite", navigation.includes("skipNextUrlWriteRef.current = true") && navigation.includes("skipNextUrlWriteRef.current = false")],
   ["current site hero visual", homeBlock.includes('className="hero-art hero-reference-art"')],
   ["focus styles for home cards", homeCss.includes(".home-page .book-card-main:focus-visible")],

@@ -50,6 +50,8 @@
     "check:transaction-loading": "node scripts/check-transaction-loading.mjs",
     "check:risk-warning": "node scripts/check-risk-warning.mjs",
     "check:chat-state": "node scripts/check-chat-switching.mjs",
+    "check:confirmed-orders": "node scripts/check-confirmed-orders.mjs",
+    "check:site-version": "node scripts/check-site-version.mjs",
     "check:notifications": "node scripts/check-notification-refresh.mjs",
     "check:push": "node scripts/check-browser-push.mjs",
     "check:capacity": "node scripts/check-capacity-optimization.mjs",

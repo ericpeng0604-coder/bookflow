@@ -537,7 +537,7 @@ export type WorkspaceTabData = {
 
 export async function loadWorkspaceTabData(
   client: SupabaseClient,
-  tab: "listings" | "chats" | "requests" | "received" | "favorites" | "studentVerification",
+  tab: "listings" | "chats" | "requests" | "received" | "confirmedOrders" | "favorites" | "studentVerification",
 ): Promise<WorkspaceTabData> {
   if (tab === "studentVerification") {
     return { studentVerification: await fetchMyStudentVerification(client) };

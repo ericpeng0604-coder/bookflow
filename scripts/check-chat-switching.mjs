@@ -23,5 +23,10 @@ assert.match(
   /return \(\) => \{\s*active = false;\s*void client\.removeChannel\(channel\);/,
   "conversation cleanup must invalidate async work before removing realtime",
 );
+assert.match(
+  app,
+  /const isStandaloneChatRoute = view === "chat"[\s\S]*new URLSearchParams\(window\.location\.search\)\.get\("view"\) === "chat"/,
+  "the chat URL must win over stale dashboard view state",
+);
 
-console.log("Chat switching state checks passed (4/4).");
+console.log("Chat switching state checks passed (5/5).");
