@@ -21,6 +21,12 @@ assert.ok(!header.includes(">二手市場</button>"), "desktop navigation must n
 assert.ok(!header.includes('openListingForm("book")'), "header must not expose a separate textbook listing entry");
 assert.ok(!header.includes('openListingForm("secondhand")'), "header must not expose a separate secondhand listing entry");
 assert.ok(!market.includes("market-mode-switch"), "the catalog must not expose another market switch");
+assert.ok(
+  css.includes(".market-switch button:focus-visible")
+    && css.includes("outline-offset: 3px")
+    && !css.includes(".site-header .market-switch button:focus-visible"),
+  "market switch keyboard focus must use a scoped visible ring without changing the whole header",
+);
 assert.ok(!listingForm.includes("cover-upload"), "the large duplicate upload card must be removed");
 assert.ok(
   listingForm.includes("function preventImplicitSubmit")
