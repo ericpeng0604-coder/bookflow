@@ -16,7 +16,7 @@
 - No GitHub workflow or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`.
 
-## 實作範圍
+## 已完成
 
 - 所有訊息入口統一導向 `view=chat&tab=chats`，並正規化舊的 dashboard chat URL。
 - 直接開啟 conversation URL 時，以 URL 狀態優先，避免舊 dashboard shell 或 legacy chat markup 顯示。
@@ -25,7 +25,30 @@
 - 顯示 `APP_VERSION` 版本 badge，支援 `NEXT_PUBLIC_APP_VERSION` 覆寫。
 - 保留既有 mobile 列表／聊天室切換與 responsive chat layout。
 
-## 驗證狀態
+## 下一步
+
+1. 使用本 branch 建立 PR，等待 CI 與 Vercel checks。
+2. 合併後確認正式站部署 commit 與合併版本一致。
+3. 以正式站 release health、首頁與聊天室 smoke test 完成證據鏈。
+
+## 變更檔案
+
+- `app/globals.css`
+- `components/marketplace-app.tsx`
+- `components/marketplace/navigation-state.ts`
+- `lib/app-version.ts`
+- `lib/marketplace/queries.ts`
+- `package.json`
+- `scripts/check-chat-switching.mjs`
+- `scripts/check-confirmed-orders.mjs`
+- `scripts/check-home-accessibility.mjs`
+- `scripts/check-site-version.mjs`
+- `scripts/run-project-checks.mjs`
+- `AI_HANDOFF.md`
+- `.ai/state.json`
+- `.ai/history/20260718-deploy-unified-chat-confirmed-orders.md`
+
+## 驗證結果
 
 - Project checks: passed, 33/33.
 - Chat switching checks: passed, 5/5.
@@ -37,18 +60,20 @@
 - Production build: CI verification required; local build not run while the active Next dev server owns the shared `.next` output.
 - Production browser smoke: pending PR merge and deployment.
 
-## 發布要求
+## 風險與注意事項
 
-1. 使用本 branch 建立 PR，等待 CI 與 Vercel checks。
-2. 合併後確認正式站部署 commit 與合併版本一致。
-3. 以正式站 release health、首頁與聊天室 smoke test 完成證據鏈。
+- No database migration, table, RLS, transaction state transition, notification, or protected recovery workflow changes are included.
+- Do not carry unrelated dirty-checkout files into this release.
+- If the deployed commit differs from the merged commit or smoke test fails, do not claim production deployment complete.
 
-## 目前 implementation commit
+## 下一位 AI 工作指引
 
+1. Keep this handoff, `.ai/state.json`, and the matching history file synchronized.
+2. Wait for required CI and Vercel checks before merging.
+3. After merge, verify `/api/health/release`, production commit provenance, and the canonical chat route in the browser.
+
+## 相關 Commit
+
+- Base commit: `99706bddf27a54e97dda5e8fedfb0eef6166acdc`.
 - Feature commit: `bd07178537a1c6cd74478b6a712776614b84023b`.
-
-## 交接規則
-
-- 只發布本次聊天室與已確認訂單範圍，勿帶入原工作區其他未提交修改。
-- 不保存 token、API key、密碼或使用者敏感資料。
-- 若部署 commit 不一致或 smoke test 未通過，不得宣稱正式部署完成。
+- Release metadata commit: `f2aff912c6c0a27511de0c3e25b4ee2410586aa6`.

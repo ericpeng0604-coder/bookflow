@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "in_progress",
+  "owner": "none",
+  "status": "idle",
   "taskId": "20260718-deploy-unified-chat-confirmed-orders",
   "taskTitle": "deploy unified chat and confirmed orders",
   "baseCommit": "99706bddf27a54e97dda5e8fedfb0eef6166acdc",
