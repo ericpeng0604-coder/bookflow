@@ -152,7 +152,6 @@ import type {
 const ACTIVE_REQUEST_CHECK_TIMEOUT_MS = 8_000;
 
 const STORAGE_KEY = "bookflow-market-v1";
-const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0";
 const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
 const LAST_CHAT_KEY = "bookflow-last-chat-v1";
 const IMAGE_SEARCH_MAX_FILE_BYTES = 5 * 1024 * 1024;
