@@ -393,6 +393,24 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .dashboard-list { display: grid; gap: 12px; }
 .favorites-grid { margin-top: 4px; }
 .favorites-grid .empty { grid-column: 1 / -1; }
+.favorites-shelf { display: grid; gap: 24px; }
+.favorites-shelf-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 6px 0 2px; }
+.favorites-shelf-heading h2 { margin: 7px 0 5px; color: var(--ink); font-size: clamp(26px, 3vw, 34px); line-height: 1.15; }
+.favorites-shelf-heading p { margin: 0; color: var(--muted); font-size: 13px; }
+.favorites-shelf-count { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 9px 13px; border: 1px solid #cfe2d8; border-radius: 999px; background: #f1f8f4; color: var(--green); font-size: 12px; font-weight: 800; }
+.favorites-grid .book-card { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.favorites-grid .book-card-main { width: 100%; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.favorites-grid .card-image { aspect-ratio: 4 / 5; height: auto; }
+.favorites-grid .card-body { min-height: 224px; display: flex; flex-direction: column; }
+.favorites-grid .card-body h3 { display: -webkit-box; min-height: 2.8em; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.favorites-grid .card-body > p { display: -webkit-box; min-height: 2.9em; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.favorites-grid .card-footer { margin-top: auto; }
+.favorites-grid .heart { z-index: 2; top: 12px; right: 12px; }
+.favorites-grid .book-card:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(29, 106, 87, .14), var(--shadow); }
+.favorites-grid .book-card-main { min-width: 0; }
+.favorites-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.card-image-fallback { width: 100%; height: 100%; display: grid; place-items: center; align-content: center; gap: 10px; padding: 20px; background: linear-gradient(145deg, #eee6d7, #e3d8c2); color: #7d705d; text-align: center; }
+.card-image-fallback span { font-size: 12px; font-weight: 700; }
 .listing-row, .request-row { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 16px; }
 .listing-row > img { width: 82px; height: 92px; object-fit: cover; border-radius: 7px; }
 .listing-image-placeholder { width: 82px; height: 92px; flex: 0 0 auto; border-radius: 7px; background: var(--cream); color: var(--muted); display: grid; place-items: center; }
@@ -608,13 +626,10 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .photo-assist > div:first-child { display: flex; gap: 10px; align-items: flex-start; color: var(--green); }
 .photo-assist > div:first-child span { display: grid; gap: 3px; }
 .photo-assist small, .photo-assist p { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }
-.photo-assist .ocr-privacy-note { color: #65756e; border-top: 1px solid #dceae4; padding-top: 9px; }
 .photo-assist-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .photo-assist-actions button { border: 0; border-radius: 8px; min-height: 38px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px; background: var(--green); color: white; font-weight: 800; cursor: pointer; }
 .photo-assist-actions button.ghost { border: 1px solid #cfe2da; background: white; color: var(--green); }
 .photo-assist-actions button:disabled { opacity: .55; cursor: not-allowed; }
-.ocr-cover-note { margin: 0; color: var(--green-dark); font-size: 12px; line-height: 1.5; }
-.ocr-cover-note.needs-refresh { color: #94621e; font-weight: 700; }
 .ocr-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .ocr-progress progress { width: 100%; height: 9px; overflow: hidden; border: 0; border-radius: 999px; background: #dce9e3; accent-color: var(--green); }
 .ocr-progress progress::-webkit-progress-bar { background: #dce9e3; border-radius: 999px; }
@@ -2563,6 +2578,12 @@ footer,
 }
 
 @media (max-width: 640px) {
+  .favorites-shelf-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .favorites-shelf-count { align-self: flex-start; }
+  .favorites-grid .card-body { min-height: 208px; }
+}
+
+@media (max-width: 640px) {
   .home-page .hero-search label {
     width: 100%;
     display: grid;
@@ -3252,27 +3273,6 @@ footer,
 
 .header-actions {
   gap: 16px;
-}
-
-.site-version {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border: 1px solid rgba(34, 120, 101, .24);
-  border-radius: 999px;
-  color: #227865;
-  background: rgba(238, 248, 244, .82);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .02em;
-  white-space: nowrap;
-}
-
-@media (max-width: 760px) {
-  .site-version {
-    display: none;
-  }
 }
 
 .home-page {
@@ -4827,4 +4827,85 @@ footer,
   .chat-route-page .chat-image-picker,
   .chat-route-page .trade-chat-compose > button { flex: 0 0 40px; }
   .chat-route-page .trade-chat-compose > button { min-width: 52px; }
+}
+
+.site-header > .brand { min-width: 0; flex: 0 1 auto; }
+.site-header > .brand b { white-space: nowrap; }
+.site-header nav,
+.header-actions { min-width: 0; }
+
+@media (min-width: 981px) and (max-width: 1180px) {
+  .site-header { padding-inline: 24px; }
+  .site-header > .brand { gap: 10px; }
+  .brand b { font-size: 22px; letter-spacing: .02em; }
+  .site-header nav { gap: 12px; }
+  .site-header nav button { min-width: auto; padding-inline: 4px; font-size: 15px; }
+  .header-actions { gap: 8px; }
+  .user-chip { max-width: 100px; padding-inline: 10px; white-space: nowrap; }
+}
+
+/* Keep the listing photo guidance readable inside the narrow form modal. */
+.listing-form-section {
+  container-type: inline-size;
+}
+
+.listing-photo-guide,
+.listing-photo-guide-main,
+.listing-photo-guide-meta,
+.listing-photo-guide-main > span:last-child,
+.listing-photo-guide-meta small,
+.photo-assist > div:first-child span {
+  min-width: 0;
+}
+
+.listing-photo-guide-main strong,
+.listing-photo-guide-main small,
+.listing-photo-guide-meta small,
+.photo-assist small,
+.photo-assist p {
+  overflow-wrap: anywhere;
+}
+
+.listing-photo-guide-meta {
+  justify-content: flex-start;
+  align-content: center;
+  padding-inline-end: 8px;
+}
+
+.listing-photo-guide-meta small {
+  flex: 1 1 100%;
+  width: 100%;
+  padding-inline-end: 2px;
+}
+
+.listing-photo-guide-meta .listing-photo-remaining {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.listing-photo-add-button,
+.photo-assist-actions button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+@container (max-width: 620px) {
+  .listing-photo-guide {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .listing-photo-guide-meta {
+    max-width: none;
+  }
+
+  .listing-photo-guide-meta .listing-photo-remaining {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .listing-photo-add-button {
+    width: 100%;
+    justify-content: center;
+  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "campus-books",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "scripts": {
     "predev": "node scripts/dev-environment.mjs --fix-processes",
@@ -58,6 +58,8 @@
     "check:refresh": "node scripts/check-refresh-guard.mjs",
     "check:refresh-guard": "node --experimental-strip-types scripts/check-refresh-guard.mjs",
     "check:favorites": "node --experimental-strip-types scripts/check-favorites.mjs",
+    "check:book-images": "node scripts/check-book-image-resilience.mjs",
+    "check:listing-form-layout": "node scripts/check-listing-form-layout.mjs",
     "check:notification-delivery": "node --experimental-strip-types scripts/check-notification-delivery.mjs",
     "check:trade-chat": "node scripts/check-trade-chat.mjs",
     "check:chat-listing-order-ux": "node scripts/check-chat-listing-order-ux.mjs",

@@ -16,7 +16,19 @@ assert.match(source, /bookflow-favorites-v1/, "favorites.ts should keep the lega
 assert.match(source, /bookflow-favorites-synced-v2/, "favorites.ts should keep the sync marker key");
 assert.match(appSource, /className=\{`detail-favorite-button/, "book detail page should expose favorite toggle");
 assert.match(appSource, /toggleFavorite\(selectedBook\.id, event\)/, "detail favorite button should reuse shared favorite toggle");
+assert.match(appSource, /className="favorites-shelf"/, "dashboard favorites should expose a dedicated shelf section");
+assert.match(appSource, /id="favorites-shelf-title"[^>]*>我的收藏/, "favorites shelf should have a visible heading");
+assert.match(appSource, /取消收藏《\$\{book\.title\}》/, "favorite removal should identify the book in its accessible label");
+assert.match(appSource, /title=\{`取消收藏《\$\{book\.title\}》`\}/, "favorite removal should expose a visible tooltip");
+assert.match(appSource, /favoriteBooks\.length === 0 && <EmptyDashboard text="你還沒有收藏任何課本" \/>/, "favorites should retain an explicit empty state");
+assert.match(appSource, /<ResilientBookCover book=\{book\} \/>/, "favorite cards should use the resilient cover renderer");
+assert.match(appSource, /onError=\{\(\) => setImageFailed\(true\)\}/, "favorite cover failures should render a fallback instead of a broken image");
 assert.match(cssSource, /\.detail-favorite-button/, "detail favorite button should have a stable style hook");
+assert.match(cssSource, /\.favorites-grid \.book-card \{ position: relative;/, "favorite cards should contain their action button");
+assert.match(cssSource, /\.favorites-grid \.book-card-main \{ width: 100%;/, "favorite card main action should fill the card");
+assert.match(cssSource, /\.favorites-shelf-heading/, "favorites shelf heading should have dedicated styling");
+assert.match(cssSource, /\.card-image-fallback/, "favorite cover fallback should have a visible style");
+assert.match(cssSource, /@media \(min-width: 981px\) and \(max-width: 1180px\)/, "header should have a medium-width responsive guard");
 
 if (!nodeSupportsStripTypes()) {
   throw new Error("check-favorites requires Node with --experimental-strip-types support");
@@ -67,4 +79,4 @@ assert.equal(storage.getItem("bookflow-favorites-synced-v2"), "1");
 assert.equal(favorites.legacyFavoritesNeedSync(), false);
 
 delete globalThis.window;
-console.log("Favorites checks passed (6/6).");
+console.log("Favorites checks passed (storage, presentation, and interaction hooks).");

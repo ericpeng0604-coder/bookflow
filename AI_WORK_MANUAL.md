@@ -1246,8 +1246,46 @@ the Google account chooser. Never print the values or copy secret variables
 into the repository.
 
 **Prevention rule:** Start an authenticated local preview only with an
-explicit, process-local environment source, then rebuild before testing OAuth;
-keep OAuth redirect URLs separately configured in Supabase and Google Cloud.
+explicit, process-local environment source for both build and server startup,
+then rebuild before testing OAuth; keep OAuth redirect URLs separately
+configured in Supabase and Google Cloud. If the target worktree has no
+`.env.local`, source the ignored file from the designated local environment
+worktree without committing or printing its values.
+
+### LESSON-069: UI smoke tests must cover image failure and medium-width layout
+
+**Observed problem:** The favorites page looked correct in a normal desktop DOM
+check, but a real screenshot exposed broken cover images, horizontal overflow,
+and compressed header text at a medium browser width.
+
+**Cause:** Favorite cards depended on the image optimizer without an error
+fallback, and the header had no explicit 981–1180px width guard for its brand,
+navigation, and account controls.
+
+**Detection:** Test an authenticated favorites route with all cover requests
+loaded and with at least one failed cover request. At 981–1180 CSS pixels,
+assert that the header stays in bounds and `scrollWidth` does not exceed the
+viewport width.
+
+**Prevention rule:** Render a safe direct cover source with a visible fallback
+on error, add medium-width min-width and spacing guards, and keep the focused
+favorites check aligned with those user-visible contracts.
+
+### LESSON-070: Keep preview environment and process arguments in one PowerShell scope
+
+**Observed problem:** A nested PowerShell preview command expanded `$_` and
+environment assignments before the inner shell received them, and a wrapped
+start command did not bind the intended port.
+
+**Cause:** PowerShell interpolation and wrapper argument parsing changed the
+command before Next received it.
+
+**Detection:** After build and start, inspect the exact child command line and
+probe the intended preview URL before any browser conclusion.
+
+**Prevention rule:** Set preview environment variables in the same shell that
+runs the build, start Next with the bundled Node executable and explicit
+argument tokens, and verify the exact port responds before UI testing.
 
 ## New Lesson Template
 

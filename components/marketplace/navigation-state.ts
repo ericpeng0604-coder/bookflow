@@ -95,6 +95,7 @@ export function useMarketplaceNavigation({
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>("overview");
   const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
   const skipNextUrlWriteRef = useRef(false);
+  const previousViewRef = useRef<MarketplaceView>("home");
   const handlersRef = useRef<RouteHandlers>({
     onListingTypeChange,
     onBookRouteChange,
@@ -210,6 +211,13 @@ export function useMarketplaceNavigation({
       window.history.replaceState({}, "", nextUrl);
     }
   }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType, ready, selectedId, view]);
+
+  useEffect(() => {
+    if (view === "dashboard" && previousViewRef.current !== "dashboard") {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+    previousViewRef.current = view;
+  }, [view]);
 
   useEffect(() => {
     if (view !== "dashboard" || dashboardTab !== "chats" || expandedConversationId || !currentUser) return;
