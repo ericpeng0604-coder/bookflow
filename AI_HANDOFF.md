@@ -29,6 +29,6 @@
 
 ## Release handoff
 
-- Feature commit: `pending` until the final release commit is created.
+- Feature commit: `d816a8d`.
 - Run `node scripts/release-preflight.mjs` before opening or merging the PR.
 - After merge, verify the exact deployed SHA with `/api/health/release` and `release:smoke`.
