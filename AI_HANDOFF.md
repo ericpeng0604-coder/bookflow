@@ -35,7 +35,9 @@ BookFlow Figma homepage market-switch pilot
 ## 驗證結果
 
 - Figma capture/readback: `NOT VERIFIED` because the capture remains pending and the capture script was not observed in the browser.
-- Local baseline checks passed: listing navigation UI and homepage accessibility; typecheck passed.
+- Local verification passed: listing navigation UI, homepage accessibility, memory contract, project checks (34/34), typecheck, lint, and production build (22/22 routes).
+- AI handoff check passed: `node scripts/ai-collaboration.mjs check-ci origin/main HEAD`.
+- Draft PR: `https://github.com/ericpeng0604-coder/bookflow/pull/121`.
 - No production or database verification has been claimed.
 
 ## 風險與注意事項
@@ -52,4 +54,5 @@ BookFlow Figma homepage market-switch pilot
 ## 相關 Commit
 
 - Base commit: `62531360d518171c7557238324e453f5ca199d15`.
-- Current implementation commit before final commit: `not committed yet`.
+- Current implementation commit: `ffb8f6bf15977fef47a966f1e7ae4ea5e2d983ae`.
+- Draft PR: `#121`.
