@@ -1230,6 +1230,25 @@ project check suite, and call the same contract from `ai-collaboration.mjs`.
 A memory command or handoff fact is not trustworthy merely because it is
 documented or syntactically valid.
 
+### LESSON-068: Local auth smoke tests need the Supabase public environment
+
+**Observed problem:** A clean release worktree was served without its local
+Supabase environment, so the Google login button was disabled and the modal
+reported that authentication was not configured.
+
+**Cause:** The test server was started from a worktree containing only the
+blank `.env.example`; `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` were not available at build time.
+
+**Detection:** Before browser auth checks, confirm the test build has the two
+public Supabase values, the login button is enabled, and clicking it reaches
+the Google account chooser. Never print the values or copy secret variables
+into the repository.
+
+**Prevention rule:** Start an authenticated local preview only with an
+explicit, process-local environment source, then rebuild before testing OAuth;
+keep OAuth redirect URLs separately configured in Supabase and Google Cloud.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title

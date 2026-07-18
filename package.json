@@ -1,6 +1,6 @@
 {
   "name": "campus-books",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "predev": "node scripts/dev-environment.mjs --fix-processes",
@@ -61,6 +61,7 @@
     "check:notification-delivery": "node --experimental-strip-types scripts/check-notification-delivery.mjs",
     "check:trade-chat": "node scripts/check-trade-chat.mjs",
     "check:chat-listing-order-ux": "node scripts/check-chat-listing-order-ux.mjs",
+    "check:book-gallery": "node scripts/check-book-gallery.mjs",
     "check:chat-professional-ux": "node scripts/check-chat-professional-ux.mjs",
     "check:chat-listing-order-ux:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/check-chat-listing-order-ux.mjs",
     "check:home-accessibility": "node scripts/check-home-accessibility.mjs",
@@ -77,6 +78,7 @@
     "release:local:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-candidate.mjs local",
     "release:local:quick": "node scripts/release-candidate.mjs local --quick",
     "release:local:quick:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-candidate.mjs local --quick",
+    "release:version:patch": "node scripts/bump-version.mjs patch",
     "release:prepare": "node scripts/release-candidate.mjs prepare",
     "release:prepare:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-candidate.mjs prepare",
     "release:watch": "node scripts/release-watch.mjs",

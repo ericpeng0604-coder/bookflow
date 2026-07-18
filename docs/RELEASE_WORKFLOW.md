@@ -67,6 +67,7 @@ mutable branch name as `migration_ref`.
 
 ```text
 npm run release:local:quick
+npm run release:version:patch
 npm run release:local
 npm run release:prepare
 npm run release:watch -- --pr <pr-number-or-url>
@@ -84,6 +85,10 @@ Run `npm run release:local:quick` whenever the local site reaches a testable
 state. It runs the memory contract, regression tests, project checks, typecheck,
 and lint without the production build. It records a report under
 `.ai/artifacts/release-runs/` and stops at the first failed gate.
+
+For every production deployment, run `npm run release:version:patch` once before
+the final local gates. It increments the patch version by `0.0.1`, updates the
+lockfile, and the footer receives the same version from `package.json`.
 
 Before deployment, run `npm run release:local` without `--quick`. That final
 pass includes the production build and is the only local report accepted by

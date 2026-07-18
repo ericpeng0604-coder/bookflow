@@ -1,5 +1,11 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import { readFileSync } from "node:fs";
 import type { NextConfig } from "next";
+
+const packageMetadata = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as { version?: string };
+const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || packageMetadata.version || "0.0.0";
 
 function supabaseStorageHostnames() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -56,6 +62,9 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_APP_VERSION: appVersion,
+  },
   images: {
     remotePatterns: [
       {

@@ -31,7 +31,20 @@ import type {
   UserRole,
 } from "@/lib/types";
 
+const MAX_BOOK_IMAGES = 6;
+
+export function normalizeBookImageUrls(imageUrl: unknown, imageUrls: unknown) {
+  const cover = typeof imageUrl === "string" ? imageUrl.trim() : "";
+  const gallery = Array.isArray(imageUrls)
+    ? imageUrls
+      .filter((url): url is string => typeof url === "string")
+      .map((url) => url.trim())
+    : [];
+  return [...new Set([cover, ...gallery].filter(Boolean))].slice(0, MAX_BOOK_IMAGES);
+}
+
 export function mapBook(row: Record<string, unknown>): Book {
+  const imageUrls = normalizeBookImageUrls(row.image_url, row.image_urls);
   return {
     id: String(row.id),
     sellerId: String(row.seller_id),
@@ -56,10 +69,8 @@ export function mapBook(row: Record<string, unknown>): Book {
     approvalNumber: String(row.approval_number || ""),
     condition: String(row.condition),
     price: Number(row.price),
-    imageUrl: String(row.image_url),
-    imageUrls: Array.isArray(row.image_urls)
-      ? row.image_urls.filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
-      : [],
+    imageUrl: imageUrls[0] ?? "",
+    imageUrls,
     meetup: String(row.meetup),
     description: String(row.description || ""),
     contactMethod: String(row.contact_method || "none") as ContactMethod,

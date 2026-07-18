@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260718-release-candidate-toolkit",
-  "taskTitle": "implement local release candidate and deployment evidence toolkit",
+  "taskId": "20260718-mobile-gallery-version-release",
+  "taskTitle": "fix mobile multi-image details and release versioning",
   "baseCommit": "b789ae4e7d5616392862dde2165ac78e998e56cf",
-  "updatedAt": "2026-07-18T00:00:00.000Z",
+  "updatedAt": "2026-07-18T06:30:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260718-release-candidate-toolkit.md"
+  "historyFile": ".ai/history/20260718-mobile-gallery-version-release.md"
 }
