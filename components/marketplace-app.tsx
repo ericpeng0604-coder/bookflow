@@ -43,6 +43,7 @@ import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import {
   type AdminWorkspace,
   type DashboardTab,
+  buildMarketplaceUrl,
   useMarketplaceNavigation,
 } from "@/components/marketplace/navigation-state";
 import {
@@ -1762,6 +1763,15 @@ export function MarketplaceApp() {
     } else {
       setDepartment(departments[0]);
     }
+    window.history.pushState({}, "", buildMarketplaceUrl({
+      listingType: nextType,
+      view: "home",
+      selectedId: null,
+      adminWorkspace,
+      currentUser,
+      dashboardTab,
+      expandedConversationId: null,
+    }));
   }
 
   function openListingForm(nextType: ListingType) {
@@ -3497,9 +3507,6 @@ export function MarketplaceApp() {
           ) : (
             <button type="button" className="login-button desktop-account-action" onClick={() => setModal("login")}><UserRound size={17} /><span>登入／註冊</span></button>
           )}
-          <span className="site-version" title="目前載入的網站版本" aria-label={`網站版本 ${APP_VERSION}`}>
-            {APP_VERSION}
-          </span>
           <button type="button"
             className={"mobile-menu " + (mobileMenuOpen ? "active" : "")}
             aria-label={mobileMenuOpen ? "關閉選單" : "開啟選單"}
@@ -3807,7 +3814,7 @@ export function MarketplaceApp() {
                     aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
                   >
                     <div className="card-image">
-                      <Image src={book.imageUrl} alt="" width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
+                      <ResilientBookCover book={book} />
                       {book.sellerVerified && <span className="verified-seller-badge"><ShieldCheck size={13} />已驗證賣家</span>}
                       <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
                     </div>
@@ -4141,9 +4148,7 @@ export function MarketplaceApp() {
                       <span>選取</span>
                     </label>
                   )}
-                  {book.imageUrl
-                    ? <Image src={book.imageUrl} alt="" width={160} height={210} sizes="80px" />
-                    : <div className="listing-image-placeholder"><BookOpen size={24} /></div>}
+                  <ResilientBookCover book={book} variant="listing" />
                   <div className="listing-main">
                     <div className="listing-badges">
                       {book.lifecycleState === "active" && book.reviewStatus === "approved" ? (
@@ -4485,43 +4490,58 @@ export function MarketplaceApp() {
           )}
 
           {dashboardTab === "favorites" && (
-            <div className="book-grid favorites-grid">
-              {favoriteBooks.map((book) => (
-                <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id}>
-                  <button
-                    type="button"
-                    className="book-card-main"
-                    onClick={() => openBook(book.id)}
-                    aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
-                  >
-                    <div className="card-image">
-                      <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
-                      <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
-                    </div>
-                    <div className="card-body">
-                      {cardContextLabel(book) && (
-                        <span className="course-tag">{cardContextLabel(book)}</span>
-                      )}
-                      <h3>{book.title}</h3>
-                      <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
-                      {book.listingType === "book" && textbookMetadata(book).length > 0 && (
-                        <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
-                      )}
-                      <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
-                    </div>
-                  </button>
-                  <button type="button"
-                    className="heart active"
-                    aria-label="取消收藏"
-                    aria-pressed="true"
-                    onClick={(event) => toggleFavorite(book.id, event)}
-                  >
-                    <Heart size={18} fill="currentColor" />
-                  </button>
-                </article>
-              ))}
-              {favoriteBooks.length === 0 && <EmptyDashboard text="你還沒有收藏任何課本" />}
-            </div>
+            <section className="favorites-shelf" aria-labelledby="favorites-shelf-title">
+              <div className="favorites-shelf-heading">
+                <div>
+                  <span className="section-kicker">MY BOOKSHELF</span>
+                  <h2 id="favorites-shelf-title">我的收藏</h2>
+                  <p>把想留住的課本放在自己的書架裡，隨時回來查看。</p>
+                </div>
+                <span className="favorites-shelf-count" aria-label={`共 ${favoriteBooks.length} 件收藏`}>
+                  <Heart size={16} fill="currentColor" aria-hidden="true" />
+                  {favoriteBooks.length} 件收藏
+                </span>
+              </div>
+              <div className="book-grid favorites-grid">
+                {favoriteBooks.map((book) => (
+                  <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id}>
+                    <button
+                      type="button"
+                      className="book-card-main"
+                      onClick={() => openBook(book.id)}
+                      aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
+                    >
+                      <div className="card-image">
+                        <ResilientBookCover book={book} />
+                        <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
+                      </div>
+                      <div className="card-body">
+                        {cardContextLabel(book) && (
+                          <span className="course-tag">{cardContextLabel(book)}</span>
+                        )}
+                        <h3>{book.title}</h3>
+                        <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
+                        {book.listingType === "book" && textbookMetadata(book).length > 0 && (
+                          <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
+                        )}
+                        <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="heart active"
+                      aria-label={`取消收藏《${book.title}》`}
+                      aria-pressed="true"
+                      title={`取消收藏《${book.title}》`}
+                      onClick={(event) => toggleFavorite(book.id, event)}
+                    >
+                      <Heart size={18} fill="currentColor" aria-hidden="true" />
+                    </button>
+                  </article>
+                ))}
+                {favoriteBooks.length === 0 && <EmptyDashboard text="你還沒有收藏任何課本" />}
+              </div>
+            </section>
           )}
         </section>
       )}
@@ -6041,7 +6061,6 @@ function BookFormModal({
   const [coverId, setCoverId] = useState(initialImageItems[0]?.id || "");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [imageDragActive, setImageDragActive] = useState(false);
-  const [ocrCompletedCoverId, setOcrCompletedCoverId] = useState<string | null>(null);
   const [ocrOriginalDraft, setOcrOriginalDraft] = useState<BookOcrDraft | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -6086,7 +6105,6 @@ function BookFormModal({
   const draftChanged = JSON.stringify(draft) !== baseDraftSignatureRef.current;
   const dirty = imageItems.length > 0 || draftChanged;
   const isSecondhand = initialListingType === "secondhand";
-  const ocrNeedsRefresh = Boolean(ocrOriginalDraft && coverId && ocrCompletedCoverId !== coverId);
   const hasCoverImage = Boolean(coverId && imageItems.some((item) => item.id === coverId && item.url));
 
   useEffect(() => {
@@ -6250,7 +6268,12 @@ function BookFormModal({
   }
 
   async function readBookOcr() {
-    if (!coverId || isSecondhand) return;
+    if (isSecondhand) return;
+    if (!coverId) {
+      setOcrProgress(0);
+      setOcrMessage("請先在照片縮圖上選擇「設為封面」。");
+      return;
+    }
     const requestId = ++ocrRequestRef.current;
     setOcrBusy(true);
     setOcrProgress(4);
@@ -6339,7 +6362,6 @@ function BookFormModal({
         return next;
       });
       setOcrOriginalDraft(ocrDraft);
-      setOcrCompletedCoverId(coverId);
       setOcrProgress(100);
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
         ? `已填入可辨識的欄位，送出前請再確認。${aiFallbackError ? ` ${aiFallbackError}` : ""}`
@@ -6468,13 +6490,12 @@ function BookFormModal({
             </div>
           )}
 
-          {!isSecondhand && (
+          {!isSecondhand && imageItems.length > 0 && (
             <div className="photo-assist full">
               <div>
                 <Sparkles size={18} aria-hidden="true" />
                 <span>
                   <b>使用照片填寫課本資料</b>
-                  <small>拍清楚封面後，系統會先辨識書名、作者、版本與出版線索；價格仍由你自己填。</small>
                 </span>
               </div>
               <div className="photo-assist-actions">
@@ -6485,21 +6506,13 @@ function BookFormModal({
                   <Sparkles size={16} />{ocrBusy ? "辨識中..." : "使用封面辨識"}
                 </button>
               </div>
-              <p className={`ocr-cover-note ${ocrNeedsRefresh ? "needs-refresh" : ""}`}>
-                {ocrNeedsRefresh
-                  ? "封面已變更，原有文字仍保留；請重新辨識以更新課本資料。"
-                  : coverId
-                    ? "AI 辨識來源：目前標記為封面的照片。"
-                    : "請先在照片縮圖上選擇「設為封面」。"}
-              </p>
               {(ocrBusy || ocrProgress > 0) && (
                 <div className="ocr-progress" aria-live="polite">
                   <progress value={ocrProgress} max={100} aria-label="照片辨識進度" />
                   <span>{ocrBusy ? `${ocrProgress}%` : "辨識完成"}</span>
                 </div>
               )}
-              <p>{ocrMessage || (coverId ? "AI 辨識只會讀取目前標記為封面的照片，結果只會填入草稿。" : "請先在照片縮圖上設定封面，再使用 AI 辨識。")}</p>
-              <p className="ocr-privacy-note">本機辨識不足時，照片可能會短暫用於提高辨識準確度；BookFlow 不會另外保存這次辨識圖片。</p>
+              {ocrMessage && <p>{ocrMessage}</p>}
             </div>
           )}
 
@@ -7570,6 +7583,33 @@ function TradeChatPanel({
   );
 }
 /* eslint-enable @next/next/no-img-element */
+
+function ResilientBookCover({ book, variant = "card" }: { book: Book; variant?: "card" | "listing" }) {
+  const source = safeImageSource(book.imageUrl);
+  const [imageFailed, setImageFailed] = useState(!source);
+
+  if (imageFailed) {
+    return (
+      <div className={variant === "listing" ? "listing-image-placeholder" : "card-image-fallback"} role="img" aria-label={`${book.title}封面暫時無法載入`}>
+        <BookOpen size={variant === "listing" ? 24 : 34} aria-hidden="true" />
+        {variant === "card" && <span>封面暫時無法載入</span>}
+      </div>
+    );
+  }
+
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={source}
+      alt={book.title}
+      width={420}
+      height={560}
+      loading="lazy"
+      decoding="async"
+      onError={() => setImageFailed(true)}
+    />
+  );
+}
 
 function EmptyDashboard({ text }: { text: string }) {
   return <div className="empty small"><Clock3 size={34} /><h3>{text}</h3><p>新的進度會出現在這裡。</p></div>;
