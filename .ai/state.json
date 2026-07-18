@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260718-fix-listing-photo-card-layout",
-  "taskTitle": "fix listing photo card text width",
-  "baseCommit": "b789ae4e7d5616392862dde2165ac78e998e56cf",
-  "updatedAt": "2026-07-18T12:30:00.000Z",
+  "owner": "codex",
+  "status": "in_progress",
+  "taskId": "20260718-deploy-unified-chat-confirmed-orders",
+  "taskTitle": "deploy unified chat and confirmed orders",
+  "baseCommit": "99706bddf27a54e97dda5e8fedfb0eef6166acdc",
+  "updatedAt": "2026-07-18T04:24:33.310Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260718-fix-listing-photo-card-layout.md"
+  "historyFile": ".ai/history/20260718-deploy-unified-chat-confirmed-orders.md"
 }
