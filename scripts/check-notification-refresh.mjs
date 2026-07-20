@@ -14,8 +14,8 @@ assert.match(
 );
 assert.match(
   app,
-  /if \(view === "dashboard" && store\.currentUser\)[\s\S]*loadDashboardWorkspace/,
-  "clicking My Transactions while already open must refresh the active tab",
+  /const openDashboard = useCallback[\s\S]*if \(store\.currentUser\)[\s\S]*loadDashboardWorkspace\(store\.currentUser, "listings"\)/,
+  "clicking My Transactions must refresh the listings dashboard",
 );
 assert.match(
   app,

@@ -92,7 +92,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .icon-button, .mobile-menu { border: 0; background: none; padding: 8px; cursor: pointer; }
 .mobile-menu { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 9px; }
 .mobile-menu.active { color: var(--green); background: var(--mint); }
-.mobile-nav-backdrop { position: fixed; z-index: 40; inset: 74px 0 0; display: block; background: transparent; }
+.mobile-nav-backdrop { position: fixed; z-index: 40; inset: 86px 0 0; display: block; background: transparent; }
 .mobile-nav-dismiss { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; background: transparent; cursor: default; }
 .mobile-nav { position: absolute; top: 10px; right: max(5vw, 28px); width: min(310px, calc(100vw - 32px)); padding: 10px; display: grid; gap: 5px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 54px rgba(17, 47, 40, .18); }
 .mobile-nav button { width: 100%; min-height: 42px; padding: 10px 12px; border: 0; border-radius: 8px; display: flex; align-items: center; gap: 9px; background: transparent; font-weight: 700; text-align: left; cursor: pointer; }
@@ -773,7 +773,7 @@ footer { position: relative; border-top: 1px solid var(--line); padding: 35px ma
   nav { display: none; }
   .mobile-menu { display: grid; place-items: center; border-radius: 9px; min-width: 44px; min-height: 44px; }
   .mobile-menu.active { color: var(--green); background: var(--mint); }
-  .mobile-nav-backdrop { position: fixed; z-index: 40; inset: 74px 0 0; display: block; background: rgba(14, 34, 30, .38); }
+  .mobile-nav-backdrop { position: fixed; z-index: 40; inset: 86px 0 0; display: block; background: rgba(14, 34, 30, .38); }
   .mobile-nav { position: absolute; top: 0; right: 0; width: min(340px, calc(100vw - 32px)); padding: 13px; display: grid; gap: 5px; background: var(--paper); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 0 16px; box-shadow: 0 24px 50px rgba(17, 47, 40, .2); }
   .mobile-nav button { width: 100%; min-height: 46px; padding: 10px 13px; border: 0; border-radius: 9px; display: flex; align-items: center; gap: 9px; background: transparent; font-weight: 700; text-align: left; cursor: pointer; }
   .mobile-nav button:hover, .mobile-nav button.active { color: var(--green); background: var(--mint); }
@@ -794,7 +794,7 @@ footer { position: relative; border-top: 1px solid var(--line); padding: 35px ma
   .brand b { font-size: 17px; }
   .brand-mark { width: 35px; height: 35px; }
   .desktop-account-action, .admin-shortcut { display: none; }
-  .mobile-nav-backdrop { top: 64px; }
+  .mobile-nav-backdrop { top: 86px; }
   .offline-banner { top: 64px; }
   .mobile-nav { width: 100%; border-left: 0; border-right: 0; border-radius: 0 0 14px 14px; }
   .login-button { padding: 8px 10px; font-size: 12px; }
@@ -4023,7 +4023,7 @@ footer,
 
 .chat-route-page .conversation-layout {
   max-width: 1440px;
-  height: calc(100% - 54px);
+  height: 100%;
   min-height: 0;
   margin: 0 auto;
   grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
@@ -4497,7 +4497,7 @@ footer,
   }
 
   .chat-route-page .conversation-layout {
-    height: calc(100% - 46px);
+    height: 100%;
     grid-template-columns: 1fr;
     gap: 0;
   }

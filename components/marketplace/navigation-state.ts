@@ -21,6 +21,8 @@ type UseMarketplaceNavigationOptions = RouteHandlers & {
   currentUser: Profile | null;
   conversations: Conversation[];
   lastChatStorageKey: (userId: string) => string;
+  initialView?: MarketplaceView;
+  initialDashboardTab?: DashboardTab;
 };
 
 type BuildMarketplaceUrlOptions = {
@@ -85,13 +87,15 @@ export function useMarketplaceNavigation({
   currentUser,
   conversations,
   lastChatStorageKey,
+  initialView = "home",
+  initialDashboardTab = "listings",
   onListingTypeChange,
   onBookRouteChange,
   onConversationRoute,
 }: UseMarketplaceNavigationOptions) {
-  const [view, setView] = useState<MarketplaceView>("home");
+  const [view, setView] = useState<MarketplaceView>(initialView);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [dashboardTab, setDashboardTab] = useState<DashboardTab>("listings");
+  const [dashboardTab, setDashboardTab] = useState<DashboardTab>(initialDashboardTab);
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>("overview");
   const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
   const skipNextUrlWriteRef = useRef(false);
@@ -273,6 +277,8 @@ export function useMarketplaceNavigation({
 
   const openDashboard = useCallback(() => {
     setView("dashboard");
+    setDashboardTab("listings");
+    setExpandedConversationId(null);
   }, []);
 
   return {

@@ -2,43 +2,43 @@
 
 ## 任務目標
 
-BookFlow Figma homepage market-switch pilot
+BookFlow chat navigation and dashboard reload release
 
 ## 目前狀態與背景
 
-- Task ID: `20260718-figma-home-market-switch-pilot`.
-- Task: `BookFlow Figma homepage market-switch pilot`.
-- Branch: `codex/figma-home-market-switch-pilot`.
-- Base commit: `62531360d518171c7557238324e453f5ca199d15`.
-- History: `.ai/history/20260718-figma-home-market-switch-pilot.md`.
+- Task ID: `20260720-chat-release`.
+- Task: `BookFlow chat navigation and dashboard reload release`.
+- Branch: `codex/chat-release-20260720`.
+- Base commit: `77f2072da5567af8a87baec011b4a76934750347`.
+- History: `.ai/history/20260720-chat-release.md`.
 - No database migration is included unless listed here.
 - No GitHub workflow or protected recovery file is changed unless explicitly listed here.
 - Do not add `Rollback-Workflow-Approved: true` unless this is an authorized rollback/recovery change.
 
 ## 已完成
 
-- Use the clean `origin/main` release baseline for a private Figma visual pilot.
+- Remove the standalone message-page return-to-profile control.
+- Prevent dashboard reloads from flashing the public market homepage before auth hydration.
+- Align tablet mobile-menu positioning and distinguish its background dismiss label.
+- Bump the application patch version from 0.1.2 to 0.1.3.
+- Make the header “我的交易” action open the listings dashboard in one click.
 - Preserve existing Supabase data flows and do not add a database migration.
-- Figma file: `https://www.figma.com/design/eBGxlegWs8bZ9Ei6gTSVS8`
 
 ## 下一步
 
-1. Capture and review the homepage market switch in Figma.
-2. Run focused regression checks, project checks, typecheck, lint, and production build.
-3. Run release scope and handoff preflight checks, then commit and push the branch if the pilot is approved.
-4. Open the PR and wait for required GitHub and Vercel gates before any production claim.
+1. Run focused regression checks, project checks, typecheck, lint, and production build.
+2. Run release scope and handoff preflight checks, then commit and push the branch.
+3. Open the PR and wait for required GitHub and Vercel gates.
+4. After merge, verify the exact production SHA with `/api/health/release` and `release:smoke`.
 
 ## 變更檔案
 
-- A new append-only `.ai/history/*.md` archive is created for this pilot.
+- A new append-only `.ai/history/*.md` archive will be created before the PR.
 
 ## 驗證結果
 
-- Figma capture/readback: `NOT VERIFIED` because the capture remains pending and the capture script was not observed in the browser.
-- Local verification passed: listing navigation UI, homepage accessibility, memory contract, project checks (34/34), typecheck, lint, and production build (22/22 routes).
-- AI handoff check passed: `node scripts/ai-collaboration.mjs check-ci origin/main HEAD`.
-- Draft PR: `https://github.com/ericpeng0604-coder/bookflow/pull/121`.
-- No production or database verification has been claimed.
+- Local verification passed: project checks (34/34), chat listing checks (26/26), chat visibility (9/9), professional message UX (13/13), Google OAuth checks, typecheck, lint, workflow checks, and production build.
+- No production or database verification has been claimed yet.
 
 ## 風險與注意事項
 
@@ -47,12 +47,11 @@ BookFlow Figma homepage market-switch pilot
 
 ## 下一位 AI 工作指引
 
-1. Keep the pilot limited to the market-switch focus ring, its focused check, and the Figma workflow contract.
+1. Keep the release limited to the listed UI, test, and memory-contract changes.
 2. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching `.ai/history/*.md` in sync.
 3. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
 
 ## 相關 Commit
 
-- Base commit: `62531360d518171c7557238324e453f5ca199d15`.
-- Current implementation commit: `ffb8f6bf15977fef47a966f1e7ae4ea5e2d983ae`.
-- Draft PR: `#121`.
+- Base commit: `77f2072da5567af8a87baec011b4a76934750347`.
+- Current implementation commit before final commit: `not committed yet`.
