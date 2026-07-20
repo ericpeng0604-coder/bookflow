@@ -43,6 +43,7 @@ import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import {
   type AdminWorkspace,
   type DashboardTab,
+  type MarketplaceView,
   buildMarketplaceUrl,
   useMarketplaceNavigation,
 } from "@/components/marketplace/navigation-state";
@@ -662,7 +663,12 @@ function canRecallTradeMessage(message: TradeMessage, currentUserId: string, now
   );
 }
 
-export function MarketplaceApp() {
+type MarketplaceAppProps = {
+  initialView?: MarketplaceView;
+  initialDashboardTab?: DashboardTab;
+};
+
+export function MarketplaceApp({ initialView = "home", initialDashboardTab = "listings" }: MarketplaceAppProps) {
   const [store, setStore] = useState<Store>({ books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null });
   const [ready, setReady] = useState(false);
   const [online, setOnline] = useState(true);
@@ -786,6 +792,8 @@ export function MarketplaceApp() {
     currentUser,
     conversations,
     lastChatStorageKey,
+    initialView,
+    initialDashboardTab,
     onListingTypeChange: setListingType,
     onBookRouteChange: clearBookDetailRouteState,
     onConversationRoute: openConversation,
@@ -3524,7 +3532,7 @@ export function MarketplaceApp() {
             <button
               type="button"
               className="mobile-nav-dismiss"
-              aria-label="關閉選單"
+              aria-label="關閉選單背景"
               onClick={() => setMobileMenuOpen(false)}
             />
             <div id="mobile-navigation" className="mobile-nav">
