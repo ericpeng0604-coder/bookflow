@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
+const navigation = readFileSync(new URL("../components/marketplace/navigation-state.ts", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../lib/marketplace/queries.ts", import.meta.url), "utf8");
 const handoffPreferencesMigration = readFileSync(new URL("../supabase/migrations/20260704160000_purchase_request_handoff_preferences.sql", import.meta.url), "utf8");
@@ -26,7 +27,8 @@ const checks = [
   ["chat preserves scroll when loading older messages", app.includes("previousScrollHeight") && app.includes("previousScrollTop") && app.includes("heightDelta")],
   ["chat compose uses multiline input and dedicated phrase scroller", app.includes("<textarea") && app.includes('className="trade-chat-phrases-scroll"') && css.includes(".trade-chat-compose textarea")],
   ["seller can keep tracking completed orders", app.includes("sellerRequestNextStep") && app.includes('"completed"].includes(request.status)') && app.includes('className="order-next-step"')],
-  ["standalone message route owns chat scrolling", app.includes('className="chat-page-toolbar"') && app.includes('chat-route-page') && /\.chat-route-page\s*\{\s*position:\s*fixed/.test(css) && css.includes(".chat-route-page .trade-chat-log")],
+  ["standalone message route owns chat scrolling", !app.includes("chat-page-toolbar") && !app.includes("chat-page-exit") && app.includes('chat-route-page') && /\.chat-route-page\s*\{\s*position:\s*fixed/.test(css) && css.includes(".chat-route-page .trade-chat-log")],
+  ["my transactions opens listings in one click", navigation.includes('setDashboardTab("listings")') && navigation.includes('setExpandedConversationId(null)') && app.includes("requireLogin(openDashboard)")],
   ["mobile chat rail remains usable for switching", !app.includes("onClickCapture") && css.includes("minmax(118px, 34vw)") && css.includes("-webkit-line-clamp: 2")],
   ["book detail reload keeps existing order state", queries.includes("fetchActiveRequestForBook") && app.includes("fetchActiveRequestForBook") && app.includes("已下訂：")],
   ["handoff preference migration checks the existing books table", handoffPreferencesMigration.includes("from public.books") && !handoffPreferencesMigration.includes("marketplace_listings")],

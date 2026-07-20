@@ -4022,7 +4022,7 @@ footer,
 
 .chat-route-page .conversation-layout {
   max-width: 1440px;
-  height: calc(100% - 54px);
+  height: 100%;
   min-height: 0;
   margin: 0 auto;
   grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
@@ -4496,7 +4496,7 @@ footer,
   }
 
   .chat-route-page .conversation-layout {
-    height: calc(100% - 46px);
+    height: 100%;
     grid-template-columns: 1fr;
     gap: 0;
   }

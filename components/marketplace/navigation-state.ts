@@ -273,6 +273,8 @@ export function useMarketplaceNavigation({
 
   const openDashboard = useCallback(() => {
     setView("dashboard");
+    setDashboardTab("listings");
+    setExpandedConversationId(null);
   }, []);
 
   return {

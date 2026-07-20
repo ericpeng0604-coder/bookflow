@@ -2,22 +2,23 @@
 
 ## 任務目標
 
-BookFlow 0.1.2 marketplace, listing, image, favorites, auth, and chat release
+BookFlow message navigation test release
 
 ## 目前狀態與背景
 
-- Task ID: `20260718-release-bookflow-011-chat-ui`.
-- Task: `BookFlow 0.1.2 marketplace, listing, image, favorites, auth, and chat release`.
-- Branch: `codex/bookflow-011-production`.
-- Base commit: `b4875868f23621130e5870e0b21baa3df18223f2`.
-- History: `.ai/history/20260718-0931-20260718-release-bookflow-011-chat-ui.md`.
+- Task ID: `20260720-message-navigation-test`.
+- Task: `BookFlow message navigation test release`.
+- Branch: `codex/message-navigation-test`.
+- Base commit: `62531360d518171c7557238324e453f5ca199d15`.
+- History: `.ai/history/20260720-message-navigation-test.md`.
 - No database migration is included unless listed here.
 - No GitHub workflow or protected recovery file is changed unless explicitly listed here.
 - Do not add `Rollback-Workflow-Approved: true` unless this is an authorized rollback/recovery change.
 
 ## 已完成
 
-- Carry the tested marketplace, favorites, listing-photo, image fallback, AI-photo, and chat UI changes from the 0.1.1 test worktree into a clean production branch.
+- Remove the standalone message-page return-to-profile control.
+- Make the header “我的交易” action open the listings dashboard in one click.
 - Preserve existing Supabase data flows and do not add a database migration.
 
 ## 下一步
@@ -33,7 +34,7 @@ BookFlow 0.1.2 marketplace, listing, image, favorites, auth, and chat release
 
 ## 驗證結果
 
-- Local verification passed: project checks (34/34), focused favorites/image/listing checks, typecheck, lint, and production build.
+- Local verification passed: chat listing checks (26/26), chat switching checks (5/5), Google OAuth checks (11/11), typecheck, lint, workflow checks, and production build.
 - No production or database verification has been claimed yet.
 
 ## 風險與注意事項
@@ -49,5 +50,5 @@ BookFlow 0.1.2 marketplace, listing, image, favorites, auth, and chat release
 
 ## 相關 Commit
 
-- Base commit: `b4875868f23621130e5870e0b21baa3df18223f2`.
+- Base commit: `62531360d518171c7557238324e453f5ca199d15`.
 - Current implementation commit before final commit: `not committed yet`.

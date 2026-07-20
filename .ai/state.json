@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260718-release-bookflow-011-chat-ui",
-  "taskTitle": "BookFlow 0.1.2 marketplace, listing, image, favorites, auth, and chat release",
-  "baseCommit": "b4875868f23621130e5870e0b21baa3df18223f2",
-  "updatedAt": "2026-07-18T09:31:36.527Z",
+  "taskId": "20260720-message-navigation-test",
+  "taskTitle": "BookFlow message navigation test release",
+  "baseCommit": "62531360d518171c7557238324e453f5ca199d15",
+  "updatedAt": "2026-07-20T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260718-0931-20260718-release-bookflow-011-chat-ui.md"
+  "historyFile": ".ai/history/20260720-message-navigation-test.md"
 }
