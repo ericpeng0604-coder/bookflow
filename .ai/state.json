@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260720-chat-release",
-  "taskTitle": "BookFlow chat navigation and dashboard reload release",
-  "baseCommit": "77f2072da5567af8a87baec011b4a76934750347",
+  "taskId": "20260720-desktop-active-release",
+  "taskTitle": "BookFlow desktop active navigation release",
+  "baseCommit": "9c378809370ec5a519472dcba4bbfae3393df9ea",
   "updatedAt": "2026-07-20T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260720-chat-release.md"
+  "historyFile": ".ai/history/20260720-desktop-active-release.md"
 }
