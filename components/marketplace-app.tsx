@@ -1142,11 +1142,10 @@ export function MarketplaceApp() {
 
   const openDashboard = useCallback(() => {
     showDashboard();
-    if (view === "dashboard" && store.currentUser) {
-      if (dashboardTab === "chats") setDashboardTab("listings");
-      void loadDashboardWorkspace(store.currentUser, dashboardTab === "chats" ? "listings" : dashboardTab);
+    if (store.currentUser) {
+      void loadDashboardWorkspace(store.currentUser, "listings");
     }
-  }, [dashboardTab, loadDashboardWorkspace, setDashboardTab, showDashboard, store.currentUser, view]);
+  }, [loadDashboardWorkspace, showDashboard, store.currentUser]);
 
   const openDashboardTab = useCallback((tab: DashboardTab) => {
     if (tab === "chats") {
@@ -4192,13 +4191,6 @@ export function MarketplaceApp() {
 
           {dashboardTab === "chats" && (
             <>
-              {isStandaloneChatRoute && (
-                <div className="chat-page-toolbar">
-                  <button type="button" className="chat-page-exit" onClick={returnToChatListRoute}>
-                    <ArrowLeft size={16} />返回個人中心
-                  </button>
-                </div>
-              )}
             <div className={`conversation-layout ${expandedConversationId ? "conversation-open" : ""} ${chatListCollapsed ? "chat-list-collapsed" : ""}`}>
               <div className="conversation-list-shell">
               <div className="conversation-list-header">
