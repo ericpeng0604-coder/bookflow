@@ -3439,7 +3439,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           </div>
           <button type="button" className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isSecondhandMode ? "找二手物品" : "找二手書籍"}</button>
           <button type="button" onClick={() => requireActive(() => openListingForm(listingType))}>我要刊登</button>
-          <button type="button" onClick={() => requireLogin(openDashboard)}>我的交易</button>
+          <button type="button" className={view === "dashboard" ? "active" : ""} onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button type="button" className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>管理</button>}
         </nav>
         <div className="header-actions">

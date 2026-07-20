@@ -2,15 +2,15 @@
 
 ## 任務目標
 
-BookFlow chat navigation and dashboard reload release
+BookFlow desktop active navigation release
 
 ## 目前狀態與背景
 
-- Task ID: `20260720-chat-release`.
-- Task: `BookFlow chat navigation and dashboard reload release`.
-- Branch: `codex/chat-release-20260720`.
-- Base commit: `77f2072da5567af8a87baec011b4a76934750347`.
-- History: `.ai/history/20260720-chat-release.md`.
+- Task ID: `20260720-desktop-active-release`.
+- Task: `BookFlow desktop active navigation release`.
+- Branch: `codex/desktop-active-release-20260720`.
+- Base commit: `9c378809370ec5a519472dcba4bbfae3393df9ea`.
+- History: `.ai/history/20260720-desktop-active-release.md`.
 - No database migration is included unless listed here.
 - No GitHub workflow or protected recovery file is changed unless explicitly listed here.
 - Do not add `Rollback-Workflow-Approved: true` unless this is an authorized rollback/recovery change.
@@ -20,7 +20,8 @@ BookFlow chat navigation and dashboard reload release
 - Remove the standalone message-page return-to-profile control.
 - Prevent dashboard reloads from flashing the public market homepage before auth hydration.
 - Align tablet mobile-menu positioning and distinguish its background dismiss label.
-- Bump the application patch version from 0.1.2 to 0.1.3.
+- Bump the application patch version from 0.1.3 to 0.1.4.
+- Show the desktop header's "我的交易" button as active when the dashboard is open.
 - Make the header “我的交易” action open the listings dashboard in one click.
 - Preserve existing Supabase data flows and do not add a database migration.
 
@@ -37,7 +38,7 @@ BookFlow chat navigation and dashboard reload release
 
 ## 驗證結果
 
-- Local verification passed: project checks (34/34), chat listing checks (26/26), chat visibility (9/9), professional message UX (13/13), Google OAuth checks, typecheck, lint, workflow checks, and production build.
+- Local verification is pending for the desktop active-state patch.
 - No production or database verification has been claimed yet.
 
 ## 風險與注意事項
@@ -53,5 +54,5 @@ BookFlow chat navigation and dashboard reload release
 
 ## 相關 Commit
 
-- Base commit: `77f2072da5567af8a87baec011b4a76934750347`.
+- Base commit: `9c378809370ec5a519472dcba4bbfae3393df9ea`.
 - Current implementation commit before final commit: `not committed yet`.
