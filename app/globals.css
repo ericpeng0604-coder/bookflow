@@ -522,7 +522,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .form .listing-file-input:focus-visible { border-color: var(--green); box-shadow: 0 0 0 4px rgba(30, 99, 79, .1); }
 .listing-file-input::file-selector-button { min-height: 40px; margin-right: 12px; padding: 8px 14px; border: 0; border-radius: 7px; background: var(--green); color: white; font: inherit; font-weight: 800; cursor: pointer; }
 .listing-file-input::file-selector-button:hover { background: #174f3f; }
-.listing-photo-guide { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px 16px; border: 1px solid #c4ddd2; border-radius: 14px; background: linear-gradient(135deg, #f1faf6, #fbfdfb); }
+.listing-photo-guide { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(220px, auto); gap: 16px; align-items: center; padding: 14px 16px; border: 1px solid #c4ddd2; border-radius: 14px; background: linear-gradient(135deg, #f1faf6, #fbfdfb); }
 .listing-photo-guide.has-images { border-color: #8bbca9; background: linear-gradient(135deg, #eaf7f1, #f8fcfa); }
 .listing-photo-guide.is-dragging { border-color: var(--green); border-style: dashed; background: #e0f4eb; box-shadow: 0 0 0 3px rgba(30, 99, 79, .12); }
 .listing-photo-guide-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
