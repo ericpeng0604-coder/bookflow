@@ -474,6 +474,8 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .permission-row .suspension-reason { color: #983f35; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(10, 26, 22, .58); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 22px; overflow-y: auto; }
+.modal-backdrop { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; outline: none; color: inherit; }
+.modal-backdrop::backdrop { background: transparent; }
 .modal-backdrop-dismiss { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; background: transparent; cursor: default; }
 .modal { width: min(600px, 100%); max-height: calc(100vh - 44px); overflow-y: auto; background: var(--paper); border-radius: 17px; padding: 28px; position: relative; z-index: 1; box-shadow: 0 28px 80px rgba(9, 34, 27, .3); }
 .modal-close { position: absolute; right: 18px; top: 18px; border: 0; background: none; cursor: pointer; }
@@ -521,8 +523,24 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .form .listing-file-input:hover { border-color: var(--green); background: #eef7f3; }
 .form .listing-file-input:focus-visible { border-color: var(--green); box-shadow: 0 0 0 4px rgba(30, 99, 79, .1); }
 .listing-file-input::file-selector-button { min-height: 40px; margin-right: 12px; padding: 8px 14px; border: 0; border-radius: 7px; background: var(--green); color: white; font: inherit; font-weight: 800; cursor: pointer; }
+.favorites-shelf { display: grid; gap: 24px; }
+.favorites-shelf-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 6px 0 2px; }
+.favorites-shelf-heading h2 { margin: 7px 0 5px; color: var(--ink); font-size: clamp(26px, 3vw, 34px); line-height: 1.15; }
+.favorites-shelf-heading p { margin: 0; color: var(--muted); font-size: 13px; }
+.favorites-shelf-count { display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border: 1px solid #cfe2d8; border-radius: 999px; background: #f1f8f4; color: var(--green); font-size: 12px; font-weight: 800; }
+.favorites-grid .book-card { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.favorites-grid .book-card-main { width: 100%; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.conversation-layout.chat-list-collapsed { grid-template-columns: 56px minmax(0, 1fr); }
+.conversation-layout.chat-list-collapsed .chat-list-toggle { width: 38px; }
+.card-image-fallback { width: 100%; height: 100%; display: grid; place-items: center; align-content: center; gap: 10px; padding: 20px; background: linear-gradient(145deg, #eee6d7, #e3d8c2); color: #7d705d; text-align: center; }
+.card-image-fallback span { font-size: 12px; font-weight: 700; }
+@media (min-width: 981px) and (max-width: 1180px) {
+  .site-header { padding-left: 24px; padding-right: 24px; }
+  .site-header nav { gap: 12px; }
+  .site-header nav button { font-size: 13px; }
+}
 .listing-file-input::file-selector-button:hover { background: #174f3f; }
-.listing-photo-guide { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(220px, auto); gap: 16px; align-items: center; padding: 14px 16px; border: 1px solid #c4ddd2; border-radius: 14px; background: linear-gradient(135deg, #f1faf6, #fbfdfb); }
+.listing-photo-guide { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: center; padding: 14px 16px; border: 1px solid #c4ddd2; border-radius: 14px; background: linear-gradient(135deg, #f1faf6, #fbfdfb); }
 .listing-photo-guide.has-images { border-color: #8bbca9; background: linear-gradient(135deg, #eaf7f1, #f8fcfa); }
 .listing-photo-guide.is-dragging { border-color: var(--green); border-style: dashed; background: #e0f4eb; box-shadow: 0 0 0 3px rgba(30, 99, 79, .12); }
 .listing-photo-guide-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -530,7 +548,8 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .listing-photo-guide-main > span:last-child { display: grid; flex: 1 1 auto; gap: 3px; min-width: 0; max-width: 100%; }
 .listing-photo-guide-main strong { color: var(--green-dark); font-size: 15px; }
 .listing-photo-guide-main small, .listing-photo-guide-meta small { color: var(--muted); font-size: 11px; line-height: 1.45; }
-.listing-photo-guide-meta { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 10px; max-width: 360px; }
+.listing-photo-guide-meta { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 8px 10px; max-width: none; }
+.listing-photo-guide-meta small { flex: 1 1 100%; }
 .listing-photo-cover-status { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; }
 .listing-photo-cover-status.ready { background: #d7f0e5; color: var(--green-dark); }
 .listing-photo-cover-status.needs-cover { background: #fff1d8; color: #94621e; }
@@ -538,6 +557,24 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .listing-photo-add-button { min-height: 36px; padding: 7px 12px; border: 1px solid #b9d6ca; border-radius: 9px; display: inline-flex; align-items: center; gap: 6px; background: white; color: var(--green); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
 .listing-photo-add-button:hover { border-color: var(--green); background: #f4fbf7; }
 .listing-photo-add-button:disabled { opacity: .5; cursor: not-allowed; }
+.meetup-mode-field { display: grid; gap: 10px; }
+.meetup-mode-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 12px; }
+.meetup-mode-label-row span { color: var(--muted); font-size: 11px; font-weight: 400; }
+.meetup-mode-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.meetup-mode-option { min-width: 0; min-height: 76px; position: relative; display: flex; align-items: flex-start; gap: 8px; padding: 12px 10px; border: 1px solid #d8e5df; border-radius: 12px; background: #fffefb; color: var(--ink); text-align: left; cursor: pointer; transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.meetup-mode-option:hover, .meetup-mode-option:focus-visible, .meetup-mode-option.previewing { border-color: #8bbca9; background: #f5fbf8; box-shadow: 0 7px 16px rgba(31, 109, 88, .09); transform: translateY(-1px); }
+.meetup-mode-option.selected { border-color: var(--green); background: #edf7f1; box-shadow: inset 0 0 0 1px rgba(31, 109, 88, .12); }
+.meetup-mode-option:focus-visible { outline: 3px solid rgba(31, 109, 88, .18); outline-offset: 2px; }
+.meetup-mode-option:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+.meetup-mode-option-check { width: 20px; height: 20px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #bcd2c8; border-radius: 50%; color: white; background: white; font-size: 12px; font-weight: 900; }
+.meetup-mode-option.selected .meetup-mode-option-check { border-color: var(--green); background: var(--green); }
+.meetup-mode-option-copy { min-width: 0; position: relative; display: grid; gap: 5px; }
+.meetup-mode-option-copy strong { color: var(--green-dark); font-size: 12px; line-height: 1.35; }
+.meetup-mode-option-copy small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.meetup-mode-option.has-tooltip { z-index: 5; }
+.meetup-mode-tooltip { position: absolute; z-index: 20; top: calc(100% + 10px); left: 0; display: block; box-sizing: border-box; width: min(250px, calc(100vw - 48px)); max-width: 100%; min-width: 190px; padding: 9px 11px; border: 1px solid #c5ddd2; border-radius: 9px; background: rgba(255, 255, 251, .98); color: var(--muted); box-shadow: 0 10px 24px rgba(21, 74, 61, .16); font-size: 11px; font-weight: 400; line-height: 1.5; text-align: left; white-space: normal; overflow-wrap: anywhere; pointer-events: none; animation: meetup-tooltip-in .16s ease-out both; }
+.meetup-mode-option:nth-child(3) .meetup-mode-tooltip { right: 0; left: auto; }
+@keyframes meetup-tooltip-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 .image-preview { height: 210px; border-radius: 10px; overflow: hidden; background: var(--cream); }
 .image-preview img { width: 100%; height: 100%; object-fit: contain; }
 .listing-gallery-editor { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -1958,9 +1995,23 @@ footer,
 
 .market-switch { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid #d8e4de; border-radius: 999px; background: #f1f6f3; }
 .market-switch button { min-height: 36px; border: 0; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; background: transparent; color: #52665f; font-weight: 800; cursor: pointer; }
-.market-switch button:focus-visible { outline: 3px solid rgba(34, 120, 101, .48); outline-offset: 3px; box-shadow: 0 0 0 2px #fff, 0 4px 10px rgba(34, 120, 101, .18); }
+.market-switch button:focus-visible { outline: 3px solid rgba(31, 105, 82, .22); outline-offset: 3px; }
 .market-switch button.active { background: #227865; color: #fff; box-shadow: 0 4px 10px rgba(34, 120, 101, .18); }
 .market-switch button.placeholder { color: #8c9b95; cursor: not-allowed; opacity: .72; }
+.theme-giveaway {
+  --ink: #20251f;
+  --muted: #667066;
+  --cream: #f3efe4;
+  --paper: #fffdf7;
+  --green: #1f6d58;
+  --green-dark: #154a3d;
+  --mint: #e4f0e7;
+  --orange: #b66a35;
+  --line: #ded7c8;
+  --shadow: 0 20px 54px rgba(54, 48, 36, .12);
+}
+.theme-giveaway .giveaway-card { border-color: #d4e3dc; }
+.theme-giveaway .giveaway-card .card-footer strong, .theme-giveaway .detail-price { color: var(--green); }
 .theme-secondhand .market-switch button.active { background: #227865; color: #fff; }
 @media (max-width: 980px) { .market-switch { display: none; } }
 
@@ -2004,83 +2055,6 @@ footer,
   }
 }
 
-/* Giveaway uses a compact utility header instead of the shared photo hero. */
-.theme-giveaway .home-page .hero.giveaway-compact-hero {
-  min-height: 0;
-  padding: 28px max(7vw, 24px);
-  display: block;
-  background: var(--cream);
-  background-image: none !important;
-  overflow: visible;
-}
-
-.theme-giveaway .home-page .hero.giveaway-compact-hero::before,
-.theme-giveaway .home-page .hero.giveaway-compact-hero::after {
-  display: none;
-}
-
-.theme-giveaway .giveaway-compact-hero .hero-copy {
-  max-width: none;
-  display: flex;
-  align-items: center;
-  gap: 28px;
-}
-
-.theme-giveaway .giveaway-compact-heading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 0 0 auto;
-}
-
-.theme-giveaway .giveaway-compact-icon {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 13px;
-  color: white;
-  background: var(--green);
-}
-
-.theme-giveaway .giveaway-compact-heading span:last-child {
-  display: grid;
-  gap: 3px;
-}
-
-.theme-giveaway .giveaway-compact-heading b {
-  color: var(--ink);
-  font-size: 21px;
-  line-height: 1.25;
-}
-
-.theme-giveaway .giveaway-compact-heading small {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.theme-giveaway .giveaway-compact-hero .hero-search {
-  flex: 1;
-  max-width: none;
-  margin-top: 0;
-}
-
-@media (max-width: 760px) {
-  .theme-giveaway .home-page .hero.giveaway-compact-hero {
-    padding: 22px 20px;
-  }
-
-  .theme-giveaway .giveaway-compact-hero .hero-copy {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .theme-giveaway .giveaway-compact-hero .hero-search {
-    width: 100%;
-  }
-}
-
 @media (max-width: 640px) {
   .site-header > .brand {
     gap: 10px;
@@ -2102,6 +2076,613 @@ footer,
     min-width: 38px;
     height: 38px;
     padding: 6px;
+  }
+}
+
+/* Keep the upload guide readable on tablet-sized windows. The modal has less
+   usable width than the viewport, so stack its text and actions before the
+   phone breakpoint instead of squeezing Chinese copy into one character per
+   line. */
+@media (max-width: 900px) {
+  .listing-photo-guide {
+    grid-template-columns: 1fr;
+  }
+
+  .listing-photo-guide-meta {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .listing-photo-guide-meta small {
+    flex: 1 1 100%;
+  }
+
+  .meetup-mode-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .meetup-mode-option {
+    min-height: 58px;
+  }
+
+  .meetup-mode-tooltip,
+  .meetup-mode-option:nth-child(3) .meetup-mode-tooltip {
+    right: auto;
+    left: 0;
+    width: min(270px, calc(100vw - 48px));
+  }
+
+}
+
+/* Giveaway discovery layout: a compact treasure-hunt surface that keeps the
+   existing BookFlow cream/green palette while separating the free-sharing flow
+   from the transaction-oriented markets. */
+.theme-giveaway .home-page {
+  background:
+    radial-gradient(circle at 24px 26px, rgba(34, 120, 101, .12) 1px, transparent 1.5px) 0 0 / 30px 30px,
+    linear-gradient(180deg, #fffdf8 0%, #f7f4eb 48%, #fffdf8 100%);
+}
+
+.theme-giveaway .home-page .hero {
+  display: none !important;
+  min-height: 184px;
+  padding: 28px clamp(22px, 7vw, 120px) 30px;
+  background: #fffdf8;
+  border-bottom: 1px solid #e3ece7;
+}
+
+.theme-giveaway .home-page .giveaway-discovery {
+  display: none !important;
+}
+
+.theme-giveaway .home-page .giveaway-status-grid {
+  grid-template-columns: 1fr;
+}
+
+.theme-giveaway .home-page .giveaway-status-panel:nth-child(2) {
+  display: none !important;
+}
+
+.theme-giveaway .home-page .hero-art.hero-reference-art {
+  display: none;
+}
+
+.theme-giveaway .home-page .hero:after {
+  display: none;
+}
+
+.theme-giveaway .home-page .hero-copy {
+  width: 100%;
+  max-width: 780px;
+}
+
+.giveaway-compact-intro {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: #1e7964;
+}
+
+.giveaway-compact-intro span {
+  display: grid;
+  gap: 2px;
+}
+
+.giveaway-compact-intro b {
+  color: #173d35;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.giveaway-compact-intro small {
+  color: #71847c;
+  font-size: 12px;
+}
+
+.theme-giveaway .home-page .hero-search {
+  max-width: 780px;
+}
+
+.theme-giveaway .home-page .hero .hero-search {
+  display: none;
+}
+
+.theme-giveaway .home-page .hero {
+  min-height: 104px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+.theme-giveaway .home-page .hero .hero-message h1.giveaway-compact-intro {
+  margin-bottom: 0;
+}
+
+.theme-giveaway .home-page .hero-trust {
+  display: none;
+}
+
+.giveaway-discovery {
+  width: min(1240px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 34px 0 0;
+}
+
+.giveaway-discovery-heading,
+.giveaway-status-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.giveaway-discovery-heading h2,
+.giveaway-status-heading h3 {
+  margin: 7px 0 0;
+  color: #123d34;
+  line-height: 1.2;
+}
+
+.giveaway-discovery-heading h2 {
+  font-size: 28px;
+}
+
+.giveaway-discovery-note {
+  color: #71847c;
+  font-size: 13px;
+}
+
+.giveaway-recent-rail {
+  display: flex;
+  gap: 14px;
+  margin-top: 18px;
+  overflow-x: auto;
+  padding: 0 2px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #b9d6cb transparent;
+}
+
+.giveaway-recent-card {
+  flex: 0 0 245px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #dbe8e1;
+  border-radius: 14px;
+  background: #fff;
+  color: #163d34;
+  text-align: left;
+  box-shadow: 0 9px 24px rgba(35, 81, 67, .07);
+  cursor: pointer;
+}
+
+.giveaway-recent-card:hover {
+  border-color: #9fc7b8;
+  transform: translateY(-2px);
+}
+
+.giveaway-recent-image {
+  position: relative;
+  height: 132px;
+  overflow: hidden;
+  background: #eef5f0;
+}
+
+.giveaway-recent-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.giveaway-recent-image span {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #1e7964;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.giveaway-recent-body {
+  display: grid;
+  gap: 8px;
+  padding: 13px 14px 15px;
+}
+
+.giveaway-recent-body strong,
+.giveaway-status-card strong {
+  overflow: hidden;
+  color: #173d35;
+  font-size: 14px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.giveaway-recent-body small,
+.giveaway-status-card small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  color: #71847c;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.giveaway-guide-card {
+  min-height: 116px;
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px dashed #b9d6cb;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(237, 246, 242, .82);
+}
+
+.giveaway-guide-icon {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #d9f0e7;
+  color: #1e7964;
+}
+
+.giveaway-guide-card strong {
+  display: block;
+  color: #173d35;
+  font-size: 16px;
+}
+
+.giveaway-guide-card p {
+  margin: 5px 0 0;
+  color: #71847c;
+  font-size: 13px;
+}
+
+.giveaway-guide-card .secondary-action {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.theme-giveaway .home-page .market {
+  padding-top: 48px;
+}
+
+.theme-giveaway .home-page .section-heading {
+  margin-bottom: 20px;
+}
+
+.theme-giveaway .home-page .section-heading h2 {
+  font-size: 32px;
+}
+
+.giveaway-category-pills {
+  display: flex;
+  gap: 9px;
+  margin: 0 0 16px;
+  overflow-x: auto;
+  padding: 2px 0 6px;
+  scrollbar-width: none;
+}
+
+.giveaway-category-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.giveaway-category-pills button {
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding: 0 14px;
+  border: 1px solid #d7e4de;
+  border-radius: 999px;
+  background: #fff;
+  color: #5f766e;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.giveaway-category-pills button.active {
+  border-color: #1e7964;
+  background: #1e7964;
+  color: #fff;
+  box-shadow: 0 7px 16px rgba(30, 121, 100, .16);
+}
+
+.theme-giveaway .home-page .filters {
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 0;
+}
+
+.theme-giveaway .home-page .result-line {
+  margin-top: 20px;
+}
+
+.theme-giveaway .home-page .book-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  min-height: 0;
+}
+
+.theme-giveaway .home-page .giveaway-card {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-color: #d4e3dc;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.theme-giveaway .home-page .giveaway-card:hover {
+  border-color: #9fc7b8;
+}
+
+.theme-giveaway .home-page .giveaway-card-main {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 43% 57%;
+  padding: 0;
+  border: 0;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-giveaway .home-page .giveaway-card .card-image {
+  height: 100%;
+  min-height: 0;
+  background: #eef5f0;
+}
+
+.theme-giveaway .home-page .giveaway-card .card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.theme-giveaway .home-page .giveaway-card .status {
+  top: 12px;
+  left: 12px;
+  background: #1e7964;
+}
+
+.theme-giveaway .home-page .giveaway-card .card-body {
+  min-height: 0;
+  overflow: hidden;
+  padding: 21px 18px 17px;
+}
+
+.theme-giveaway .home-page .giveaway-card .course-tag {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #edf6f2;
+  color: #1e7964;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-giveaway .home-page .giveaway-card .card-body h3 {
+  min-height: 0;
+  margin: 14px 0 8px;
+  font-size: 19px;
+  line-height: 1.4;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.theme-giveaway .home-page .giveaway-card .card-body > p {
+  min-height: 0;
+  margin-bottom: 13px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.theme-giveaway .home-page .giveaway-card .card-meta {
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+  align-items: start;
+  color: #526a62;
+  font-size: 12px;
+}
+
+.theme-giveaway .home-page .giveaway-card .card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.theme-giveaway .home-page .giveaway-card .card-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 8px;
+  align-items: start;
+}
+
+.giveaway-card-cta {
+  min-height: 35px;
+  width: fit-content;
+  padding: 0 11px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #1e7964;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.giveaway-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 38px;
+}
+
+.giveaway-status-panel {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #dbe8e1;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .78);
+}
+
+.giveaway-status-heading {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.giveaway-status-heading h3 {
+  font-size: 21px;
+}
+
+.giveaway-status-heading > svg {
+  color: #1e7964;
+}
+
+.giveaway-status-list {
+  display: grid;
+  gap: 9px;
+}
+
+.giveaway-status-card {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 7px;
+  border: 1px solid #e2ece7;
+  border-radius: 11px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.giveaway-status-card:hover {
+  border-color: #a6cbbb;
+}
+
+.giveaway-status-card img {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.giveaway-status-card > span {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.giveaway-status-card > svg {
+  color: #1e7964;
+}
+
+.giveaway-status-empty {
+  min-height: 82px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #7c9188;
+  font-size: 13px;
+}
+
+@media (max-width: 1080px) {
+  .theme-giveaway .home-page .book-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .theme-giveaway .home-page .hero {
+    min-height: 164px;
+    padding: 22px 18px 24px;
+  }
+
+  .giveaway-discovery {
+    width: calc(100% - 36px);
+    padding-top: 28px;
+  }
+
+  .giveaway-discovery-heading {
+    display: block;
+  }
+
+  .giveaway-discovery-note {
+    display: block;
+    margin-top: 8px;
+  }
+
+  .giveaway-guide-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .giveaway-guide-card .secondary-action {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .theme-giveaway .home-page .giveaway-card {
+    aspect-ratio: auto;
+    min-height: 265px;
+  }
+
+  .theme-giveaway .home-page .giveaway-card-main {
+    min-height: 265px;
+  }
+
+  .giveaway-status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .theme-giveaway .home-page .book-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .theme-giveaway .home-page .giveaway-card {
+    min-height: 230px;
+  }
+
+  .theme-giveaway .home-page .giveaway-card-main {
+    min-height: 230px;
+    grid-template-columns: 40% 60%;
+  }
+
+  .theme-giveaway .home-page .giveaway-card .card-body {
+    padding: 16px 14px 14px;
+  }
+
+  .theme-giveaway .home-page .giveaway-card .card-body h3 {
+    font-size: 17px;
+  }
+
+  .giveaway-status-panel {
+    padding: 16px;
   }
 }
 
@@ -2909,6 +3490,7 @@ footer,
   content: none;
   display: none;
 }
+.site-header .market-switch button.active::after { content: none; }
 
 @media (max-width: 760px) {
   .home-page .hero-art.hero-reference-art,
@@ -2921,6 +3503,137 @@ footer,
       url("/bookflow-hero-clean.png");
     background-position: center top;
     background-size: auto 58%;
+  }
+}
+
+/* Final giveaway-only compact override. This intentionally comes after the
+   shared hero depth rules above so the free-sharing page stays lightweight. */
+.theme-giveaway .home-page .hero {
+  min-height: 104px;
+  height: auto;
+  padding: 20px clamp(22px, 7vw, 120px);
+  background: #fffdf8;
+  border-bottom: 1px solid #e3ece7;
+}
+
+.theme-giveaway .home-page .hero-art.hero-reference-art,
+.theme-giveaway .home-page .hero:after,
+.theme-giveaway .home-page .hero .hero-search,
+.theme-giveaway .home-page .hero .hero-trust {
+  display: none;
+}
+
+.theme-giveaway .home-page .hero-copy {
+  width: 100%;
+  max-width: 780px;
+}
+
+.theme-giveaway .home-page .hero .hero-message h1.giveaway-compact-intro {
+  max-width: none;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #1e7964;
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.theme-giveaway .home-page .giveaway-compact-intro span {
+  display: grid;
+  gap: 2px;
+}
+
+.theme-giveaway .home-page .giveaway-compact-intro b {
+  color: #173d35;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.theme-giveaway .home-page .giveaway-compact-intro small {
+  color: #71847c;
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .theme-giveaway .home-page .hero {
+    min-height: 96px;
+    padding: 18px;
+  }
+}
+
+/* Final compact giveaway hero override. Keep the discovery page focused on
+   search and listings instead of a promotional headline or hero artwork. */
+.theme-giveaway .home-page .hero {
+  min-height: 184px;
+  height: auto;
+  padding: 28px clamp(22px, 7vw, 120px) 30px;
+  background: #fffdf8;
+  border-bottom: 1px solid #e3ece7;
+}
+
+.theme-giveaway .home-page .hero-art.hero-reference-art,
+.theme-giveaway .home-page .hero:after {
+  display: none;
+}
+
+.theme-giveaway .home-page .hero-copy {
+  width: 100%;
+  max-width: 780px;
+}
+
+.theme-giveaway .home-page .hero .hero-message p,
+.theme-giveaway .home-page .hero .hero-trust {
+  display: none;
+}
+
+.theme-giveaway .home-page .giveaway-compact-intro {
+  margin: 0 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: #1e7964;
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: inherit;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.theme-giveaway .home-page .hero .hero-message h1.giveaway-compact-intro {
+  max-width: none;
+  margin: 0 0 14px;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.theme-giveaway .home-page .giveaway-compact-intro span {
+  display: grid;
+  gap: 2px;
+}
+
+.theme-giveaway .home-page .giveaway-compact-intro b {
+  color: #173d35;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.theme-giveaway .home-page .giveaway-compact-intro small {
+  color: #71847c;
+  font-size: 12px;
+}
+
+.theme-giveaway .home-page .hero-search {
+  max-width: 780px;
+}
+
+@media (max-width: 760px) {
+  .theme-giveaway .home-page .hero {
+    min-height: 96px;
+    padding: 18px 18px 20px;
   }
 }
 

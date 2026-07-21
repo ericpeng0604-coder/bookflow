@@ -36,6 +36,15 @@ export function isDashboardTab(value: string | null): value is DashboardTab {
   return dashboardTabs.has(value as DashboardTab);
 }
 
+export function buildChatUrl(listingType: ListingType, conversationId?: string | null) {
+  const params = new URLSearchParams();
+  params.set("market", listingType);
+  params.set("view", "chat");
+  params.set("tab", "chats");
+  if (conversationId) params.set("conversation", conversationId);
+  return `/?${params.toString()}`;
+}
+
 export function buildMarketplaceUrl({
   listingType,
   view,
@@ -50,11 +59,7 @@ export function buildMarketplaceUrl({
     params.set("view", "book");
     params.set("book", selectedId);
   } else if (view === "chat" && currentUser) {
-    params.set("view", "chat");
-    params.set("tab", "chats");
-    if (expandedConversationId) {
-      params.set("conversation", expandedConversationId);
-    }
+    return buildChatUrl(listingType, expandedConversationId);
   } else if (view === "dashboard" && currentUser) {
     params.set("view", "dashboard");
     params.set("tab", dashboardTab);

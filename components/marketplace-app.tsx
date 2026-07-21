@@ -97,6 +97,8 @@ import {
   loadWorkspaceTabData,
   mergeProfiles,
   fetchNotifications,
+  fetchRiskProfileDetail,
+  RISK_REVIEW_PAGE_SIZE,
 } from "@/lib/marketplace/queries";
 import { giveawayChatBanner, giveawayRequestLabel, sortGiveawayRequests } from "@/lib/marketplace/giveaway";
 import { DEFAULT_MEETUP_MODE, MEETUP_MODE_OPTIONS, meetupModeLabel, normalizeMeetupMode } from "@/lib/marketplace/meetup";
@@ -223,6 +225,7 @@ function useActionDialog() {
 const NOTIFICATION_REFRESH_INTERVAL_MS = 120_000;
 const SECONDHAND_CATEGORIES = [ALL_ITEM_CATEGORIES, "3C 電子", "文具用品", "宿舍生活", "服飾配件", "運動休閒", "其他"];
 const DEFAULT_SECONDHAND_CATEGORY = SECONDHAND_CATEGORIES[1];
+const GIVEAWAY_CATEGORIES = [ALL_ITEM_CATEGORIES, "書籍", "3C 電子", "文具用品", "宿舍生活", "服飾配件", "運動休閒", "其他"];
 
 const REQUEST_PHRASES = [
   "你好，我對這本書有興趣，方便約時間面交嗎？",
@@ -424,14 +427,123 @@ function listingContextLabel(book: Book) {
   return [visibleBookField(book.department), visibleBookField(book.course)].filter(Boolean).join(" · ");
 }
 
+function cardContextLabel(book: Book) {
+  return listingContextLabel(book) || visibleBookField(book.subject) || visibleBookField(book.course);
+}
+
 function meetupSummary(book: Pick<Book, "meetupMode" | "meetup">) {
   return normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE
     ? book.meetup.trim()
     : meetupModeLabel(book.meetupMode);
 }
 
-function cardContextLabel(book: Book) {
-  return listingContextLabel(book) || visibleBookField(book.subject) || visibleBookField(book.course);
+const MEETUP_MODE_DETAILS: Record<MeetupMode, { summary: string; detail: string }> = {
+  fixed_location: {
+    summary: "我提供固定地點",
+    detail: "你會先填寫一個校內面交位置，申請者可以依這個位置安排領取。",
+  },
+  mutual_discussion: {
+    summary: "聊天討論地點",
+    detail: "送出後在站內聊天，一起確認雙方都方便且安全的校內面交點。",
+  },
+  applicant_preferred: {
+    summary: "優先配合對方",
+    detail: "不先指定位置，收到申請後優先配合受贈者提出的校內領取地點。",
+  },
+};
+
+function MeetupModePicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: MeetupMode;
+  disabled?: boolean;
+  onChange: (value: MeetupMode) => void;
+}) {
+  const selectedMode = normalizeMeetupMode(value);
+  const [tooltipMode, setTooltipMode] = useState<MeetupMode | null>(null);
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tooltipId = useId();
+
+  useEffect(() => {
+    if (tooltipTimerRef.current !== null) {
+      clearTimeout(tooltipTimerRef.current);
+      tooltipTimerRef.current = null;
+    }
+    setTooltipMode(null);
+  }, [selectedMode]);
+
+  const clearTooltip = useCallback(() => {
+    if (tooltipTimerRef.current !== null) {
+      clearTimeout(tooltipTimerRef.current);
+      tooltipTimerRef.current = null;
+    }
+    setTooltipMode(null);
+  }, []);
+
+  const scheduleTooltip = useCallback((mode: MeetupMode) => {
+    if (tooltipTimerRef.current !== null) clearTimeout(tooltipTimerRef.current);
+    setTooltipMode(null);
+    tooltipTimerRef.current = setTimeout(() => {
+      setTooltipMode(mode);
+      tooltipTimerRef.current = null;
+    }, 650);
+  }, []);
+
+  useEffect(() => () => {
+    if (tooltipTimerRef.current !== null) clearTimeout(tooltipTimerRef.current);
+  }, []);
+
+  return (
+    <div className="meetup-mode-field full">
+      <div className="meetup-mode-label-row">
+        <b>面交方式 *</b>
+        <span>停留一下查看詳細說明</span>
+      </div>
+      <input type="hidden" name="meetupMode" value={selectedMode} />
+      <div className="meetup-mode-picker" role="radiogroup" aria-label="面交方式">
+        {MEETUP_MODE_OPTIONS.map(([mode, label]) => {
+          const detail = MEETUP_MODE_DETAILS[mode];
+          const selected = selectedMode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              className={`meetup-mode-option ${selected ? "selected" : ""} ${tooltipMode === mode ? "has-tooltip" : ""}`}
+              role="radio"
+              aria-checked={selected}
+              disabled={disabled}
+              aria-describedby={tooltipMode === mode ? `${tooltipId}-${mode}` : undefined}
+              onFocus={() => scheduleTooltip(mode)}
+              onBlur={clearTooltip}
+              onClick={() => onChange(mode)}
+            >
+              <span className="meetup-mode-option-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+              <span
+                className="meetup-mode-option-copy"
+                onMouseEnter={() => scheduleTooltip(mode)}
+                onMouseLeave={clearTooltip}
+              >
+                <strong>{label}</strong>
+                <small>{detail.summary}</small>
+                {tooltipMode === mode ? (
+                  <span id={`${tooltipId}-${mode}`} className="meetup-mode-tooltip" role="tooltip">
+                    {detail.detail}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function giveawayCategoryLabel(book: Book) {
+  if (book.listingType !== "giveaway") return cardContextLabel(book);
+  return book.itemCategory === "giveaway" ? "其他" : visibleBookField(book.itemCategory) || "其他";
 }
 
 function studentVerificationFlagLabels(flags: StudentVerificationFlags) {
@@ -679,6 +791,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [verifiedPartyIds, setVerifiedPartyIds] = useState<Set<string>>(() => new Set());
   const [riskProfiles, setRiskProfiles] = useState<RiskProfile[]>([]);
   const [riskPolicy, setRiskPolicy] = useState<RiskPolicy | null>(null);
+  const [riskProfileDetail, setRiskProfileDetail] = useState<RiskProfile | null>(null);
+  const [riskFilters, setRiskFilters] = useState({ status: "all", riskLevel: "all" });
+  const riskProfileIds = riskProfiles.map((risk) => risk.userId);
   const [reviewRequest, setReviewRequest] = useState<PurchaseRequest | null>(null);
   const [reviewStatus, setReviewStatus] = useState<{ reviewed: boolean; revieweeId: string; revieweeName: string } | null>(null);
   const [studentVerifications, setStudentVerifications] = useState<StudentVerification[]>([]);
@@ -782,6 +897,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     onBookRouteChange: clearBookDetailRouteState,
     onConversationRoute: openConversation,
   });
+  const isStandaloneChatRoute = view === "chat"
+    || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "chat");
 
   const ensureAdminOtp = useCallback(async (email: string, force = false) => {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
@@ -1640,7 +1757,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setImageSearchActive(false);
     setImageSearchResultCount(null);
     setImageSearchQuery("");
-    if (nextType === "book") {
+    if (nextType !== "secondhand") {
       setItemCategory(ALL_ITEM_CATEGORIES);
     } else {
       setDepartment(departments[0]);
@@ -1994,7 +2111,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       const clean = validated.value;
       const payload = {
         listingType,
-        itemCategory: String(fields.listingType) === "giveaway" ? "giveaway" : String(fields.itemCategory || "book"),
+        itemCategory: String(fields.listingType) === "giveaway" ? String(fields.itemCategory || "其他") : String(fields.itemCategory || "book"),
         title: clean.title,
         author: clean.author,
         department: String(fields.department),
@@ -2040,6 +2157,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       }
       if (payload.listingType === "secondhand" && !SECONDHAND_CATEGORIES.slice(1).includes(payload.itemCategory)) {
         setToast("請選擇正確的二手分類");
+        return;
+      }
+      if (payload.listingType === "giveaway" && !GIVEAWAY_CATEGORIES.slice(1).includes(payload.itemCategory)) {
+        setToast("請選擇正確的贈送分類");
         return;
       }
 
@@ -2968,6 +3089,15 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setToast("風險門檻已更新");
   }
 
+  async function openRiskProfileDetail(userId: string) {
+    if (!supabase || !currentUser || !isModerator) return;
+    try {
+      setRiskProfileDetail(await fetchRiskProfileDetail(supabase, userId));
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "無法載入風險明細");
+    }
+  }
+
   async function resolveReport(reportId: string, action: "dismiss" | "resolve" | "hide_book" | "suspend_user") {
     if (!supabase || !currentUser) return;
     const requiresReason = action === "hide_book" || action === "suspend_user";
@@ -3178,8 +3308,15 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     query.trim()
     || minPrice !== NO_MIN_PRICE
     || maxPrice !== NO_MAX_PRICE
-    || (!isGiveawayMode && (isSecondhandMode ? itemCategory !== ALL_ITEM_CATEGORIES : !isAllDepartments(department))),
+    || (isSecondhandMode && itemCategory !== ALL_ITEM_CATEGORIES)
+    || (isGiveawayMode && itemCategory !== ALL_ITEM_CATEGORIES)
+    || (!isSecondhandMode && !isGiveawayMode && !isAllDepartments(department)),
   );
+  const giveawayRecentBooks = isGiveawayMode ? filteredBooks.slice(0, 6) : [];
+  const giveawayHotBooks = isGiveawayMode ? filteredBooks.slice(0, 4) : [];
+  const giveawayApplyingBooks = isGiveawayMode
+    ? filteredBooks.filter((book) => book.status === "negotiating").slice(0, 4)
+    : [];
 
   function clearMarketplaceFilters() {
     setQuery("");
@@ -3579,20 +3716,22 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
               <div><b>帳號目前為唯讀模式</b><span>{currentUser.suspensionReason || "請聯絡管理員了解停權原因。"}</span></div>
             </section>
           )}
-          <section className={`hero ${isGiveawayMode ? "giveaway-compact-hero" : ""}`} aria-labelledby="home-hero-title">
-            {!isGiveawayMode && <div className="hero-art hero-reference-art" aria-hidden="true" />}
+          <section className="hero" aria-labelledby="home-hero-title">
+            <div className="hero-art hero-reference-art" aria-hidden="true" />
             <div className="hero-copy hero-search-panel">
-              {isGiveawayMode ? (
-                <div className="giveaway-compact-heading">
-                  <span className="giveaway-compact-icon"><Gift size={22} aria-hidden="true" /></span>
-                  <span><b id="home-hero-title">零元贈送專區</b><small>先聊天確認，再正式選定受贈者。</small></span>
-                </div>
-              ) : (
-                <div className="hero-message">
-                  <h1 id="home-hero-title">{isSecondhandMode ? <>Good Finds,<br />Next Chapter.</> : <>Used Books,<br />New Chapter.</>}</h1>
-                  <p>{isSecondhandMode ? "在虎科找到適合你的二手物品，也讓閒置好物繼續被需要。" : "在虎科找到需要的二手書，也讓讀過的故事繼續流動。"}</p>
-                </div>
-              )}
+              <div className="hero-message">
+                {isGiveawayMode ? (
+                  <h1 id="home-hero-title" className="giveaway-compact-intro">
+                    <Gift size={20} aria-hidden="true" />
+                    <span><b>零元贈送</b><small>把用不到的好物，送給下一個需要的人。</small></span>
+                  </h1>
+                ) : (
+                  <>
+                    <h1 id="home-hero-title">{isSecondhandMode ? <>Good Finds,<br />Next Chapter.</> : <>Used Books,<br />New Chapter.</>}</h1>
+                    <p>{isSecondhandMode ? "在虎科找到適合你的二手物品，也讓閒置好物繼續被需要。" : "在虎科找到需要的二手書，也讓讀過的故事繼續流動。"}</p>
+                  </>
+                )}
+              </div>
               <form
                 className="hero-search"
                 onSubmit={(event) => {
@@ -3630,13 +3769,50 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 )}
                 <button type="submit">{isGiveawayMode ? "開始找零元贈送" : isSecondhandMode ? "開始找二手物品" : "開始找二手書"}</button>
               </form>
-              {!isGiveawayMode && <div className="hero-trust hero-assurance" aria-label="平台特色">
+              <div className="hero-trust hero-assurance" aria-label="平台特色">
                 <span><ShieldCheck size={17} aria-hidden="true" />校園面交更安心</span>
                 <span><MessageCircle size={17} aria-hidden="true" />接受後依賣家設定分享聯絡方式</span>
-                {isSecondhandMode ? <span><Sparkles size={17} aria-hidden="true" />探索校園二手好物</span> : <button type="button" onClick={openCourseSearchGuide}><GraduationCap size={17} aria-hidden="true" />依課程快速找到二手書</button>}
-              </div>}
+                {isGiveawayMode ? <span><Gift size={17} aria-hidden="true" />先聊天、再確認受贈者</span> : isSecondhandMode ? <span><Sparkles size={17} aria-hidden="true" />探索校園二手好物</span> : <button type="button" onClick={openCourseSearchGuide}><GraduationCap size={17} aria-hidden="true" />依課程快速找到二手書</button>}
+              </div>
             </div>
           </section>
+
+          {isGiveawayMode && (
+            <section className="giveaway-discovery" aria-labelledby="giveaway-discovery-title">
+              <div className="giveaway-discovery-heading">
+                <div>
+                  <span className="section-kicker">JUST SHARED</span>
+                  <h2 id="giveaway-discovery-title">剛剛有人送出</h2>
+                </div>
+                <span className="giveaway-discovery-note">校園裡的好物，正在找到下一位需要的人</span>
+              </div>
+              {giveawayRecentBooks.length > 0 ? (
+                <div className="giveaway-recent-rail" aria-label="最近送出的零元贈送物品">
+                  {giveawayRecentBooks.map((book) => (
+                    <button type="button" className="giveaway-recent-card" key={book.id} onClick={() => openBook(book.id)}>
+                      <div className="giveaway-recent-image">
+                        <Image src={book.imageUrl} alt="" width={240} height={240} sizes="220px" />
+                        <span>剛剛送出</span>
+                      </div>
+                      <div className="giveaway-recent-body">
+                        <strong>{book.title}</strong>
+                        <small><MapPin size={13} aria-hidden="true" />{book.meetup || "校園面交"}</small>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="giveaway-guide-card">
+                  <div className="giveaway-guide-icon"><Gift size={25} aria-hidden="true" /></div>
+                  <div>
+                    <strong>還沒有最新贈送物品</strong>
+                    <p>把用不到但仍然完好的東西送出，讓它繼續幫上別人的忙。</p>
+                  </div>
+                  <button type="button" className="secondary-action" onClick={() => requireActive(() => openListingForm("giveaway"))}>我要送出</button>
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="market" id="market" aria-labelledby="home-market-title">
             <div className="section-heading">
@@ -3651,6 +3827,21 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 <Plus size={18} aria-hidden="true" />{isGiveawayMode ? "刊登零元贈送" : isSecondhandMode ? "刊登二手物品" : "刊登一本書"}
               </button>
             </div>
+            {isGiveawayMode && (
+              <div className="giveaway-category-pills" aria-label="零元贈送分類">
+                {GIVEAWAY_CATEGORIES.map((category) => (
+                  <button
+                    type="button"
+                    key={category}
+                    className={itemCategory === category ? "active" : ""}
+                    aria-pressed={itemCategory === category}
+                    onClick={() => setItemCategory(category)}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            )}
             <form className="filters" aria-label={isGiveawayMode ? "篩選零元贈送" : isSecondhandMode ? "篩選二手物品" : "篩選課本"} onSubmit={(event) => event.preventDefault()}>
               {showCourseSearchGuide && !isSecondhandMode && !isGiveawayMode && (
                 <div className="course-search-guide" role="status">
@@ -3771,14 +3962,14 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     <div className="card-image">
                       <Image src={book.imageUrl} alt="" width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
                       {book.sellerVerified && <span className="verified-seller-badge"><ShieldCheck size={13} />已驗證賣家</span>}
-                      <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
+                      <span className={`status ${book.status}`}>{book.listingType === "giveaway" ? "免費贈送" : statusLabels[book.status]}</span>
                     </div>
                     <div className="card-body">
                       <span
                         className={`course-tag ${cardContextLabel(book) ? "" : "is-empty"}`}
                         aria-hidden={cardContextLabel(book) ? undefined : true}
                       >
-                        {cardContextLabel(book) || "\u00a0"}
+                        {giveawayCategoryLabel(book) || "\u00a0"}
                       </span>
                       <h3>{book.title}</h3>
                       <p>{book.listingType === "giveaway" ? (book.description || "校園零元贈送") : book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
@@ -3786,7 +3977,14 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                         <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
                       )}
                       <div className="card-meta"><span>{book.condition}</span><span>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={13} aria-hidden="true" /> : null}{meetupSummary(book)}</span></div>
-                      <div className="card-footer"><strong>{book.listingType === "giveaway" ? "免費贈送" : money(book.price)}</strong><small>{timeAgo(book.createdAt)}刊登</small></div>
+                      <div className="card-footer">
+                        {book.listingType === "giveaway" ? (
+                          <span className="giveaway-card-cta">查看並申請 <ArrowRight size={16} aria-hidden="true" /></span>
+                        ) : (
+                          <strong>{money(book.price)}</strong>
+                        )}
+                        <small>{timeAgo(book.createdAt)}刊登</small>
+                      </div>
                     </div>
                   </button>
                   <button
@@ -3801,6 +3999,38 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 </li>
               ))}
             </ul>
+            {isGiveawayMode && (
+              <div className="giveaway-status-grid">
+                <section className="giveaway-status-panel" aria-labelledby="giveaway-hot-title">
+                  <div className="giveaway-status-heading"><div><span className="section-kicker">POPULAR NOW</span><h3 id="giveaway-hot-title">熱門贈送</h3></div><Sparkles size={19} aria-hidden="true" /></div>
+                  {giveawayHotBooks.length > 0 ? (
+                    <div className="giveaway-status-list">
+                      {giveawayHotBooks.map((book) => (
+                        <button type="button" className="giveaway-status-card" key={book.id} onClick={() => openBook(book.id)}>
+                          <Image src={book.imageUrl} alt="" width={84} height={84} sizes="84px" />
+                          <span><strong>{book.title}</strong><small>{giveawayCategoryLabel(book)} · {book.meetup || "校園面交"}</small></span>
+                          <ArrowRight size={17} aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : <div className="giveaway-status-empty"><Sparkles size={20} aria-hidden="true" /><span>等待第一件熱門贈送物品</span></div>}
+                </section>
+                <section className="giveaway-status-panel" aria-labelledby="giveaway-applying-title">
+                  <div className="giveaway-status-heading"><div><span className="section-kicker">IN PROGRESS</span><h3 id="giveaway-applying-title">正在被申請</h3></div><MessageCircle size={19} aria-hidden="true" /></div>
+                  {giveawayApplyingBooks.length > 0 ? (
+                    <div className="giveaway-status-list">
+                      {giveawayApplyingBooks.map((book) => (
+                        <button type="button" className="giveaway-status-card" key={book.id} onClick={() => openBook(book.id)}>
+                          <Image src={book.imageUrl} alt="" width={84} height={84} sizes="84px" />
+                          <span><strong>{book.title}</strong><small>已有申請 · {book.meetup || "校園面交"}</small></span>
+                          <ArrowRight size={17} aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : <div className="giveaway-status-empty"><MessageCircle size={20} aria-hidden="true" /><span>目前還沒有申請中的物品</span></div>}
+                </section>
+              </div>
+            )}
             {marketplaceLoading && filteredBooks.length > 0 && (
               <output className="market-refresh-note">正在更新搜尋結果...</output>
             )}
@@ -3819,7 +4049,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             )}
             {filteredBooks.length === 0 && !marketplaceLoading && (
               <section className="empty" aria-live="polite">
-                <BookOpen size={40} aria-hidden="true" />
+                {isGiveawayMode ? <Gift size={40} aria-hidden="true" /> : <BookOpen size={40} aria-hidden="true" />}
                 <h3>{hasMarketplaceFilters ? `找不到符合條件的${activeMarketLabel}` : `目前還沒有${activeMarketLabel}`}</h3>
                 <p>{hasMarketplaceFilters ? "清除篩選後看看其他刊登。" : `成為第一位刊登${activeMarketLabel}的人，讓校園交換開始流動。`}</p>
                 <button
@@ -3827,7 +4057,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   className="secondary-action"
                   onClick={hasMarketplaceFilters
                     ? clearMarketplaceFilters
-                    : () => requireActive(() => openListingForm(isSecondhandMode ? "secondhand" : "book"))}
+                    : () => requireActive(() => openListingForm(isGiveawayMode ? "giveaway" : isSecondhandMode ? "secondhand" : "book"))}
                 >
                   {hasMarketplaceFilters ? "清除篩選" : `刊登${activeMarketLabel}`}
                 </button>
@@ -3835,7 +4065,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             )}
             {marketplaceLoading && filteredBooks.length === 0 && (
               <section className="empty" aria-live="polite" aria-busy="true">
-                <BookOpen size={40} aria-hidden="true" />
+                {isGiveawayMode ? <Gift size={40} aria-hidden="true" /> : <BookOpen size={40} aria-hidden="true" />}
                 <h3>載入中...</h3>
               </section>
             )}
@@ -4021,8 +4251,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         </section>
       )}
 
-      {(view === "dashboard" || view === "chat") && currentUser && (
-        <section className={`dashboard ${view === "chat" ? "chat-route-page" : ""}`}>
+      {(view === "dashboard" || isStandaloneChatRoute) && currentUser && (
+        <section className={`dashboard ${isStandaloneChatRoute ? "chat-route-page" : ""}`}>
           <div className="dashboard-head">
             <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
             <div className="dashboard-head-actions">
@@ -4394,7 +4624,16 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           )}
 
           {dashboardTab === "favorites" && (
-            <div className="book-grid favorites-grid">
+            <section className="favorites-shelf" aria-labelledby="favorites-shelf-title">
+              <div className="favorites-shelf-heading">
+                <div>
+                  <span className="section-kicker">MY BOOKSHELF</span>
+                  <h2 id="favorites-shelf-title">我的收藏</h2>
+                  <p>把想留住的課本放在自己的書架裡，隨時回來查看。</p>
+                </div>
+                <span className="favorites-shelf-count" aria-label={`共 ${favoriteBooks.length} 件收藏`}><Heart size={16} fill="currentColor" aria-hidden="true" />{favoriteBooks.length} 件收藏</span>
+              </div>
+              <div className="book-grid favorites-grid">
               {favoriteBooks.map((book) => (
                 <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id}>
                   <button
@@ -4404,7 +4643,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
                   >
                     <div className="card-image">
-                      <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
+                      <ResilientBookCover book={book} />
                       <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
                     </div>
                     <div className="card-body">
@@ -4419,9 +4658,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
                     </div>
                   </button>
-                  <button type="button"
+                  <button
+                    type="button"
                     className="heart active"
-                    aria-label="取消收藏"
+                    title={`取消收藏《${book.title}》`}
+                    aria-label={`取消收藏《${book.title}》`}
                     aria-pressed="true"
                     onClick={(event) => toggleFavorite(book.id, event)}
                   >
@@ -4430,7 +4671,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 </article>
               ))}
               {favoriteBooks.length === 0 && <EmptyDashboard text="你還沒有收藏任何課本" />}
-            </div>
+              </div>
+            </section>
           )}
         </section>
       )}
@@ -4465,9 +4707,38 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 <div className="risk-actions"><button type="submit" className="primary">儲存風險門檻</button></div>
               </form>
             )}
-            <div className="risk-profile-list">
-              {riskProfiles.map((risk) => (
-                <article className="risk-profile-card" key={risk.userId}>
+            <div className="risk-actions" aria-label="風險篩選">
+              <label>審核狀態
+                <select value={riskFilters.status} onChange={(event) => setRiskFilters((previous) => ({ ...previous, status: event.target.value }))}>
+                  <option value="all">全部</option>
+                  <option value="pending">待處理</option>
+                  <option value="viewed">已查看</option>
+                  <option value="processed">已處理</option>
+                </select>
+              </label>
+              <label>風險等級
+                <select value={riskFilters.riskLevel} onChange={(event) => setRiskFilters((previous) => ({ ...previous, riskLevel: event.target.value }))}>
+                  <option value="all">全部</option>
+                  <option value="high">高風險</option>
+                  <option value="medium">中風險</option>
+                  <option value="low">低風險</option>
+                </select>
+              </label>
+              <small>每頁最多 {RISK_REVIEW_PAGE_SIZE} 筆</small>
+            </div>
+            {riskProfileDetail && (
+              <details className="risk-evidence" open>
+                <summary>風險明細</summary>
+                <p>評價證據 {riskProfileDetail.reviewEvidence.length} 筆，檢舉證據 {riskProfileDetail.reportEvidence.length} 筆。</p>
+              </details>
+            )}
+            <div className="risk-profile-list" aria-label={`風險使用者列表，共 ${riskProfileIds.length} 位`}>
+              {riskProfiles
+                .filter((risk) => (riskFilters.status === "all" || risk.reviewStatus === riskFilters.status)
+                  && (riskFilters.riskLevel === "all" || risk.riskLevel === riskFilters.riskLevel))
+                .slice(0, RISK_REVIEW_PAGE_SIZE)
+                .map((risk) => (
+                <article className="risk-profile-card" key={risk.userId} onClick={() => void openRiskProfileDetail(risk.userId)}>
                   <header><div><h3>{risk.userName}</h3><small>{risk.userDepartment || "未填系所"}</small></div><span className={"risk-level " + risk.riskLevel}>{risk.riskLevel === "high" ? "高風險" : risk.riskLevel === "medium" ? "中風險" : "低風險"} · {risk.riskScore}</span></header>
                   <div className="risk-summary-grid">
                     <div><small>完成交易</small><b>{risk.completedTradeCount}</b></div>
@@ -4628,10 +4899,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
       <footer>
         <div className="brand footer-brand"><span className="brand-mark"><BookOpen size={20} /></span><span><b>虎科書流</b><small>HUST BOOKFLOW</small></span></div>
-        <p>{isSecondhandMode ? "讓每件校園好物，都找到下一位需要它的人。" : "讓每一本課本，都找到下一位需要它的人。"}</p>
+        <p>{isGiveawayMode ? "讓每件用不到的好物，都找到下一位需要它的人。" : isSecondhandMode ? "讓每件校園好物，都找到下一位需要它的人。" : "讓每一本課本，都找到下一位需要它的人。"}</p>
         <button className="footer-feedback" type="button" onClick={() => requireLogin(() => setModal("feedback"))}>問題回報</button>
         <div className="footer-meta">
-          <span>{isSecondhandMode ? "虎科校園二手交流平台" : "虎科校園課本交流平台"} · 2026</span>
+          <span>{isGiveawayMode ? "虎科校園零元贈送平台" : isSecondhandMode ? "虎科校園二手交流平台" : "虎科校園課本交流平台"} · 2026</span>
           <nav aria-label="網站政策">
             <Link href="/privacy">隱私權</Link>
             <Link href="/terms">使用條款</Link>
@@ -4749,6 +5020,58 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   );
 }
 
+function NativeDialog({
+  className,
+  label,
+  labelledBy,
+  onClose,
+  closeOnBackdrop = true,
+  children,
+}: {
+  className: string;
+  label?: string;
+  labelledBy?: string;
+  onClose: () => void;
+  closeOnBackdrop?: boolean;
+  children: React.ReactNode;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+      previouslyFocused?.focus();
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className={className}
+      aria-label={label}
+      aria-labelledby={labelledBy}
+      onCancel={(event) => {
+        event.preventDefault();
+        onCloseRef.current();
+      }}
+      onMouseDown={(event) => {
+        if (closeOnBackdrop && event.target === event.currentTarget) onCloseRef.current();
+      }}
+    >
+      {children}
+    </dialog>
+  );
+}
+
 function ModalShell({
   title,
   subtitle,
@@ -4824,7 +5147,7 @@ function ModalShell({
   }, []);
 
   return (
-    <div className="modal-backdrop">
+    <NativeDialog className="modal-backdrop" onClose={onClose} closeOnBackdrop={closeOnBackdrop}>
       {closeOnBackdrop && (
         <button
           type="button"
@@ -4836,8 +5159,6 @@ function ModalShell({
       <div
         ref={dialogRef}
         className="modal"
-        role="dialog"
-        aria-modal="true"
         aria-labelledby={headingId}
         tabIndex={-1}
       >
@@ -4848,7 +5169,7 @@ function ModalShell({
         </div>
         {children}
       </div>
-    </div>
+    </NativeDialog>
   );
 }
 
@@ -4862,9 +5183,16 @@ function ActionDialog({
   onConfirm: (value: string) => void;
 }) {
   const [value, setValue] = useState(request.initialValue || "");
+  const headingId = useId();
 
   return (
-    <ModalShell title={request.title} subtitle="請確認這項操作的影響" onClose={onCancel}>
+    <NativeDialog className="modal-backdrop" labelledBy={headingId} onClose={onCancel}>
+      <div className="modal">
+        <button className="modal-close" type="button" onClick={onCancel} aria-label="關閉視窗"><X aria-hidden="true" /></button>
+        <div className="modal-heading">
+          <span className="brand-mark"><BookOpen size={21} /></span>
+          <div><h2 id={headingId}>{request.title}</h2><p>請確認這項操作的影響</p></div>
+        </div>
       <form
         className="form action-dialog"
         onSubmit={(event) => {
@@ -4893,7 +5221,8 @@ function ActionDialog({
           </button>
         </div>
       </form>
-    </ModalShell>
+      </div>
+    </NativeDialog>
   );
 }
 
@@ -5046,6 +5375,7 @@ function StudentVerificationPanel({
         supabase!,
         studentIdFile,
         studentIdOcrText,
+        studentAiRequestKey || crypto.randomUUID(),
       );
       const details = parseStudentId(result.studentNumber);
       if (!details) throw new Error("AI 找不到符合近五年規則的學號，請重新拍攝學生證。");
@@ -5770,7 +6100,7 @@ function BookFormModal({
   const value = book ?? {
     ...blankBook,
     listingType: initialListingType,
-    itemCategory: initialListingType === "secondhand" ? DEFAULT_SECONDHAND_CATEGORY : initialListingType === "giveaway" ? "giveaway" : "book",
+    itemCategory: initialListingType === "secondhand" ? DEFAULT_SECONDHAND_CATEGORY : initialListingType === "giveaway" ? "其他" : "book",
   };
   const initialImageItems = bookImageUrls(value).map((url, index) => ({ id: `existing-${index}`, url }));
   const [imageItems, setImageItems] = useState<ListingImageItem[]>(initialImageItems);
@@ -5790,20 +6120,11 @@ function BookFormModal({
   const tradeSectionRef = useRef<HTMLElement>(null);
   const imageItemsRef = useRef<ListingImageItem[]>(initialImageItems);
   const ocrRequestRef = useRef(0);
-  const savedDepartment = (() => {
-    if (book || initialListingType !== "book") return "";
-    try {
-      const value = window.localStorage.getItem(listingDepartmentStorageKey(userId)) || "";
-      return departments.slice(1).includes(value) ? value : "";
-    } catch {
-      return "";
-    }
-  })();
-  const baseDraft = {
+  const baseDraft = useMemo(() => ({
     title: value.title,
     author: value.author,
     edition: value.edition,
-    department: value.department || savedDepartment,
+    department: value.department,
     course: value.course,
     teacher: value.teacher,
     condition: value.condition,
@@ -5812,19 +6133,25 @@ function BookFormModal({
     meetup: value.meetup,
     description: value.description,
     itemCategory: value.itemCategory === "book" ? DEFAULT_SECONDHAND_CATEGORY : value.itemCategory,
-  };
-  const baseDraftSignature = JSON.stringify(baseDraft);
+  }), [
+    value.author,
+    value.condition,
+    value.course,
+    value.department,
+    value.description,
+    value.edition,
+    value.itemCategory,
+    value.meetup,
+    value.meetupMode,
+    value.price,
+    value.teacher,
+    value.title,
+  ]);
   const draftStorageKey = listingDraftStorageKey(userId, initialListingType, book?.id);
-  const [draft, setDraft] = useState(() => {
-    try {
-      const saved = window.localStorage.getItem(draftStorageKey);
-      if (!saved) return baseDraft;
-      return { ...baseDraft, ...(JSON.parse(saved) as Partial<typeof baseDraft>) };
-    } catch {
-      return baseDraft;
-    }
-  });
-  const draftChanged = JSON.stringify(draft) !== baseDraftSignature;
+  const baseDraftSignatureRef = useRef(JSON.stringify(baseDraft));
+  const skipDraftPersistenceRef = useRef(true);
+  const [draft, setDraft] = useState(baseDraft);
+  const draftChanged = JSON.stringify(draft) !== baseDraftSignatureRef.current;
   const imageItemsChanged = JSON.stringify(imageItems.map(({ id, url, file }) => ({ id, url, name: file?.name, size: file?.size })))
     !== JSON.stringify(initialImageItems);
   const coverChanged = coverId !== (initialImageItems[0]?.id || "");
@@ -5846,6 +6173,29 @@ function BookFormModal({
   }, []);
 
   useEffect(() => {
+    let hydratedBase = baseDraft;
+    try {
+      if (!book && initialListingType === "book") {
+        const savedDepartment = window.localStorage.getItem(listingDepartmentStorageKey(userId)) || "";
+        if (departments.slice(1).includes(savedDepartment)) {
+          hydratedBase = { ...hydratedBase, department: hydratedBase.department || savedDepartment };
+        }
+      }
+      baseDraftSignatureRef.current = JSON.stringify(hydratedBase);
+      const saved = window.localStorage.getItem(draftStorageKey);
+      setDraft(saved ? { ...hydratedBase, ...(JSON.parse(saved) as Partial<typeof baseDraft>) } : hydratedBase);
+    } catch {
+      baseDraftSignatureRef.current = JSON.stringify(hydratedBase);
+      setDraft(hydratedBase);
+    }
+    skipDraftPersistenceRef.current = true;
+  }, [baseDraft, book, draftStorageKey, initialListingType, userId]);
+
+  useEffect(() => {
+    if (skipDraftPersistenceRef.current) {
+      skipDraftPersistenceRef.current = false;
+      return;
+    }
     if (!draftChanged) {
       window.localStorage.removeItem(draftStorageKey);
       return;
@@ -6052,15 +6402,14 @@ function BookFormModal({
           aiFallbackError = aiError instanceof Error ? aiError.message : "暫時無法提高辨識準確度";
         }
       }
+      const previousAuto = ocrOriginalDraft;
       setDraft((previous) => {
         const next = { ...previous };
-        const previousAuto = ocrOriginalDraft;
         for (const field of ["title", "author", "edition"] as const) {
-          const current = previous[field].trim();
           const recognized = ocrDraft[field]?.trim() || "";
-          if (recognized && (!current || current === previousAuto?.[field]?.trim())) {
-            next[field] = recognized;
-          }
+          const current = previous[field].trim();
+          const autoValue = previousAuto?.[field]?.trim() || "";
+          if (recognized && (!current || current === autoValue)) next[field] = recognized;
         }
         return next;
       });
@@ -6133,7 +6482,7 @@ function BookFormModal({
           </p>
           <input
             ref={imageInputRef}
-            className="listing-file-input full visually-hidden"
+            className="listing-file-input full"
             name="image"
             required={!book && imageItems.length === 0}
             type="file"
@@ -6260,7 +6609,14 @@ function BookFormModal({
               <input type="hidden" name="bookType" value="" />
               <input type="hidden" name="isbn13" value="" />
               <input type="hidden" name="approvalNumber" value="" />
-              {isGiveaway ? <input type="hidden" name="itemCategory" value="giveaway" /> : (
+              {isGiveaway ? (
+                <label>
+                  贈送分類 *
+                  <select name="itemCategory" required value={draft.itemCategory === "giveaway" ? "其他" : draft.itemCategory} onChange={(event) => updateDraft("itemCategory", event.target.value)}>
+                    {GIVEAWAY_CATEGORIES.slice(1).map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+              ) : (
                 <label>
                   二手分類 *
                   <select name="itemCategory" required value={draft.itemCategory} onChange={(event) => updateDraft("itemCategory", event.target.value)}>
@@ -6334,20 +6690,14 @@ function BookFormModal({
           <label>價格（NT$）*<input name="price" required readOnly={isGiveaway} type="number" min="0" max={LISTING_FIELD_LIMITS.price} step="1" value={isGiveaway ? "0" : draft.price} onChange={(event) => updateDraft("price", event.target.value)} /></label>
           {isNonBookListing ? (
             <>
-              <label className="full">面交方式 *
-                <select
-                  name="meetupMode"
-                  required
-                  value={normalizeMeetupMode(draft.meetupMode)}
-                  onChange={(event) => {
-                    const nextMode = normalizeMeetupMode(event.target.value);
-                    updateDraft("meetupMode", nextMode);
-                    if (nextMode !== DEFAULT_MEETUP_MODE) updateDraft("meetup", "");
-                  }}
-                >
-                  {MEETUP_MODE_OPTIONS.map(([mode, label]) => <option key={mode} value={mode}>{label}</option>)}
-                </select>
-              </label>
+              <MeetupModePicker
+                value={normalizeMeetupMode(draft.meetupMode)}
+                disabled={saving}
+                onChange={(nextMode) => {
+                  updateDraft("meetupMode", nextMode);
+                  if (nextMode !== DEFAULT_MEETUP_MODE) updateDraft("meetup", "");
+                }}
+              />
               {normalizeMeetupMode(draft.meetupMode) === DEFAULT_MEETUP_MODE && (
                 <label className="full">指定面交位置 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
               )}
@@ -7298,7 +7648,7 @@ function TradeChatPanel({
         </form>
       ) : <p className="chat-readonly">這段訊息已結束，紀錄保持唯讀。你可從書籍頁重新建立訊息。</p>}
       {enlargedImageUrl && (
-        <div className="chat-image-lightbox" role="dialog" aria-modal="true" aria-label="放大的訊息圖片" onMouseDown={() => setEnlargedImageUrl(null)}>
+        <NativeDialog className="chat-image-lightbox" label="放大的訊息圖片" onClose={() => setEnlargedImageUrl(null)}>
           <button type="button" className="chat-image-lightbox-close" onClick={() => setEnlargedImageUrl(null)} aria-label="關閉圖片">
             <X size={24} />
           </button>
@@ -7311,7 +7661,7 @@ function TradeChatPanel({
           >
             <img src={enlargedImageUrl} alt="" />
           </button>
-        </div>
+        </NativeDialog>
       )}
       {actionDialog.dialog && (
         <ActionDialog
@@ -7325,6 +7675,14 @@ function TradeChatPanel({
   );
 }
 /* eslint-enable @next/next/no-img-element */
+
+function ResilientBookCover({ book }: { book: Book }) {
+  const [imageFailed, setImageFailed] = useState(!book.imageUrl);
+  if (imageFailed) {
+    return <div className="card-image-fallback" role="img" aria-label={`${book.title} 封面`}><BookOpen size={34} aria-hidden="true" /><span>暫無封面</span></div>;
+  }
+  return <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" onError={() => setImageFailed(true)} />;
+}
 
 function EmptyDashboard({ text }: { text: string }) {
   return <div className="empty small"><Clock3 size={34} /><h3>{text}</h3><p>新的進度會出現在這裡。</p></div>;

@@ -407,6 +407,15 @@ export async function fetchRiskProfilesForModeration(client: SupabaseClient): Pr
   return (data ?? []).map((row: Record<string, unknown>) => mapRiskProfile(row));
 }
 
+export const RISK_REVIEW_PAGE_SIZE = 20;
+
+export async function fetchRiskProfileDetail(client: SupabaseClient, userId: string): Promise<RiskProfile | null> {
+  const { data, error } = await client.rpc("get_risk_profile_for_moderation", { target_user_id: userId });
+  if (error) throw error;
+  const row = data?.[0] as Record<string, unknown> | undefined;
+  return row ? mapRiskProfile(row) : null;
+}
+
 export async function fetchRiskPolicy(client: SupabaseClient): Promise<RiskPolicy | null> {
   const { data, error } = await client.rpc("get_risk_policy");
   if (error) throw error;

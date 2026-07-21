@@ -1,11 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-type StudentCardAiResponse = { studentNumber?: string };
+type StudentCardAiResponse = { studentNumber?: string; confidence?: number; error?: string };
 
 export async function recognizeStudentCardWithAi(
   client: SupabaseClient,
   file: File,
   localOcrText: string,
+  requestKey = crypto.randomUUID(),
 ) {
   const { data } = await client.auth.getSession();
   const token = data.session?.access_token;
@@ -16,14 +17,10 @@ export async function recognizeStudentCardWithAi(
   body.set("localOcrText", localOcrText.slice(0, 1000));
   const response = await fetch("/api/ai/student-card", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "X-Idempotency-Key": crypto.randomUUID() },
+    headers: { Authorization: `Bearer ${token}`, "X-Idempotency-Key": requestKey },
     body,
   });
   const payload = await response.json().catch(() => ({})) as StudentCardAiResponse;
-  if (!response.ok) {
-    if (response.status === 401) throw new Error("登入狀態已失效，請重新登入後再試");
-    if (response.status >= 500) throw new Error("目前無法完成辨識，請稍後再試");
-    throw new Error("照片暫時無法辨識，請重新上傳清晰的學生證照片");
-  }
-  return { studentNumber: payload.studentNumber || "" };
+  if (!response.ok) throw new Error(payload.error || "AI 學生證辨識暫時無法使用");
+  return { studentNumber: payload.studentNumber || "", confidence: Number(payload.confidence || 0) };
 }
