@@ -55,4 +55,4 @@ BookFlow zero giveaway release 0.1.5
 ## 相關 Commit
 
 - Base commit: `971347503a257d4baf4736e19d67c99bf1caf415`.
-- Current implementation commit before final commit: `5603dac`.
+- Current implementation commit before final commit: `77428d3`.
