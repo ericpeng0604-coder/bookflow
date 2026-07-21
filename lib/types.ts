@@ -2,6 +2,7 @@ export type BookStatus = "available" | "negotiating" | "sold";
 export type RequestStatus =
   | "pending"
   | "waitlisted"
+  | "awaiting_recipient_confirmation"
   | "reserved"
   | "awaiting_confirmation"
   | "completed"
@@ -15,7 +16,7 @@ export type StudentVerificationStatus = "pending" | "approved" | "rejected" | "w
 export type ModerationVisibility = "visible" | "hidden";
 export type ListingLifecycleState = "active" | "archived" | "withdrawn";
 export type ContactMethod = "none" | "email" | "line";
-export type ListingType = "book" | "secondhand";
+export type ListingType = "book" | "secondhand" | "giveaway";
 export type ReportTargetType = "book" | "user";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
 export type ReportReason =

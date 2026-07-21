@@ -45,8 +45,8 @@ export function buildMarketplaceFilters(
     listingType,
     itemCategory: listingType === "secondhand" && itemCategory !== ALL_ITEM_CATEGORIES ? itemCategory : null,
     department: listingType === "book" && !isAllDepartments(department) ? department : null,
-    minPrice: parseMinPriceFilter(minPrice),
-    maxPrice: parseMaxPriceFilter(maxPrice),
+    minPrice: listingType === "giveaway" ? 0 : parseMinPriceFilter(minPrice),
+    maxPrice: listingType === "giveaway" ? 0 : parseMaxPriceFilter(maxPrice),
     query: listingType === "book"
       ? normalizeTaiwanTextbookQuery(query) || null
       : query.trim() || null,

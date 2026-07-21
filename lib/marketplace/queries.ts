@@ -16,24 +16,12 @@ import {
   mapFeedback,
   mapRiskPolicy,
   mapRiskProfile,
-  mapRiskProfileSummary,
-  mapRiskModerationSummary,
   mapTrustBadge,
 } from "@/lib/marketplace/mappers";
-import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskLevel, RiskModerationSummary, RiskPolicy, RiskProfile, RiskProfileSummary, RiskReviewStatus, SellerLifecycle, StudentVerification, StudentVerificationSummary, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
+import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskPolicy, RiskProfile, SellerLifecycle, StudentVerification, StudentVerificationSummary, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 const ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS = 10_000;
-
-function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-  });
-  return Promise.race([promise, timeout]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
-}
 
 export type { MarketplaceFilters } from "@/lib/marketplace/filters";
 export type MarketplaceCursor = {
@@ -46,31 +34,6 @@ export type MarketplacePageResult = {
   books: Book[];
   hasMore: boolean;
   nextCursor: MarketplaceCursor;
-};
-
-export const RISK_REVIEW_PAGE_SIZE = 20;
-
-export type RiskModerationFilters = {
-  scope: "queue" | "all";
-  status: RiskReviewStatus | "all";
-  riskLevel: RiskLevel | "all";
-  query: string;
-  department: string;
-  offset: number;
-};
-
-export const DEFAULT_RISK_MODERATION_FILTERS: RiskModerationFilters = {
-  scope: "queue",
-  status: "pending",
-  riskLevel: "all",
-  query: "",
-  department: "",
-  offset: 0,
-};
-
-export type RiskModerationPage = {
-  profiles: RiskProfileSummary[];
-  total: number;
 };
 
 function marketplaceRpcParams(filters: MarketplaceFilters, limit: number, cursor: MarketplaceCursor) {
@@ -248,7 +211,7 @@ export async function fetchActiveRequestForBook(
   bookId: string,
   buyerId: string,
 ): Promise<PurchaseRequest | null> {
-  const query = client
+  const { data, error } = await client
     .from("purchase_requests")
     .select("*")
     .eq("book_id", bookId)
@@ -258,11 +221,6 @@ export async function fetchActiveRequestForBook(
     .limit(1)
     .abortSignal(AbortSignal.timeout(ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS))
     .maybeSingle();
-  const { data, error } = await withTimeout(
-    query,
-    ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS,
-    "確認目前申請狀態逾時，請重試。",
-  );
   if (error) throw error;
   return data ? mapRequest(data) : null;
 }
@@ -318,7 +276,9 @@ export async function fetchConversationsPage(
     error = fallback.error;
   }
   if (error) {
-    if (["PGRST202", "42883"].includes(error.code || "")) return { conversations: [], hasMore: false, nextCursor: null };
+    if (["PGRST202", "42883"].includes(error.code || "")) {
+      return { conversations: [], hasMore: false, nextCursor: null };
+    }
     throw error;
   }
   const conversations = (data ?? [])
@@ -332,6 +292,19 @@ export async function fetchConversationsPage(
       ? { lastMessageAt: lastConversation.lastMessageAt, id: lastConversation.id }
       : null,
   };
+}
+
+export async function fetchPublicStudentVerificationIds(client: SupabaseClient, profileIds: string[]) {
+  if (profileIds.length === 0) return new Set<string>();
+  const { data, error } = await client.rpc("get_public_student_verification_status", {
+    target_user_ids: profileIds,
+  });
+  if (error) throw error;
+  return new Set(
+    (data ?? [])
+      .filter((row: Record<string, unknown>) => Boolean(row.seller_verified))
+      .map((row: Record<string, unknown>) => String(row.user_id)),
+  );
 }
 
 export async function fetchConversations(client: SupabaseClient): Promise<Conversation[]> {
@@ -428,48 +401,10 @@ export async function submitTradeReview(
   return String(data);
 }
 
-export async function fetchRiskProfilesForModeration(
-  client: SupabaseClient,
-  filters: RiskModerationFilters = DEFAULT_RISK_MODERATION_FILTERS,
-): Promise<RiskModerationPage> {
-  const { data, error } = await client.rpc("list_risk_profiles_for_moderation", {
-    p_scope: filters.scope,
-    p_status: filters.status,
-    p_risk_level: filters.riskLevel,
-    p_query: filters.query.trim(),
-    p_department: filters.department,
-    p_limit: RISK_REVIEW_PAGE_SIZE,
-    p_offset: filters.offset,
-  });
+export async function fetchRiskProfilesForModeration(client: SupabaseClient): Promise<RiskProfile[]> {
+  const { data, error } = await client.rpc("list_risk_profiles_for_moderation");
   if (error) throw error;
-  const profiles = (data ?? []).map((row: Record<string, unknown>) => mapRiskProfileSummary(row));
-  return { profiles, total: profiles[0]?.totalCount ?? 0 };
-}
-
-export async function fetchRiskProfileDetail(client: SupabaseClient, userId: string): Promise<RiskProfile | null> {
-  const { data, error } = await client.rpc("get_risk_profile_for_moderation", { target_user_id: userId });
-  if (error) throw error;
-  const row = data?.[0] as Record<string, unknown> | undefined;
-  return row ? mapRiskProfile(row) : null;
-}
-
-export async function fetchRiskModerationSummary(client: SupabaseClient): Promise<RiskModerationSummary | null> {
-  const { data, error } = await client.rpc("get_risk_moderation_summary");
-  if (error) throw error;
-  const row = data?.[0] as Record<string, unknown> | undefined;
-  return row ? mapRiskModerationSummary(row) : null;
-}
-
-export async function updateRiskReviewStatus(
-  client: SupabaseClient,
-  userId: string,
-  status: RiskReviewStatus,
-): Promise<void> {
-  const { error } = await client.rpc("update_risk_review_status", {
-    target_user_id: userId,
-    new_status: status,
-  });
-  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) => mapRiskProfile(row));
 }
 
 export async function fetchRiskPolicy(client: SupabaseClient): Promise<RiskPolicy | null> {
@@ -532,6 +467,7 @@ export type WorkspaceTabData = {
   conversationPage?: ConversationPage;
   favoriteIds?: string[];
   trustBadges?: TrustBadge[];
+  verifiedPartyIds?: string[];
   studentVerification?: StudentVerificationSummary | null;
 };
 
@@ -578,31 +514,33 @@ export async function loadWorkspaceTabData(
     .map((request) => request.id);
   const profileIds = [...new Set(requests.map((request) => request.buyerId))];
   const bookIds = [...new Set(requests.map((request) => request.bookId))];
-  const [partyProfiles, contacts, requestBooks] = await Promise.all([
+  const [partyProfiles, contacts, requestBooks, verifiedPartyIds] = await Promise.all([
     fetchProfilesByIds(client, profileIds),
     fetchTradeContactsBatch(client, selectedIds),
     fetchBooksByIds(client, bookIds),
+    fetchPublicStudentVerificationIds(client, profileIds),
   ]);
   const badgeIds = [...new Set([
     ...profileIds,
     ...requestBooks.map((book) => book.sellerId),
   ])];
   const trustBadges = await fetchPublicTrustBadges(client, badgeIds);
-  return { requests, partyProfiles, contacts, requestBooks, trustBadges };
+  return { requests, partyProfiles, contacts, requestBooks, trustBadges, verifiedPartyIds: [...verifiedPartyIds] as string[] };
 }
 
 export async function loadModerationData(client: SupabaseClient, user: Profile) {
-  const [pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskPolicy, adminProfiles] = await Promise.all([
+  const [pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskProfiles, riskPolicy, adminProfiles] = await Promise.all([
     fetchPendingReviews(client),
     fetchHiddenBooks(client),
     fetchModerationReports(client),
     fetchFeedbackForModeration(client),
     fetchStudentVerificationsForReview(client),
+    fetchRiskProfilesForModeration(client),
     user.role === "admin" ? fetchRiskPolicy(client) : Promise.resolve(null),
     user.role === "admin" ? fetchAdminProfiles(client) : Promise.resolve([] as Profile[]),
   ]);
 
-  return { pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskPolicy, adminProfiles };
+  return { pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskProfiles, riskPolicy, adminProfiles };
 }
 
 export function mergeProfiles(

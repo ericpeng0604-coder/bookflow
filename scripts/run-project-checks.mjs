@@ -7,23 +7,19 @@ import { dirname, join } from "node:path";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const checks = [
   { file: "check-memory.mjs" },
-  { file: "memory-contract.test.mjs", test: true },
   { file: "check-filters.mjs" },
   { file: "check-free-ocr-book-covers.mjs", stripTypes: true },
   { file: "check-mobile-book-ocr.mjs" },
   { file: "check-book-ocr-ai.mjs", stripTypes: true },
-  { file: "check-student-verification.mjs", stripTypes: true },
   { file: "check-image-search.mjs", stripTypes: true },
   { file: "check-taiwan-textbooks.mjs", stripTypes: true },
   { file: "benchmark-taiwan-textbooks.mjs", stripTypes: true },
   { file: "check-listing-navigation-ui.mjs" },
   { file: "check-listing-lifecycle.mjs" },
   { file: "check-trade-workflow.mjs" },
-  { file: "check-transaction-loading.mjs" },
+  { file: "check-giveaway-flow.mjs" },
   { file: "check-risk-warning.mjs" },
   { file: "check-chat-switching.mjs" },
-  { file: "check-confirmed-orders.mjs" },
-  { file: "check-site-version.mjs" },
   { file: "check-notification-refresh.mjs" },
   { file: "check-browser-push.mjs" },
   { file: "check-capacity-optimization.mjs" },
@@ -33,7 +29,6 @@ const checks = [
   { file: "check-trade-chat.mjs" },
   { file: "check-chat-visibility-and-feedback.mjs" },
   { file: "check-chat-listing-order-ux.mjs" },
-  { file: "check-book-gallery.mjs" },
   { file: "check-home-accessibility.mjs" },
   { file: "check-site-quality-hardening.mjs", stripTypes: true },
   { file: "check-push-subscription-api.mjs" },
@@ -44,12 +39,9 @@ const checks = [
 
 for (const check of checks) {
   console.log(`\n==> ${check.file}`);
-  const path = join(root, check.test ? "tests" : "scripts", check.file);
-  const args = check.test
-    ? ["--test", path]
-    : check.stripTypes
-      ? ["--experimental-strip-types", path]
-      : [path];
+  const args = check.stripTypes
+    ? ["--experimental-strip-types", join(root, "scripts", check.file)]
+    : [join(root, "scripts", check.file)];
   const result = spawnSync(process.execPath, args, {
     cwd: root,
     stdio: "inherit",

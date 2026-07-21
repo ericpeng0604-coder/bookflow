@@ -22,19 +22,32 @@ type CountRequestBody = {
   query?: unknown;
 };
 
-function textField(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+class InvalidCountRequestError extends Error {}
+
+function optionalTextField(value: unknown, field: string) {
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string") throw new InvalidCountRequestError(`${field} must be a string`);
+  return value.trim();
 }
 
 function normalizedFilters(body: CountRequestBody): CountFilters {
-  const rawListingType = textField(body.listingType);
-  const listingType = rawListingType === "secondhand" ? "secondhand" : "book";
-  const itemCategory = textField(body.itemCategory) || null;
-  const department = textField(body.department) || null;
-  const rawQuery = textField(body.query).slice(0, 80);
+  const rawListingType = optionalTextField(body.listingType, "listingType");
+  if (rawListingType && !["book", "secondhand", "giveaway"].includes(rawListingType)) {
+    throw new InvalidCountRequestError("listingType must be book, secondhand, or giveaway");
+  }
+  const listingType = rawListingType || "book";
+  const itemCategory = optionalTextField(body.itemCategory, "itemCategory") || null;
+  const department = optionalTextField(body.department, "department") || null;
+  const rawQuery = optionalTextField(body.query, "query").slice(0, 80);
   const query = (listingType === "book" ? normalizeTaiwanTextbookQuery(rawQuery) : rawQuery) || null;
   const rawMaxPrice = body.maxPrice;
   const rawMinPrice = body.minPrice;
+  if (rawMinPrice !== undefined && rawMinPrice !== null && typeof rawMinPrice !== "number" && typeof rawMinPrice !== "string") {
+    throw new InvalidCountRequestError("minPrice must be a number");
+  }
+  if (rawMaxPrice !== undefined && rawMaxPrice !== null && typeof rawMaxPrice !== "number" && typeof rawMaxPrice !== "string") {
+    throw new InvalidCountRequestError("maxPrice must be a number");
+  }
   const parsedMinPrice =
     typeof rawMinPrice === "number" || typeof rawMinPrice === "string"
       ? Number(rawMinPrice)
@@ -43,12 +56,21 @@ function normalizedFilters(body: CountRequestBody): CountFilters {
     typeof rawMaxPrice === "number" || typeof rawMaxPrice === "string"
       ? Number(rawMaxPrice)
       : null;
+  if (parsedMinPrice !== null && (!Number.isFinite(parsedMinPrice) || parsedMinPrice < 0)) {
+    throw new InvalidCountRequestError("minPrice must be a non-negative number");
+  }
+  if (parsedMaxPrice !== null && (!Number.isFinite(parsedMaxPrice) || parsedMaxPrice < 0)) {
+    throw new InvalidCountRequestError("maxPrice must be a non-negative number");
+  }
+  if (parsedMinPrice !== null && parsedMaxPrice !== null && parsedMinPrice > parsedMaxPrice) {
+    throw new InvalidCountRequestError("minPrice cannot exceed maxPrice");
+  }
   return {
     listingType,
     itemCategory: listingType === "secondhand" ? itemCategory : null,
     department,
-    minPrice: parsedMinPrice !== null && Number.isFinite(parsedMinPrice) ? parsedMinPrice : null,
-    maxPrice: parsedMaxPrice !== null && Number.isFinite(parsedMaxPrice) ? parsedMaxPrice : null,
+    minPrice: listingType === "giveaway" ? 0 : parsedMinPrice !== null && Number.isFinite(parsedMinPrice) ? parsedMinPrice : null,
+    maxPrice: listingType === "giveaway" ? 0 : parsedMaxPrice !== null && Number.isFinite(parsedMaxPrice) ? parsedMaxPrice : null,
     query,
   };
 }
@@ -83,9 +105,12 @@ async function requestCount(filters: CountFilters) {
 async function readCountBody(request: NextRequest): Promise<CountRequestBody> {
   try {
     const body = await request.json();
-    return body && typeof body === "object" ? body : {};
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new InvalidCountRequestError("request body must be an object");
+    }
+    return body as CountRequestBody;
   } catch {
-    return {};
+    throw new InvalidCountRequestError("request body must be valid JSON");
   }
 }
 
@@ -115,7 +140,10 @@ export async function POST(request: NextRequest) {
       { count, approximate: true },
       { headers: { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=300" } },
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidCountRequestError) {
+      return NextResponse.json({ error: "搜尋條件格式不正確" }, { status: 400 });
+    }
     return NextResponse.json({ count: null, approximate: true }, { status: 503 });
   }
 }

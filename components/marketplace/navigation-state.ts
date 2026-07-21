@@ -4,10 +4,8 @@ import type { Conversation, ListingType, Profile } from "@/lib/types";
 
 export type MarketplaceView = "home" | "book" | "dashboard" | "chat" | "admin";
 export type DashboardTab = "listings" | "chats" | "requests" | "received" | "confirmedOrders" | "favorites" | "studentVerification";
-export type AdminWorkspace = "overview" | "listings" | "reports" | "feedback" | "studentVerification" | "risk" | "hiddenListings" | "permissions";
 
 const dashboardTabs = new Set<DashboardTab>(["listings", "chats", "requests", "received", "confirmedOrders", "favorites", "studentVerification"]);
-const adminWorkspaces = new Set<AdminWorkspace>(["overview", "listings", "reports", "feedback", "studentVerification", "risk", "hiddenListings", "permissions"]);
 
 type RouteHandlers = {
   onListingTypeChange: (listingType: ListingType) => void;
@@ -31,25 +29,11 @@ type BuildMarketplaceUrlOptions = {
   selectedId: string | null;
   currentUser: Profile | null;
   dashboardTab: DashboardTab;
-  adminWorkspace: AdminWorkspace;
   expandedConversationId: string | null;
 };
 
 export function isDashboardTab(value: string | null): value is DashboardTab {
   return dashboardTabs.has(value as DashboardTab);
-}
-
-export function isAdminWorkspace(value: string | null): value is AdminWorkspace {
-  return adminWorkspaces.has(value as AdminWorkspace);
-}
-
-export function buildChatUrl(listingType: ListingType, conversationId?: string | null) {
-  const params = new URLSearchParams();
-  params.set("market", listingType);
-  params.set("view", "chat");
-  params.set("tab", "chats");
-  if (conversationId) params.set("conversation", conversationId);
-  return `/?${params.toString()}`;
 }
 
 export function buildMarketplaceUrl({
@@ -58,7 +42,6 @@ export function buildMarketplaceUrl({
   selectedId,
   currentUser,
   dashboardTab,
-  adminWorkspace,
   expandedConversationId,
 }: BuildMarketplaceUrlOptions) {
   const params = new URLSearchParams();
@@ -67,16 +50,14 @@ export function buildMarketplaceUrl({
     params.set("view", "book");
     params.set("book", selectedId);
   } else if (view === "chat" && currentUser) {
-    return buildChatUrl(listingType, expandedConversationId);
-  } else if (view === "dashboard" && currentUser) {
-    if (dashboardTab === "chats") {
-      return buildChatUrl(listingType, expandedConversationId);
+    params.set("view", "chat");
+    params.set("tab", "chats");
+    if (expandedConversationId) {
+      params.set("conversation", expandedConversationId);
     }
+  } else if (view === "dashboard" && currentUser) {
     params.set("view", "dashboard");
     params.set("tab", dashboardTab);
-  } else if (view === "admin" && currentUser) {
-    params.set("view", "admin");
-    params.set("adminTab", adminWorkspace);
   }
   return `/?${params.toString()}`;
 }
@@ -96,10 +77,8 @@ export function useMarketplaceNavigation({
   const [view, setView] = useState<MarketplaceView>(initialView);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>(initialDashboardTab);
-  const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>("overview");
   const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
   const skipNextUrlWriteRef = useRef(false);
-  const previousViewRef = useRef<MarketplaceView>("home");
   const handlersRef = useRef<RouteHandlers>({
     onListingTypeChange,
     onBookRouteChange,
@@ -117,8 +96,7 @@ export function useMarketplaceNavigation({
   const applyCurrentRoute = useCallback((options?: { openConversation?: boolean }) => {
     const params = new URLSearchParams(window.location.search);
     const targetMarket = params.get("market");
-    const routeListingType = targetMarket === "book" || targetMarket === "secondhand" ? targetMarket : listingType;
-    if (targetMarket === "book" || targetMarket === "secondhand") {
+    if (targetMarket === "book" || targetMarket === "secondhand" || targetMarket === "giveaway") {
       handlersRef.current.onListingTypeChange(targetMarket);
     }
 
@@ -133,14 +111,10 @@ export function useMarketplaceNavigation({
 
     if (targetView === "chat") {
       if (!currentUser) return;
-      const targetConversation = params.get("conversation");
       setDashboardTab("chats");
-      setExpandedConversationId(targetConversation);
+      setExpandedConversationId(params.get("conversation"));
       setView("chat");
-      const canonicalUrl = buildChatUrl(routeListingType, targetConversation);
-      if (`${window.location.pathname}${window.location.search}` !== canonicalUrl) {
-        window.history.replaceState({}, "", canonicalUrl);
-      }
+      const targetConversation = params.get("conversation");
       if (targetConversation && options?.openConversation) {
         void handlersRef.current.onConversationRoute(targetConversation);
       }
@@ -151,14 +125,10 @@ export function useMarketplaceNavigation({
       if (!currentUser) return;
       const targetTab = params.get("tab");
       if (targetTab === "chats") {
-        const targetConversation = params.get("conversation");
         setDashboardTab("chats");
-        setExpandedConversationId(targetConversation);
+        setExpandedConversationId(params.get("conversation"));
         setView("chat");
-        const canonicalUrl = buildChatUrl(routeListingType, targetConversation);
-        if (`${window.location.pathname}${window.location.search}` !== canonicalUrl) {
-          window.history.replaceState({}, "", canonicalUrl);
-        }
+        const targetConversation = params.get("conversation");
         if (targetConversation && options?.openConversation) {
           void handlersRef.current.onConversationRoute(targetConversation);
         }
@@ -170,18 +140,10 @@ export function useMarketplaceNavigation({
       return;
     }
 
-    if (targetView === "admin") {
-      if (!currentUser || !["admin", "moderator"].includes(currentUser.role)) return;
-      setView("admin");
-      const targetWorkspace = params.get("adminTab");
-      if (isAdminWorkspace(targetWorkspace)) setAdminWorkspace(targetWorkspace);
-      return;
-    }
-
     setSelectedId(null);
     handlersRef.current.onBookRouteChange();
     setView("home");
-  }, [currentUser, listingType]);
+  }, [currentUser]);
 
   useEffect(() => {
     if (!ready) return;
@@ -208,20 +170,12 @@ export function useMarketplaceNavigation({
       selectedId,
       currentUser,
       dashboardTab,
-      adminWorkspace,
       expandedConversationId,
     });
     if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
       window.history.replaceState({}, "", nextUrl);
     }
-  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType, ready, selectedId, view]);
-
-  useEffect(() => {
-    if (view === "dashboard" && previousViewRef.current !== "dashboard") {
-      window.scrollTo({ top: 0, behavior: "auto" });
-    }
-    previousViewRef.current = view;
-  }, [view]);
+  }, [currentUser, dashboardTab, expandedConversationId, listingType, ready, selectedId, view]);
 
   useEffect(() => {
     if (view !== "dashboard" || dashboardTab !== "chats" || expandedConversationId || !currentUser) return;
@@ -240,11 +194,10 @@ export function useMarketplaceNavigation({
       selectedId: bookId,
       currentUser,
       dashboardTab,
-      adminWorkspace,
       expandedConversationId,
     }));
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId]);
+  }, [currentUser, dashboardTab, expandedConversationId]);
 
   const returnToMarketRoute = useCallback(() => {
     setSelectedId(null);
@@ -256,24 +209,9 @@ export function useMarketplaceNavigation({
       selectedId: null,
       currentUser,
       dashboardTab,
-      adminWorkspace,
       expandedConversationId,
     }));
-  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType]);
-
-  const returnToChatListRoute = useCallback(() => {
-    setExpandedConversationId(null);
-    setDashboardTab("chats");
-    setView("chat");
-    window.history.pushState({}, "", buildChatUrl(listingType));
-  }, [listingType]);
-
-  const openChatRoute = useCallback((conversationId?: string | null) => {
-    setDashboardTab("chats");
-    setExpandedConversationId(conversationId || null);
-    setView("chat");
-    window.history.pushState({}, "", buildChatUrl(listingType, conversationId));
-  }, [listingType]);
+  }, [currentUser, dashboardTab, expandedConversationId, listingType]);
 
   const openDashboard = useCallback(() => {
     setView("dashboard");
@@ -281,18 +219,27 @@ export function useMarketplaceNavigation({
     setExpandedConversationId(null);
   }, []);
 
+  const returnToChatListRoute = useCallback(() => {
+    setDashboardTab("chats");
+    setExpandedConversationId(null);
+    setView("chat");
+    const params = new URLSearchParams(window.location.search);
+    params.set("market", listingType);
+    params.set("view", "chat");
+    params.set("tab", "chats");
+    params.delete("conversation");
+    window.history.replaceState({}, "", `/?${params.toString()}`);
+  }, [listingType]);
+
   return {
     dashboardTab,
-    adminWorkspace,
     expandedConversationId,
-    openChatRoute,
     openBookRoute,
     openDashboard,
     returnToChatListRoute,
     returnToMarketRoute,
     selectedId,
     setDashboardTab,
-    setAdminWorkspace,
     setExpandedConversationId,
     setSelectedId,
     setView,
