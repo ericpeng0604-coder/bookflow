@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "project": "bookflow",
   "owner": "codex",
-  "status": "ready-for-pr",
+  "status": "handoff",
   "taskId": "20260722-zero-giveaway-release",
   "taskTitle": "BookFlow zero giveaway release 0.1.5",
   "baseCommit": "971347503a257d4baf4736e19d67c99bf1caf415",
