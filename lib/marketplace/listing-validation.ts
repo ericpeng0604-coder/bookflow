@@ -2,6 +2,8 @@ import {
   canonicalPublisher,
   normalizeIsbn13,
 } from "./taiwan-textbook.ts";
+import { normalizeMeetupMode } from "./meetup.ts";
+import type { MeetupMode } from "@/lib/types";
 
 export const LISTING_FIELD_LIMITS = {
   title: 160,
@@ -31,6 +33,7 @@ type ListingFields = {
   publisher: string;
   course: string;
   teacher: string;
+  meetupMode?: MeetupMode;
   meetup: string;
   description: string;
   educationLevel: string;
@@ -56,6 +59,7 @@ export function normalizeAndValidateListingFields(
     publisher: fields.publisher.trim(),
     course: fields.course.trim(),
     teacher: fields.teacher.trim(),
+    meetupMode: normalizeMeetupMode(fields.meetupMode),
     meetup: fields.meetup.trim(),
     description: fields.description.trim(),
     educationLevel: fields.educationLevel.trim(),
@@ -71,7 +75,8 @@ export function normalizeAndValidateListingFields(
   normalized.publisher = canonicalPublisher(normalized.publisher) || normalized.publisher;
 
   if (!normalized.title) return { error: "請填寫名稱" };
-  if (!normalized.meetup) return { error: "請填寫面交地點" };
+  if (normalized.meetupMode === "fixed_location" && !normalized.meetup) return { error: "請填寫面交地點" };
+  if (normalized.meetupMode !== "fixed_location") normalized.meetup = "";
   if (!normalized.description) return { error: "請填寫商品說明" };
   if (!Number.isInteger(normalized.price) || normalized.price < 0 || normalized.price > LISTING_FIELD_LIMITS.price) {
     return { error: `價格必須是 0 到 ${LISTING_FIELD_LIMITS.price.toLocaleString("zh-TW")} 之間的整數` };

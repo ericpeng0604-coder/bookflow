@@ -99,6 +99,7 @@ import {
   fetchNotifications,
 } from "@/lib/marketplace/queries";
 import { giveawayChatBanner, giveawayRequestLabel, sortGiveawayRequests } from "@/lib/marketplace/giveaway";
+import { DEFAULT_MEETUP_MODE, MEETUP_MODE_OPTIONS, meetupModeLabel, normalizeMeetupMode } from "@/lib/marketplace/meetup";
 import { isAbortError, runGuarded } from "@/lib/marketplace/refresh-guard";
 import {
   LISTING_FIELD_LIMITS,
@@ -134,6 +135,7 @@ import type {
   RiskPolicy,
   RiskProfile,
   ListingType,
+  MeetupMode,
   UserRole,
 } from "@/lib/types";
 
@@ -361,6 +363,7 @@ const blankBook: Omit<
   price: 0,
   imageUrl: "",
   imageUrls: [],
+  meetupMode: DEFAULT_MEETUP_MODE,
   meetup: "",
   description: "",
   contactMethod: "none",
@@ -419,6 +422,12 @@ function visibleBookField(value: string) {
 function listingContextLabel(book: Book) {
   if (book.listingType === "secondhand") return visibleBookField(book.itemCategory);
   return [visibleBookField(book.department), visibleBookField(book.course)].filter(Boolean).join(" · ");
+}
+
+function meetupSummary(book: Pick<Book, "meetupMode" | "meetup">) {
+  return normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE
+    ? book.meetup.trim()
+    : meetupModeLabel(book.meetupMode);
 }
 
 function cardContextLabel(book: Book) {
@@ -1952,6 +1961,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         return;
       }
 
+      const listingType = (String(fields.listingType) === "giveaway" ? "giveaway" : String(fields.listingType) === "secondhand" ? "secondhand" : "book") as ListingType;
+      const meetupMode: MeetupMode = listingType === "book"
+        ? DEFAULT_MEETUP_MODE
+        : normalizeMeetupMode(fields.meetupMode);
       const validated = normalizeAndValidateListingFields({
         title: String(fields.title),
         author: String(fields.author),
@@ -1959,6 +1972,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         publisher: String(fields.publisher),
         course: String(fields.course),
         teacher: String(fields.teacher),
+        meetupMode,
         meetup: String(fields.meetup),
         description: String(fields.description),
         educationLevel: String(fields.educationLevel || ""),
@@ -1970,7 +1984,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         bookType: String(fields.bookType || ""),
         isbn13: String(fields.isbn13 || ""),
         approvalNumber: String(fields.approvalNumber || ""),
-        price: String(fields.listingType) === "giveaway" ? 0 : Number(fields.price),
+        price: listingType === "giveaway" ? 0 : Number(fields.price),
       });
       if ("error" in validated) {
         await cleanupUploadedImages();
@@ -1979,7 +1993,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       }
       const clean = validated.value;
       const payload = {
-        listingType: (String(fields.listingType) === "giveaway" ? "giveaway" : String(fields.listingType) === "secondhand" ? "secondhand" : "book") as ListingType,
+        listingType,
         itemCategory: String(fields.listingType) === "giveaway" ? "giveaway" : String(fields.itemCategory || "book"),
         title: clean.title,
         author: clean.author,
@@ -2001,6 +2015,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         price: String(fields.listingType) === "giveaway" ? 0 : clean.price,
         imageUrl,
         imageUrls,
+        meetupMode,
         meetup: clean.meetup,
         description: clean.description,
         contactMethod: editingBook?.contactMethod ?? "none",
@@ -2052,6 +2067,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           price: payload.price,
           image_url: payload.imageUrl,
           image_urls: payload.imageUrls,
+          meetup_mode: payload.meetupMode,
           meetup: payload.meetup,
           description: payload.description,
         };
@@ -3563,13 +3579,20 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
               <div><b>帳號目前為唯讀模式</b><span>{currentUser.suspensionReason || "請聯絡管理員了解停權原因。"}</span></div>
             </section>
           )}
-          <section className="hero" aria-labelledby="home-hero-title">
-            <div className="hero-art hero-reference-art" aria-hidden="true" />
+          <section className={`hero ${isGiveawayMode ? "giveaway-compact-hero" : ""}`} aria-labelledby="home-hero-title">
+            {!isGiveawayMode && <div className="hero-art hero-reference-art" aria-hidden="true" />}
             <div className="hero-copy hero-search-panel">
-              <div className="hero-message">
-                <h1 id="home-hero-title">{isGiveawayMode ? <>Give Freely,<br />Keep It Moving.</> : isSecondhandMode ? <>Good Finds,<br />Next Chapter.</> : <>Used Books,<br />New Chapter.</>}</h1>
-                <p>{isGiveawayMode ? "把用不到但仍然完好的物品送給需要的人，先聊天確認，再正式選定受贈者。" : isSecondhandMode ? "在虎科找到適合你的二手物品，也讓閒置好物繼續被需要。" : "在虎科找到需要的二手書，也讓讀過的故事繼續流動。"}</p>
-              </div>
+              {isGiveawayMode ? (
+                <div className="giveaway-compact-heading">
+                  <span className="giveaway-compact-icon"><Gift size={22} aria-hidden="true" /></span>
+                  <span><b id="home-hero-title">零元贈送專區</b><small>先聊天確認，再正式選定受贈者。</small></span>
+                </div>
+              ) : (
+                <div className="hero-message">
+                  <h1 id="home-hero-title">{isSecondhandMode ? <>Good Finds,<br />Next Chapter.</> : <>Used Books,<br />New Chapter.</>}</h1>
+                  <p>{isSecondhandMode ? "在虎科找到適合你的二手物品，也讓閒置好物繼續被需要。" : "在虎科找到需要的二手書，也讓讀過的故事繼續流動。"}</p>
+                </div>
+              )}
               <form
                 className="hero-search"
                 onSubmit={(event) => {
@@ -3607,11 +3630,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 )}
                 <button type="submit">{isGiveawayMode ? "開始找零元贈送" : isSecondhandMode ? "開始找二手物品" : "開始找二手書"}</button>
               </form>
-              <div className="hero-trust hero-assurance" aria-label="平台特色">
+              {!isGiveawayMode && <div className="hero-trust hero-assurance" aria-label="平台特色">
                 <span><ShieldCheck size={17} aria-hidden="true" />校園面交更安心</span>
                 <span><MessageCircle size={17} aria-hidden="true" />接受後依賣家設定分享聯絡方式</span>
-                {isGiveawayMode ? <span><Gift size={17} aria-hidden="true" />先聊天、再確認受贈者</span> : isSecondhandMode ? <span><Sparkles size={17} aria-hidden="true" />探索校園二手好物</span> : <button type="button" onClick={openCourseSearchGuide}><GraduationCap size={17} aria-hidden="true" />依課程快速找到二手書</button>}
-              </div>
+                {isSecondhandMode ? <span><Sparkles size={17} aria-hidden="true" />探索校園二手好物</span> : <button type="button" onClick={openCourseSearchGuide}><GraduationCap size={17} aria-hidden="true" />依課程快速找到二手書</button>}
+              </div>}
             </div>
           </section>
 
@@ -3762,7 +3785,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       {book.listingType === "book" && textbookMetadata(book).length > 0 && (
                         <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
                       )}
-                      <div className="card-meta"><span>{book.condition}</span><span><MapPin size={13} aria-hidden="true" />{book.meetup}</span></div>
+                      <div className="card-meta"><span>{book.condition}</span><span>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={13} aria-hidden="true" /> : null}{meetupSummary(book)}</span></div>
                       <div className="card-footer"><strong>{book.listingType === "giveaway" ? "免費贈送" : money(book.price)}</strong><small>{timeAgo(book.createdAt)}刊登</small></div>
                     </div>
                   </button>
@@ -3914,7 +3937,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 {selectedBook.listingType === "book" && selectedBook.isbn13 && <div><small>ISBN-13</small><b>{selectedBook.isbn13}</b></div>}
                 {selectedBook.listingType === "book" && selectedBook.approvalNumber && <div><small>審定字號</small><b>{selectedBook.approvalNumber}</b></div>}
                 {selectedBook.listingType === "secondhand" && <div><small>分類</small><b>{selectedBook.itemCategory}</b></div>}
-                <div><small>面交地點</small><b>{selectedBook.meetup}</b></div>
+                <div><small>{normalizeMeetupMode(selectedBook.meetupMode) === DEFAULT_MEETUP_MODE ? "面交地點" : "面交方式"}</small><b>{meetupSummary(selectedBook)}</b></div>
               </div>
               <div className="description"><h3>賣家說明</h3><p>{selectedBook.description}</p></div>
               <div className="seller-row">
@@ -4323,7 +4346,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
                       {["reserved", "awaiting_confirmation"].includes(request.status) && <div className="contact-note">聯絡請使用獨立的「訊息」頁籤。</div>}
                       <RequestCoordinationPanel request={request} viewer="seller" />
-                      {book.listingType === "giveaway" && <p className="order-next-step">申請時間：{dateLabel(request.createdAt)}{request.preferredMeetupTime ? ` · 可面交時間：${request.preferredMeetupTime}` : ""}</p>}
+                      {book.listingType === "giveaway" && <p className="order-next-step">申請時間：{dateLabel(request.createdAt)}{request.preferredMeetupLocation ? ` · 希望地點：${request.preferredMeetupLocation}` : ""}{request.preferredMeetupTime ? ` · 可面交時間：${request.preferredMeetupTime}` : ""}</p>}
                       {book.listingType !== "giveaway" && sellerRequestNextStep(request) && <p className="order-next-step">{sellerRequestNextStep(request)}</p>}
                       <OrderTimeline request={request} />
                     </div>
@@ -4541,7 +4564,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       <div><dt>賣家</dt><dd>{seller?.name || "使用者"}<br /><small>{seller?.email}</small></dd></div>
                       <div><dt>書況</dt><dd>{book.condition}</dd></div>
                       <div><dt>價格</dt><dd>{money(book.price)}</dd></div>
-                      <div><dt>面交</dt><dd>{book.meetup}</dd></div>
+                      <div><dt>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? "面交地點" : "面交方式"}</dt><dd>{meetupSummary(book)}</dd></div>
                       {textbookMetadata(book).length > 0 && <div><dt>課本資訊</dt><dd>{textbookMetadata(book).join(" · ")}</dd></div>}
                       {book.isbn13 && <div><dt>ISBN-13</dt><dd>{book.isbn13}</dd></div>}
                       {book.approvalNumber && <div><dt>審定字號</dt><dd>{book.approvalNumber}</dd></div>}
@@ -5785,6 +5808,7 @@ function BookFormModal({
     teacher: value.teacher,
     condition: value.condition,
     price: value.price ? String(value.price) : "",
+    meetupMode: value.meetupMode || DEFAULT_MEETUP_MODE,
     meetup: value.meetup,
     description: value.description,
     itemCategory: value.itemCategory === "book" ? DEFAULT_SECONDHAND_CATEGORY : value.itemCategory,
@@ -6084,7 +6108,7 @@ function BookFormModal({
             <span>1</span>照片與封面
           </button>
           <button type="button" className={activeListingSection === "book" ? "active" : ""} aria-current={activeListingSection === "book" ? "step" : undefined} onClick={() => scrollToListingSection(bookSectionRef, "book")}>
-            <span>2</span>課本資料
+            <span>2</span>{isNonBookListing ? "物品資料" : "課本資料"}
           </button>
           <button type="button" className={activeListingSection === "trade" ? "active" : ""} aria-current={activeListingSection === "trade" ? "step" : undefined} onClick={() => scrollToListingSection(tradeSectionRef, "trade")}>
             <span>3</span>交易資訊
@@ -6207,8 +6231,8 @@ function BookFormModal({
             <div className="listing-form-section-heading">
               <span className="listing-form-section-kicker">STEP 2</span>
               <div>
-                <h3>課本資料</h3>
-                <p>先確認 AI 帶入的內容，再補充課程與版本資訊。</p>
+                <h3>{isNonBookListing ? "物品資料" : "課本資料"}</h3>
+                <p>{isNonBookListing ? "填寫商品名稱與分類，補充物品資訊。" : "先確認 AI 帶入的內容，再補充課程與版本資訊。"}</p>
               </div>
             </div>
           <label className="full">
@@ -6305,7 +6329,32 @@ function BookFormModal({
             </select>
           </label>
           <label>價格（NT$）*<input name="price" required readOnly={isGiveaway} type="number" min="0" max={LISTING_FIELD_LIMITS.price} step="1" value={isGiveaway ? "0" : draft.price} onChange={(event) => updateDraft("price", event.target.value)} /></label>
-          <label className="full">面交地點 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
+          {isNonBookListing ? (
+            <>
+              <label className="full">面交方式 *
+                <select
+                  name="meetupMode"
+                  required
+                  value={normalizeMeetupMode(draft.meetupMode)}
+                  onChange={(event) => {
+                    const nextMode = normalizeMeetupMode(event.target.value);
+                    updateDraft("meetupMode", nextMode);
+                    if (nextMode !== DEFAULT_MEETUP_MODE) updateDraft("meetup", "");
+                  }}
+                >
+                  {MEETUP_MODE_OPTIONS.map(([mode, label]) => <option key={mode} value={mode}>{label}</option>)}
+                </select>
+              </label>
+              {normalizeMeetupMode(draft.meetupMode) === DEFAULT_MEETUP_MODE && (
+                <label className="full">指定面交位置 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
+              )}
+            </>
+          ) : (
+            <>
+              <input type="hidden" name="meetupMode" value={DEFAULT_MEETUP_MODE} />
+              <label className="full">面交地點 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
+            </>
+          )}
           <label className="full">{isNonBookListing ? "商品說明" : "書況說明"} *<textarea name="description" required maxLength={LISTING_FIELD_LIMITS.description} rows={3} value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} /></label>
           <button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button>
           </section>
@@ -6406,7 +6455,7 @@ function RequestModal({
   return (
     <ModalShell title={book.listingType === "giveaway" ? "申請領取" : "確認下訂"} subtitle={`${book.listingType === "giveaway" ? "想領取" : "想購買"}《${book.title}》`} onClose={onClose}>
       <form onSubmit={onSubmit} className="form" aria-busy={saving}>
-        <div className="request-summary"><span>{book.condition}</span><b>{book.listingType === "giveaway" ? "免費贈送" : money(book.price)}</b><span><MapPin size={14} />{book.meetup}</span></div>
+        <div className="request-summary"><span>{book.condition}</span><b>{book.listingType === "giveaway" ? "免費贈送" : money(book.price)}</b><span>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={14} /> : null}{meetupSummary(book)}</span></div>
         {book.listingType === "book" && (
           <label className="version-confirmation">
             <input
@@ -7077,7 +7126,7 @@ function TradeChatPanel({
                 <span>
                   <small>正在詢問</small>
                   <b>{book.title}</b>
-                  <em>{[contextLabel, book.listingType === "giveaway" ? "免費贈送" : money(book.price)].filter(Boolean).join(" · ")}</em>
+                  <em>{[contextLabel, book.listingType === "giveaway" ? "免費贈送" : money(book.price), `面交：${meetupSummary(book)}`].filter(Boolean).join(" · ")}</em>
                 </span>
               </button>
               {request ? (

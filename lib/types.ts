@@ -17,6 +17,7 @@ export type ModerationVisibility = "visible" | "hidden";
 export type ListingLifecycleState = "active" | "archived" | "withdrawn";
 export type ContactMethod = "none" | "email" | "line";
 export type ListingType = "book" | "secondhand" | "giveaway";
+export type MeetupMode = "fixed_location" | "mutual_discussion" | "applicant_preferred";
 export type ReportTargetType = "book" | "user";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
 export type ReportReason =
@@ -80,6 +81,7 @@ export type Book = {
   price: number;
   imageUrl: string;
   imageUrls: string[];
+  meetupMode: MeetupMode;
   meetup: string;
   description: string;
   contactMethod: ContactMethod;

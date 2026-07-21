@@ -1,6 +1,6 @@
 {
   "name": "campus-books",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "scripts": {
@@ -52,6 +52,7 @@
     "check:lifecycle": "node scripts/check-listing-lifecycle.mjs",
     "check:trade": "node scripts/check-trade-workflow.mjs",
     "check:giveaway": "node scripts/check-giveaway-flow.mjs",
+    "check:meetup-modes": "node scripts/check-meetup-modes.mjs",
     "check:risk-warning": "node scripts/check-risk-warning.mjs",
     "check:chat-state": "node scripts/check-chat-switching.mjs",
     "check:notifications": "node scripts/check-notification-refresh.mjs",

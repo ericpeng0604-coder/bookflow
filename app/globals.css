@@ -1960,14 +1960,6 @@ footer,
 .market-switch button { min-height: 36px; border: 0; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; background: transparent; color: #52665f; font-weight: 800; cursor: pointer; }
 .market-switch button.active { background: #227865; color: #fff; box-shadow: 0 4px 10px rgba(34, 120, 101, .18); }
 .market-switch button.placeholder { color: #8c9b95; cursor: not-allowed; opacity: .72; }
-.theme-giveaway {
-  --orange: #c85d2c;
-  --green: #a84b24;
-  --green-dark: #803819;
-  --mint: #fff0e8;
-}
-.theme-giveaway .giveaway-card { border-color: rgba(200, 93, 44, .32); }
-.theme-giveaway .giveaway-card .card-footer strong, .theme-giveaway .detail-price { color: #b54e22; }
 .theme-secondhand .market-switch button.active { background: #227865; color: #fff; }
 @media (max-width: 980px) { .market-switch { display: none; } }
 
@@ -2008,6 +2000,83 @@ footer,
 
   .home-page .hero-trust.hero-assurance span {
     white-space: normal;
+  }
+}
+
+/* Giveaway uses a compact utility header instead of the shared photo hero. */
+.theme-giveaway .home-page .hero.giveaway-compact-hero {
+  min-height: 0;
+  padding: 28px max(7vw, 24px);
+  display: block;
+  background: var(--cream);
+  background-image: none !important;
+  overflow: visible;
+}
+
+.theme-giveaway .home-page .hero.giveaway-compact-hero::before,
+.theme-giveaway .home-page .hero.giveaway-compact-hero::after {
+  display: none;
+}
+
+.theme-giveaway .giveaway-compact-hero .hero-copy {
+  max-width: none;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.theme-giveaway .giveaway-compact-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.theme-giveaway .giveaway-compact-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  color: white;
+  background: var(--green);
+}
+
+.theme-giveaway .giveaway-compact-heading span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.theme-giveaway .giveaway-compact-heading b {
+  color: var(--ink);
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.theme-giveaway .giveaway-compact-heading small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.theme-giveaway .giveaway-compact-hero .hero-search {
+  flex: 1;
+  max-width: none;
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .theme-giveaway .home-page .hero.giveaway-compact-hero {
+    padding: 22px 20px;
+  }
+
+  .theme-giveaway .giveaway-compact-hero .hero-copy {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .theme-giveaway .giveaway-compact-hero .hero-search {
+    width: 100%;
   }
 }
 
