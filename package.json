@@ -2,7 +2,6 @@
   "name": "campus-books",
   "version": "0.1.5",
   "private": true,
-  "packageManager": "pnpm@11.7.0",
   "scripts": {
     "predev": "node scripts/dev-environment.mjs --fix-processes",
     "dev": "next dev",
