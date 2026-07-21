@@ -132,7 +132,7 @@ assert.doesNotMatch(
 );
 assert.match(app, /const current = previous\[field\]\.trim\(\)/, "OCR must inspect current user-entered fields before merging");
 assert.match(app, /previousAuto/, "OCR must distinguish prior automatic results from manual edits");
-assert.match(app, /使用照片填寫課本資料/, "the AI assist UI must keep its concise heading");
+assert.match(app, /使用封面照片填寫課本資料/, "the AI assist UI must keep its concise heading");
 assert.doesNotMatch(app, /ocr-privacy-note/, "the AI assist UI must not restore the removed privacy paragraph");
 const hardeningMigration = readFileSync(
   new URL("../supabase/migrations/20260622090000_site_quality_hardening.sql", import.meta.url),

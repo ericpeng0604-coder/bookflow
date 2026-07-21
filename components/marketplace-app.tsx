@@ -6054,9 +6054,13 @@ function BookFormModal({
       }
       setDraft((previous) => {
         const next = { ...previous };
+        const previousAuto = ocrOriginalDraft;
         for (const field of ["title", "author", "edition"] as const) {
+          const current = previous[field].trim();
           const recognized = ocrDraft[field]?.trim() || "";
-          if (recognized) next[field] = recognized;
+          if (recognized && (!current || current === previousAuto?.[field]?.trim())) {
+            next[field] = recognized;
+          }
         }
         return next;
       });
@@ -6221,7 +6225,6 @@ function BookFormModal({
                 </div>
               )}
               <p>{ocrMessage || "辨識結果只會填入草稿，送出前請再確認。"}</p>
-              <p className="ocr-privacy-note">本機辨識不足時，照片可能會短暫用於提高辨識準確度；BookFlow 不會另外保存這次辨識圖片。</p>
             </div>
           )}
 
