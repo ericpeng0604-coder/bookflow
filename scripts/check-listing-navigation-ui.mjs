@@ -39,7 +39,12 @@ assert.equal(
   1,
   "the listing form must contain exactly one file control",
 );
-assert.ok(listingForm.includes('className="listing-file-input full"'), "the file control must use the styled input");
+assert.ok(
+  listingForm.includes('className="listing-file-input full visually-hidden"')
+    && listingForm.includes("hidden")
+    && css.includes(".visually-hidden"),
+  "the file control must stay hidden behind the custom upload controls",
+);
 assert.ok(css.includes(".listing-file-input::file-selector-button"), "the native file button must be styled");
 assert.ok(
   nativeDialog.includes("const onCloseRef = useRef(onClose)")
@@ -88,6 +93,21 @@ assert.ok(
     && listingForm.includes('className="ocr-progress"')
     && css.includes(".ocr-progress progress"),
   "book OCR must show a visible progress bar",
+);
+assert.ok(
+  listingForm.includes("imageItems.length > 0 && !isNonBookListing")
+    && listingForm.includes('className="photo-assist-title"')
+    && listingForm.includes('className="photo-assist-tooltip"')
+    && listingForm.includes('role="tooltip"')
+    && listingForm.includes('使用封面辨識')
+    && !listingForm.includes('ocr-cover-note'),
+  "book AI recognition must appear only after upload with one action and floating helper copy",
+);
+assert.ok(
+  css.includes(".photo-assist-tooltip")
+    && css.includes(".photo-assist-title:hover .photo-assist-tooltip")
+    && css.includes(".photo-assist-title:focus-visible .photo-assist-tooltip"),
+  "book AI helper copy must float on hover and keyboard focus",
 );
 assert.doesNotMatch(
   nativeDialog,

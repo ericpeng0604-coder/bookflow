@@ -4,6 +4,8 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(`${root}/${file}`, "utf8");
 const checks = [
   ["MeetupMode union", read("lib/types.ts").includes('export type MeetupMode = "fixed_location" | "mutual_discussion" | "applicant_preferred";')],
+  ["contextual listing labels", read("components/marketplace-app.tsx").includes("NON_GIVEAWAY_MEETUP_MODE_LABELS") && read("components/marketplace-app.tsx").includes('fixed_location: "刊登者指定位置"') && read("components/marketplace-app.tsx").includes('applicant_preferred: "配合買家"')],
+  ["books use meetup modes", read("components/marketplace-app.tsx").includes("listingType={initialListingType}") && read("components/marketplace-app.tsx").includes("const meetupMode = normalizeMeetupMode(fields.meetupMode)")],
   ["meetup labels", read("lib/marketplace/meetup.ts").includes("贈送者指定位置") && read("lib/marketplace/meetup.ts").includes("雙方討論地點") && read("lib/marketplace/meetup.ts").includes("配合申請者")],
   ["item form heading", read("components/marketplace-app.tsx").includes('isNonBookListing ? "物品資料" : "課本資料"')],
   ["conditional location input", read("components/marketplace-app.tsx").includes('normalizeMeetupMode(draft.meetupMode) === DEFAULT_MEETUP_MODE')],

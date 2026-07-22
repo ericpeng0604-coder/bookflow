@@ -432,10 +432,18 @@ function cardContextLabel(book: Book) {
   return listingContextLabel(book) || visibleBookField(book.subject) || visibleBookField(book.course);
 }
 
-function meetupSummary(book: Pick<Book, "meetupMode" | "meetup">) {
+const NON_GIVEAWAY_MEETUP_MODE_LABELS: Record<MeetupMode, string> = {
+  fixed_location: "刊登者指定位置",
+  mutual_discussion: "雙方討論地點",
+  applicant_preferred: "配合買家",
+};
+
+function meetupSummary(book: Pick<Book, "listingType" | "meetupMode" | "meetup">) {
   return normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE
     ? book.meetup.trim()
-    : meetupModeLabel(book.meetupMode);
+    : book.listingType === "giveaway"
+      ? meetupModeLabel(book.meetupMode)
+      : NON_GIVEAWAY_MEETUP_MODE_LABELS[normalizeMeetupMode(book.meetupMode)];
 }
 
 const MEETUP_MODE_DETAILS: Record<MeetupMode, { summary: string; detail: string }> = {
@@ -455,14 +463,27 @@ const MEETUP_MODE_DETAILS: Record<MeetupMode, { summary: string; detail: string 
 
 function MeetupModePicker({
   value,
+  listingType,
   disabled,
   onChange,
 }: {
   value: MeetupMode;
+  listingType: ListingType;
   disabled?: boolean;
   onChange: (value: MeetupMode) => void;
 }) {
   const selectedMode = normalizeMeetupMode(value);
+  const modeLabels: Record<MeetupMode, string> = listingType === "giveaway"
+    ? {
+        fixed_location: "贈送者指定位置",
+        mutual_discussion: "雙方討論地點",
+        applicant_preferred: "配合申請者",
+      }
+    : {
+        fixed_location: "刊登者指定位置",
+        mutual_discussion: "雙方討論地點",
+        applicant_preferred: "配合買家",
+      };
   const [tooltipMode, setTooltipMode] = useState<MeetupMode | null>(null);
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tooltipId = useId();
@@ -504,8 +525,9 @@ function MeetupModePicker({
       </div>
       <input type="hidden" name="meetupMode" value={selectedMode} />
       <div className="meetup-mode-picker" role="radiogroup" aria-label="面交方式">
-        {MEETUP_MODE_OPTIONS.map(([mode, label]) => {
+        {MEETUP_MODE_OPTIONS.map(([mode]) => {
           const detail = MEETUP_MODE_DETAILS[mode];
+          const label = modeLabels[mode];
           const selected = selectedMode === mode;
           return (
             <button
@@ -2084,9 +2106,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       }
 
       const listingType = (String(fields.listingType) === "giveaway" ? "giveaway" : String(fields.listingType) === "secondhand" ? "secondhand" : "book") as ListingType;
-      const meetupMode: MeetupMode = listingType === "book"
-        ? DEFAULT_MEETUP_MODE
-        : normalizeMeetupMode(fields.meetupMode);
+      const meetupMode = normalizeMeetupMode(fields.meetupMode);
       const validated = normalizeAndValidateListingFields({
         title: String(fields.title),
         author: String(fields.author),
@@ -3536,7 +3556,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             <button type="button" className={isSecondhandMode ? "active" : ""} aria-pressed={isSecondhandMode} onClick={() => { switchListingType("secondhand"); setView("home"); }}><Sparkles size={16} aria-hidden="true" />二手物品</button>
             <button type="button" className={isGiveawayMode ? "active" : ""} aria-pressed={isGiveawayMode} onClick={() => { switchListingType("giveaway"); setView("home"); }}><Gift size={16} aria-hidden="true" />零元贈送</button>
           </div>
-          <button type="button" className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isGiveawayMode ? "找零元贈送" : isSecondhandMode ? "找二手物品" : "找二手書籍"}</button>
           <button type="button" onClick={() => requireActive(() => openListingForm(listingType))}>我要刊登</button>
           <button type="button" className={view === "dashboard" ? "active" : ""} onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button type="button" className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>管理</button>}
@@ -3653,15 +3672,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
               >
                 {isSecondhandMode ? <BookOpen size={18} /> : <Sparkles size={18} />}
                 {isSecondhandMode ? "回二手書籍市場" : "逛二手物品"}
-              </button>
-              <button type="button"
-                className={view === "home" ? "active" : ""}
-                onClick={() => {
-                  setView("home");
-                  setMobileMenuOpen(false);
-                }}
-              >
-                {isSecondhandMode ? "逛二手物品" : "找二手書籍"}
               </button>
               <button type="button"
                 onClick={() => {
@@ -6198,6 +6208,7 @@ function BookFormModal({
   const tradeSectionRef = useRef<HTMLElement>(null);
   const imageItemsRef = useRef<ListingImageItem[]>(initialImageItems);
   const ocrRequestRef = useRef(0);
+  const ocrHelpId = useId();
   const baseDraft = useMemo(() => ({
     title: value.title,
     author: value.author,
@@ -6560,7 +6571,8 @@ function BookFormModal({
           </p>
           <input
             ref={imageInputRef}
-            className="listing-file-input full"
+            className="listing-file-input full visually-hidden"
+            hidden
             name="image"
             required={!book && imageItems.length === 0}
             type="file"
@@ -6621,37 +6633,32 @@ function BookFormModal({
             </div>
           )}
 
-          {!isNonBookListing && (
+          {imageItems.length > 0 && !isNonBookListing && (
             <div className="photo-assist full">
               <div>
                 <Sparkles size={18} aria-hidden="true" />
-                <span>
+                <span className="photo-assist-title" tabIndex={0} aria-describedby={ocrHelpId}>
                   <b>使用封面照片填寫課本資料</b>
-                  <small>系統只會辨識目前標記為「封面」的照片，協助填入書名、作者與版本；價格仍由你自己填。</small>
+                  <HelpCircle size={15} aria-hidden="true" />
+                  <span id={ocrHelpId} className="photo-assist-tooltip" role="tooltip">
+                    {ocrNeedsRefresh
+                      ? "封面已變更；重新使用封面辨識即可更新課本資料。"
+                      : "系統只會辨識目前標記為「封面」的照片，協助填入書名、作者與版本；價格仍由你自己填。"}
+                  </span>
                 </span>
               </div>
               <div className="photo-assist-actions">
-                <button type="button" className="ghost" onClick={() => imageInputRef.current?.click()}>
-                  <ImagePlus size={16} />{hasCoverImage ? "重新選擇照片" : "選擇封面照片"}
-                </button>
                 <button type="button" disabled={ocrBusy || !hasCoverImage} onClick={() => void readBookOcr()}>
                   <Sparkles size={16} />{ocrBusy ? "辨識中..." : "使用封面辨識"}
                 </button>
               </div>
-              <p className={`ocr-cover-note ${ocrNeedsRefresh ? "needs-refresh" : ""}`}>
-                {ocrNeedsRefresh
-                  ? "封面已變更，原有文字仍保留；請重新辨識以更新課本資料。"
-                  : coverId
-                    ? "AI 辨識來源：目前標記為封面的照片。"
-                    : "請先在照片縮圖上選擇「設為封面」。"}
-              </p>
               {(ocrBusy || ocrProgress > 0) && (
                 <div className="ocr-progress" aria-live="polite">
                   <progress value={ocrProgress} max={100} aria-label="照片辨識進度" />
                   <span>{ocrBusy ? `${ocrProgress}%` : "辨識完成"}</span>
                 </div>
               )}
-              <p>{ocrMessage || "辨識結果只會填入草稿，送出前請再確認。"}</p>
+              {ocrMessage && <p aria-live="polite">{ocrMessage}</p>}
             </div>
           )}
 
@@ -6766,25 +6773,17 @@ function BookFormModal({
             </select>
           </label>
           <label>價格（NT$）*<input name="price" required readOnly={isGiveaway} type="number" min="0" max={LISTING_FIELD_LIMITS.price} step="1" value={isGiveaway ? "0" : draft.price} onChange={(event) => updateDraft("price", event.target.value)} /></label>
-          {isNonBookListing ? (
-            <>
-              <MeetupModePicker
-                value={normalizeMeetupMode(draft.meetupMode)}
-                disabled={saving}
-                onChange={(nextMode) => {
-                  updateDraft("meetupMode", nextMode);
-                  if (nextMode !== DEFAULT_MEETUP_MODE) updateDraft("meetup", "");
-                }}
-              />
-              {normalizeMeetupMode(draft.meetupMode) === DEFAULT_MEETUP_MODE && (
-                <label className="full">指定面交位置 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
-              )}
-            </>
-          ) : (
-            <>
-              <input type="hidden" name="meetupMode" value={DEFAULT_MEETUP_MODE} />
-              <label className="full">面交地點 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
-            </>
+          <MeetupModePicker
+            value={normalizeMeetupMode(draft.meetupMode)}
+            listingType={initialListingType}
+            disabled={saving}
+            onChange={(nextMode) => {
+              updateDraft("meetupMode", nextMode);
+              if (nextMode !== DEFAULT_MEETUP_MODE) updateDraft("meetup", "");
+            }}
+          />
+          {normalizeMeetupMode(draft.meetupMode) === DEFAULT_MEETUP_MODE && (
+            <label className="full">指定面交位置 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
           )}
           <label className="full">{isNonBookListing ? "商品說明" : "書況說明"} *<textarea name="description" required maxLength={LISTING_FIELD_LIMITS.description} rows={3} value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} /></label>
           <button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button>
