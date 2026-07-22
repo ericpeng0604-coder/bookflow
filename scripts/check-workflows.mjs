@@ -30,6 +30,7 @@ const readiness = read(".github/workflows/release-readiness.yml");
 const staging = read(".github/workflows/staging-migration.yml");
 const productionMigration = read(".github/workflows/production-migration.yml");
 const productionMonitor = read(".github/workflows/production-deployment-monitor.yml");
+const productionRelease = read(".github/workflows/release-production.yml");
 const rollback = read(".github/workflows/rollback-production.yml");
 const guard = read(".github/workflows/protect-rollback-workflow.yml");
 const codeowners = read(".github/CODEOWNERS");
@@ -69,6 +70,16 @@ assert.doesNotMatch(
   "production smoke must stay dependency-free unless release-smoke imports packages",
 );
 assert.match(productionMonitor, /deployment_status/);
+assert.match(productionRelease, /workflow_dispatch/);
+assert.match(productionRelease, /release_sha/);
+assert.match(productionRelease, /current_main/);
+assert.match(productionRelease, /supabase db push/);
+assert.match(productionRelease, /production-database/);
+assert.match(productionRelease, /gitSource/);
+assert.match(productionRelease, /VERCEL_GIT_REPO_ID/);
+assert.match(productionRelease, /EXPECTED_COMMIT/);
+assert.match(productionRelease, /Rollback Production/);
+assert.doesNotMatch(productionRelease, /--prebuilt/);
 const uptime = read(".github/workflows/production-uptime-smoke.yml");
 assert.match(uptime, /EXPECTED_COMMIT/);
 assert.match(uptime, /git fetch origin main/);

@@ -1302,6 +1302,25 @@ diff the related component and responsive CSS against the production SHA, then
 verify the exact user-visible layout at desktop and medium widths before calling
 the preview current.
 
+### LESSON-072: Local previews must prove the current source fingerprint
+
+**Observed problem:** Local browser testing could show an older BookFlow
+version even though the working tree had newer edits.
+
+**Cause:** A previous Node/Next process or shared `.next` cache was treated as
+the current source without comparing the running server with the worktree.
+
+**Detection:** Before browser testing, compare the local source health response
+with the current commit, dirty state, and source fingerprint. A mismatch means
+the preview is `NOT LATEST`.
+
+**Prevention rule:** Start previews with `npm run dev` or `npm run dev:codex`,
+which cleans stale processes and `.next` and writes a source manifest. Run
+`npm run check:local-source -- --url http://127.0.0.1:3000` before relying on
+the page; restart the preview when the check fails. The local `/release`
+dashboard may explain and run bounded checks, but production still requires
+the manual full-SHA GitHub Actions workflow.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
