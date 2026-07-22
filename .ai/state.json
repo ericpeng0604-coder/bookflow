@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260722-zero-giveaway-ui-release",
-  "taskTitle": "Release zero-giveaway card UI only",
-  "baseCommit": "4338ddb68855373a4eeb8bb3b3207b3467342c99",
-  "updatedAt": "2026-07-22T08:00:00.000Z",
+  "taskId": "20260722-bookflow-ui-release",
+  "taskTitle": "Deploy cumulative BookFlow listing and meetup UI fixes",
+  "baseCommit": "adffbaa79902c90e20a73bf0fd803465b319dc1b",
+  "updatedAt": "2026-07-22T15:30:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260722-zero-giveaway-ui-release.md"
+  "historyFile": ".ai/history/20260722-bookflow-ui-release.md"
 }

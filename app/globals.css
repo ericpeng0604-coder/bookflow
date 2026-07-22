@@ -569,6 +569,10 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .photo-assist { border: 1px solid #cfe2da; border-radius: 10px; background: #f4faf7; padding: 13px; display: grid; gap: 11px; }
 .photo-assist > div:first-child { display: flex; gap: 10px; align-items: flex-start; color: var(--green); }
 .photo-assist > div:first-child span { display: grid; gap: 3px; }
+.photo-assist-title { position: relative; display: inline-flex !important; width: fit-content; align-items: center; gap: 5px !important; cursor: help; outline: none; }
+.photo-assist-title:focus-visible { border-radius: 4px; box-shadow: 0 0 0 3px rgba(30, 99, 79, .16); }
+.photo-assist-tooltip { position: absolute; z-index: 20; top: calc(100% + 8px); left: 0; width: min(320px, calc(100vw - 72px)); padding: 10px 12px; border: 1px solid #b8d5c8; border-radius: 9px; background: #173f33; color: white; box-shadow: 0 10px 22px rgba(24, 58, 48, .18); font-size: 12px; font-weight: 500; line-height: 1.55; opacity: 0; pointer-events: none; visibility: hidden; transform: translateY(-4px); transition: opacity .16s ease, transform .16s ease, visibility .16s ease; }
+.photo-assist-title:hover .photo-assist-tooltip, .photo-assist-title:focus-visible .photo-assist-tooltip { opacity: 1; pointer-events: auto; visibility: visible; transform: translateY(0); }
 .photo-assist small, .photo-assist p { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }
 .photo-assist .ocr-privacy-note { color: #65756e; border-top: 1px solid #dceae4; padding-top: 9px; }
 .photo-assist-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -590,6 +594,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .listing-file-help { margin: 0 0 -8px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 12px; }
 .listing-file-help span { color: var(--muted); font-weight: 400; }
 .form .listing-file-input { min-height: 58px; padding: 8px; border: 1px solid #c8d8d0; border-radius: 10px; background: #f6faf8; color: var(--muted); cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.form .listing-file-input[hidden] { display: none !important; }
 .form .listing-file-input:hover { border-color: var(--green); background: #eef7f3; }
 .form .listing-file-input:focus-visible { border-color: var(--green); box-shadow: 0 0 0 4px rgba(30, 99, 79, .1); }
 .listing-file-input::file-selector-button { min-height: 40px; margin-right: 12px; padding: 8px 14px; border: 0; border-radius: 7px; background: var(--green); color: white; font: inherit; font-weight: 800; cursor: pointer; }

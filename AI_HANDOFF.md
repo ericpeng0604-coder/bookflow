@@ -6,20 +6,21 @@ BookFlow zero-giveaway UI release
 
 ## 目前狀態與背景
 
-- Task ID: `20260722-zero-giveaway-ui-release`.
-- Task: `Release zero-giveaway card UI only`.
-- Branch: `codex/release-giveaway-ui`.
-- Base commit: `4338ddb68855373a4eeb8bb3b3207b3467342c99`.
-- History: `.ai/history/20260722-zero-giveaway-ui-release.md`.
+- Task ID: `20260722-bookflow-ui-release`.
+- Task: `Deploy cumulative BookFlow listing and meetup UI fixes`.
+- Branch: `codex/deploy-bookflow-fixes-20260722`.
+- Base commit: `adffbaa79902c90e20a73bf0fd803465b319dc1b`.
+- History: `.ai/history/20260722-bookflow-ui-release.md`.
 - No database migration is included in this release.
 - No workflow, database migration, or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`; this is not a rollback/recovery change.
 
 ## 已完成
 
-- Redesigned only the zero-giveaway listing card with a left-image/right-information layout.
-- Added responsive card layout, richer first-glance information, and differentiated meetup-mode emphasis.
-- Preserved secondhand cards, favorites, application flow, image fallback, and listing data contracts.
+- Removed duplicate market navigation entries while preserving the market switch.
+- Hid the native file-input row, delayed book AI recognition UI until after upload, and moved helper copy into a floating tooltip with one recognition action.
+- Applied the three meetup modes to books and secondhand listings, showing the location field only for the fixed-location mode.
+- Preserved giveaway labels, validation, listing mappers, migrations, and unrelated workspace changes.
 
 ## 下一步
 
@@ -33,12 +34,14 @@ BookFlow zero-giveaway UI release
 
 - `components/marketplace-app.tsx`
 - `app/globals.css`
-- `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/20260722-zero-giveaway-ui-release.md`
+- `scripts/check-listing-navigation-ui.mjs`, `scripts/check-meetup-modes.mjs`
+- `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/20260722-bookflow-ui-release.md`
 
 ## 驗證結果
 
-- Clean-worktree source contract passed for commit `4338ddb68855373a4eeb8bb3b3207b3467342c99`.
-- Release plan, preflight, workflow structure, and release scope checks passed before commit.
+- BookFlow Release Center local source, contract, test, and quality stages passed for the dirty source fingerprint before clean isolation.
+- Clean worktree was created from `origin/main` and contains only the cumulative UI fixes listed above.
+- Targeted listing navigation, meetup-mode, giveaway-flow, and diff checks passed in the clean worktree.
 - Full typecheck, lint, project checks, and production build remain to be recorded for this release candidate.
 - Production is not verified until the merged full SHA is reported by `/api/health/release` and `release-smoke`.
 
@@ -57,5 +60,5 @@ BookFlow zero-giveaway UI release
 
 ## 相關 Commit
 
-- Base commit: `4338ddb68855373a4eeb8bb3b3207b3467342c99`.
+- Base commit: `adffbaa79902c90e20a73bf0fd803465b319dc1b`.
 - Current implementation commit before final commit: `not committed yet`.
