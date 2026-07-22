@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260722-bookflow-latest-source-protection-and-ma",
-  "taskTitle": "BookFlow latest-source protection and manual production release",
-  "baseCommit": "d25b52a73124f7e93f0dbb78724fb58840668e0d",
-  "updatedAt": "2026-07-22T06:57:07.833Z",
+  "taskId": "20260722-zero-giveaway-ui-release",
+  "taskTitle": "Release zero-giveaway card UI only",
+  "baseCommit": "4338ddb68855373a4eeb8bb3b3207b3467342c99",
+  "updatedAt": "2026-07-22T08:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260722-0657-20260722-bookflow-latest-source-protecti.md"
+  "historyFile": ".ai/history/20260722-zero-giveaway-ui-release.md"
 }

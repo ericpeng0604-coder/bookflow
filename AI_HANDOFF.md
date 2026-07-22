@@ -2,25 +2,24 @@
 
 ## 任務目標
 
-BookFlow latest-source protection and manual production release
+BookFlow zero-giveaway UI release
 
 ## 目前狀態與背景
 
-- Task ID: `20260722-bookflow-latest-source-protection-and-ma`.
-- Task: `BookFlow latest-source protection and manual production release`.
-- Branch: `codex/release-latest-source-20260722`.
-- Base commit: `d25b52a73124f7e93f0dbb78724fb58840668e0d`.
-- History: `.ai/history/20260722-0657-20260722-bookflow-latest-source-protecti.md`.
+- Task ID: `20260722-zero-giveaway-ui-release`.
+- Task: `Release zero-giveaway card UI only`.
+- Branch: `codex/release-giveaway-ui`.
+- Base commit: `4338ddb68855373a4eeb8bb3b3207b3467342c99`.
+- History: `.ai/history/20260722-zero-giveaway-ui-release.md`.
 - No database migration is included in this release.
-- Added `.github/workflows/release-production.yml`; no protected recovery file is changed.
+- No workflow, database migration, or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`; this is not a rollback/recovery change.
 
 ## 已完成
 
-- Added source fingerprint tooling and `/api/health/source`.
-- Added local `/release` dashboard with allowlisted visible checks.
-- Added manual full-SHA production workflow with staging, approval, targeted Vercel deployment, exact-SHA release smoke, and no automatic rollback.
-- Updated release documentation and project checks.
+- Redesigned only the zero-giveaway listing card with a left-image/right-information layout.
+- Added responsive card layout, richer first-glance information, and differentiated meetup-mode emphasis.
+- Preserved secondhand cards, favorites, application flow, image fallback, and listing data contracts.
 
 ## 下一步
 
@@ -32,18 +31,15 @@ BookFlow latest-source protection and manual production release
 
 ## 變更檔案
 
-- `.github/workflows/release-production.yml`
-- `app/api/health/source/`, `app/api/release/`, and `app/release/`
-- `lib/release-dashboard.ts`, `lib/release-dashboard-server.ts`
-- `scripts/release-source.mjs`, `scripts/dev-latest.mjs`, and release checks
-- `docs/RELEASE_WORKFLOW.md`, `docs/MONITORING.md`, and `AI_WORK_MANUAL.md`
+- `components/marketplace-app.tsx`
+- `app/globals.css`
+- `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/20260722-zero-giveaway-ui-release.md`
 
 ## 驗證結果
 
-- Clean-worktree source contract, dashboard contract, release flow, workflow structure, and memory checks passed.
-- TypeScript typecheck passed; full repository lint passed; tests passed 16/16; project checks passed 31/31; production build passed.
-- YAML parse passed for the release workflow. `actionlint` was not installed locally and remains a CI-only check.
-- Clean-worktree live dev smoke passed: `/release` returned 200, `/api/health/source` returned commit `d25b52a73124f7e93f0dbb78724fb58840668e0d`, `check-local-source` passed, and the dashboard ran all 4 stages successfully.
+- Clean-worktree source contract passed for commit `4338ddb68855373a4eeb8bb3b3207b3467342c99`.
+- Release plan, preflight, workflow structure, and release scope checks passed before commit.
+- Full typecheck, lint, project checks, and production build remain to be recorded for this release candidate.
 - Production is not verified until the merged full SHA is reported by `/api/health/release` and `release-smoke`.
 
 ## 風險與注意事項
@@ -61,5 +57,5 @@ BookFlow latest-source protection and manual production release
 
 ## 相關 Commit
 
-- Base commit: `d25b52a73124f7e93f0dbb78724fb58840668e0d`.
+- Base commit: `4338ddb68855373a4eeb8bb3b3207b3467342c99`.
 - Current implementation commit before final commit: `not committed yet`.
