@@ -39,6 +39,7 @@ import { FormEvent, type MouseEvent, useCallback, useEffect, useId, useMemo, use
 import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-data";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import {
+  type AdminWorkspace,
   type DashboardTab,
   type MarketplaceView,
   buildMarketplaceUrl,
@@ -823,6 +824,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [conversationLoadingMore, setConversationLoadingMore] = useState(false);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [pendingReviews, setPendingReviews] = useState<Book[]>([]);
+  const [selectedAdminBook, setSelectedAdminBook] = useState<Book | null>(null);
   const [hiddenBooks, setHiddenBooks] = useState<Book[]>([]);
   const [sellerLifecycle, setSellerLifecycle] = useState<SellerLifecycle | null>(null);
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
@@ -873,6 +875,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     };
   }, [notificationOpen]);
   const {
+    adminWorkspace,
     dashboardTab,
     expandedConversationId,
     openBookRoute,
@@ -881,6 +884,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     returnToMarketRoute,
     selectedId,
     setDashboardTab,
+    setAdminWorkspace,
     setExpandedConversationId,
     setSelectedId,
     setView,
@@ -1768,6 +1772,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       selectedId: null,
       currentUser,
       dashboardTab,
+      adminWorkspace,
       expandedConversationId: null,
     }));
   }
@@ -3293,6 +3298,23 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     && (currentUser.role === "admin" || currentUser.role === "moderator");
   const pendingReports = reports.filter((report) => report.status === "pending");
   const pendingFeedback = feedback.filter((item) => item.status === "pending");
+  const adminPendingCount = pendingReports.length + pendingReviews.length + pendingFeedback.length + studentVerifications.length;
+  const adminWorkspaceItems: Array<{ id: AdminWorkspace; label: string; description: string; count?: number }> = [
+    { id: "overview", label: "後台總覽", description: "今天需要注意的工作" },
+    { id: "listings", label: "刊登審核", description: "處理待上架商品", count: pendingReviews.length },
+    { id: "reports", label: "檢舉處理", description: "查看使用者回報", count: pendingReports.length },
+    { id: "feedback", label: "網站回饋", description: "整理產品意見", count: pendingFeedback.length },
+    { id: "studentVerification", label: "學生證審核", description: "確認學籍資料", count: studentVerifications.length },
+    { id: "risk", label: "交易風險", description: "優先處理高／中風險", count: riskProfiles.length },
+    { id: "hiddenListings", label: "已隱藏商品", description: "檢視與恢復內容", count: hiddenBooks.length },
+    ...(currentUser?.role === "admin" ? [{ id: "permissions" as const, label: "權限管理", description: "角色與帳號狀態" }] : []),
+  ];
+
+  function openAdminWorkspace(workspace: AdminWorkspace) {
+    setAdminWorkspace(workspace);
+    setView("admin");
+    setMobileMenuOpen(false);
+  }
   const unreadNotifications = unreadNotificationCount;
   const unreadMessages = conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
   const activeAvailableListings = myListings.filter((book) => book.lifecycleState === "active" && book.status === "available");
@@ -4679,15 +4701,44 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
       {view === "admin" && currentUser && isModerator && (
         <section className="dashboard admin-page">
-          <div className="dashboard-head">
+          <div className="dashboard-head admin-page-head">
             <div>
               <span className="section-kicker">MODERATION</span>
-              <h1>安全與審核後台</h1>
+              <h1>管理工作台</h1>
               <p>處理檢舉、刊登審核、商品隱藏與會員權限。</p>
             </div>
-            <div className="admin-count">{pendingReports.length + pendingReviews.length + pendingFeedback.length + studentVerifications.length} 筆待處理</div>
+            <div className="admin-head-status"><span className="admin-status-dot" />系統正常<span className="admin-count">{adminPendingCount} 筆待處理</span></div>
           </div>
 
+          <div className="admin-workbench">
+            <aside className="admin-sidebar" aria-label="管理工作區">
+              <div className="admin-sidebar-heading"><span className="section-kicker">WORKSPACE</span><strong>管理導覽</strong></div>
+              <nav>
+                {adminWorkspaceItems.map((item) => (
+                  <button key={item.id} type="button" className={adminWorkspace === item.id ? "active" : ""} aria-current={adminWorkspace === item.id ? "page" : undefined} onClick={() => openAdminWorkspace(item.id)}>
+                    <span className="admin-nav-copy"><b>{item.label}</b><small>{item.description}</small></span>
+                    {typeof item.count === "number" && <span className={`admin-nav-count ${item.count > 0 ? "has-items" : ""}`}>{item.count}</span>}
+                  </button>
+                ))}
+              </nav>
+              <div className="admin-sidebar-footer"><span className="admin-sidebar-avatar">{currentUser.name.slice(0, 1)}</span><span><b>{currentUser.name}</b><small>{currentUser.role === "admin" ? "系統管理員" : "內容審查員"}</small></span></div>
+            </aside>
+
+            <div className="admin-workspace-content">
+              {adminWorkspace === "overview" && (
+                <section className="admin-overview" aria-labelledby="admin-overview-title">
+                  <div className="admin-workspace-heading"><div><span className="section-kicker">TODAY AT A GLANCE</span><h2 id="admin-overview-title">今天的審查概況</h2><p>從這裡開始，直接進入最需要處理的工作。</p></div><button type="button" className="secondary admin-refresh-button" onClick={() => void loadModerationPanel(currentUser)}><RotateCcw size={15} />重新整理</button></div>
+                  <div className="admin-overview-grid">
+                    <button type="button" className="admin-overview-card accent" onClick={() => openAdminWorkspace("listings")}><span className="admin-overview-card-icon"><BookOpen size={20} /></span><span><small>待審核刊登</small><strong>{pendingReviews.length}</strong><em>立即處理 →</em></span></button>
+                    <button type="button" className="admin-overview-card danger" onClick={() => openAdminWorkspace("risk")}><span className="admin-overview-card-icon"><ShieldCheck size={20} /></span><span><small>風險待處理</small><strong>{riskProfiles.length}</strong><em>查看風險佇列 →</em></span></button>
+                    <button type="button" className="admin-overview-card" onClick={() => openAdminWorkspace("reports")}><span className="admin-overview-card-icon"><Flag size={20} /></span><span><small>待處理檢舉</small><strong>{pendingReports.length}</strong><em>查看回報 →</em></span></button>
+                    <button type="button" className="admin-overview-card" onClick={() => openAdminWorkspace("studentVerification")}><span className="admin-overview-card-icon"><GraduationCap size={20} /></span><span><small>學生證審核</small><strong>{studentVerifications.length}</strong><em>查看申請 →</em></span></button>
+                  </div>
+                  <div className="admin-overview-lower"><div className="admin-next-step"><div><span className="section-kicker">NEXT BEST ACTION</span><h3>先處理待審核刊登</h3><p>目前有 {pendingReviews.length} 筆刊登等待審核。開啟列表後可查看完整內容並直接決定。</p></div><button type="button" className="primary" onClick={() => openAdminWorkspace("listings")}>開始審核 <ArrowRight size={16} /></button></div><div className="admin-quick-links"><span className="section-kicker">QUICK LINKS</span><button type="button" onClick={() => openAdminWorkspace("feedback")}>網站回饋 <ArrowRight size={15} /></button><button type="button" onClick={() => openAdminWorkspace("hiddenListings")}>已隱藏商品 <ArrowRight size={15} /></button></div></div>
+                </section>
+              )}
+
+              {adminWorkspace === "risk" && (
           <section className="risk-panel" aria-labelledby="risk-panel-title">
             <div className="risk-panel-head">
               <div>
@@ -4765,8 +4816,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
               {riskProfiles.length === 0 && <EmptyDashboard text="目前沒有可分析的交易風險資料" />}
             </div>
           </section>
+              )}
 
-          <h2 className="admin-section-title">網站問題回報</h2>
+          {adminWorkspace === "feedback" && <section className="admin-workspace-panel" aria-labelledby="admin-feedback-title"><div className="admin-workspace-heading"><div><span className="section-kicker">PRODUCT FEEDBACK</span><h2 id="admin-feedback-title">網站問題回報</h2><p>集中處理使用者提出的體驗與功能問題。</p></div><span className="admin-panel-count">{pendingFeedback.length} 筆待處理</span></div>
           <div className="reports-list">
             {pendingFeedback.map((item) => (
               <article className="report-card" key={item.id}>
@@ -4783,8 +4835,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             ))}
           </div>
           {pendingFeedback.length === 0 && <EmptyDashboard text="目前沒有等待處理的問題回報" />}
+          </section>}
 
-          <h2 className="admin-section-title">學生證審核</h2>
+          {adminWorkspace === "studentVerification" && <section className="admin-workspace-panel" aria-labelledby="admin-student-title"><div className="admin-workspace-heading"><div><span className="section-kicker">VERIFICATION</span><h2 id="admin-student-title">學生證審核</h2><p>核對學生身分資料，完成後系統會保留審查紀錄。</p></div><span className="admin-panel-count">{studentVerifications.length} 筆待處理</span></div>
           <div className="reports-list">
             {studentVerifications.map((verification) => (
               <StudentVerificationCard
@@ -4795,8 +4848,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             ))}
           </div>
           {studentVerifications.length === 0 && <EmptyDashboard text="目前沒有等待審核的學生證" />}
+          </section>}
 
-          <h2 className="admin-section-title">待處理檢舉</h2>
+          {adminWorkspace === "reports" && <section className="admin-workspace-panel" aria-labelledby="admin-reports-title"><div className="admin-workspace-heading"><div><span className="section-kicker">REPORTS</span><h2 id="admin-reports-title">待處理檢舉</h2><p>依檢舉內容判斷是否駁回、解決或採取限制措施。</p></div><span className="admin-panel-count">{pendingReports.length} 筆待處理</span></div>
           <div className="reports-list">
             {pendingReports.map((report) => (
               <article className="report-card" key={report.id}>
@@ -4817,44 +4871,23 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             ))}
           </div>
           {pendingReports.length === 0 && <EmptyDashboard text="目前沒有等待處理的檢舉" />}
+          </section>}
 
-          <h2 className="admin-section-title">待審核刊登</h2>
-          <div className="moderation-grid">
+          {adminWorkspace === "listings" && <section className="admin-workspace-panel" aria-labelledby="admin-listings-title"><div className="admin-workspace-heading"><div><span className="section-kicker">LISTING REVIEW</span><h2 id="admin-listings-title">待審核刊登</h2><p>點選「查看詳情」後，在右側抽屜完成審核，不必離開列表。</p></div><span className="admin-panel-count">{pendingReviews.length} 筆待處理</span></div>
+          <div className="admin-listing-table-wrap">
+          <table className="admin-listing-table"><thead><tr><th>刊登內容</th><th>賣家</th><th>價格</th><th>送審時間</th><th><span className="visually-hidden">操作</span></th></tr></thead><tbody>
             {pendingReviews.map((book) => {
               const seller = profile(book.sellerId);
-              return (
-                <article className="moderation-card" key={book.id}>
-                  <div className="moderation-image">
-                    <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="220px" />
-                    <span className="review-badge pending">待審核</span>
-                  </div>
-                  <div className="moderation-body">
-                    <h3>{book.title}</h3>
-                    <p>{[book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
-                    <dl>
-                      <div><dt>賣家</dt><dd>{seller?.name || "使用者"}<br /><small>{seller?.email}</small></dd></div>
-                      <div><dt>書況</dt><dd>{book.condition}</dd></div>
-                      <div><dt>價格</dt><dd>{money(book.price)}</dd></div>
-                      <div><dt>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? "面交地點" : "面交方式"}</dt><dd>{meetupSummary(book)}</dd></div>
-                      {textbookMetadata(book).length > 0 && <div><dt>課本資訊</dt><dd>{textbookMetadata(book).join(" · ")}</dd></div>}
-                      {book.isbn13 && <div><dt>ISBN-13</dt><dd>{book.isbn13}</dd></div>}
-                      {book.approvalNumber && <div><dt>審定字號</dt><dd>{book.approvalNumber}</dd></div>}
-                    </dl>
-                    <div className="moderation-description">{book.description}</div>
-                    <div className="moderation-actions">
-                      <button type="button" className="accept" onClick={() => void reviewBook(book.id, "approved")}><Check size={17} />通過上架</button>
-                      <button type="button" className="reject" onClick={() => void reviewBook(book.id, "rejected")}><X size={17} />拒絕</button>
-                    </div>
-                  </div>
-                </article>
-              );
+              return <tr key={book.id}><td><div className="admin-listing-title"><span className="admin-listing-thumb"><Image src={book.imageUrl} alt="" width={48} height={64} /></span><span><b>{book.title}</b><small>{[book.author, book.edition, book.publisher].filter(Boolean).join(" · ") || "二手商品"}</small></span></div></td><td><span className="admin-table-person"><b>{seller?.name || "使用者"}</b><small>{seller?.department || "未填系所"}</small></span></td><td><strong>{money(book.price)}</strong><small className="admin-table-muted">{book.condition}</small></td><td><span className="admin-table-muted">{timeAgo(book.createdAt)}</span></td><td><button type="button" className="admin-table-open" onClick={() => setSelectedAdminBook(book)}>查看詳情 <ArrowRight size={15} /></button></td></tr>;
             })}
+          </tbody></table>
           </div>
           {pendingReviews.length === 0 && <EmptyDashboard text="目前沒有等待審核的書籍" />}
+          </section>}
 
-          {hiddenBooks.length > 0 && (
+          {adminWorkspace === "hiddenListings" && <section className="admin-workspace-panel" aria-labelledby="admin-hidden-title"><div className="admin-workspace-heading"><div><span className="section-kicker">HIDDEN LISTINGS</span><h2 id="admin-hidden-title">已隱藏商品</h2><p>檢視被暫時隱藏的刊登，確認後可恢復公開。</p></div><span className="admin-panel-count">{hiddenBooks.length} 筆</span></div>
+          {hiddenBooks.length > 0 ? (
             <>
-              <h2 className="admin-section-title permissions-title">已隱藏商品</h2>
               <div className="permissions-list">
                 {hiddenBooks.map((book) => (
                   <div className="permission-row" key={book.id}>
@@ -4865,11 +4898,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 ))}
               </div>
             </>
-          )}
+          ) : <EmptyDashboard text="目前沒有已隱藏的商品" />}
+          </section>}
 
-          {currentUser.role === "admin" && (
-            <>
-              <h2 className="admin-section-title permissions-title">管理權限</h2>
+          {adminWorkspace === "permissions" && currentUser.role === "admin" && <section className="admin-workspace-panel" aria-labelledby="admin-permissions-title"><div className="admin-workspace-heading"><div><span className="section-kicker">ACCESS CONTROL</span><h2 id="admin-permissions-title">管理權限</h2><p>調整角色與帳號狀態，只有系統管理員可以進入此工作區。</p></div><span className="admin-panel-count">{store.profiles.length} 位使用者</span></div>
               <div className="permissions-list">
                 {store.profiles.map((user) => (
                   <div className="permission-row" key={user.id}>
@@ -4892,7 +4924,24 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   </div>
                 ))}
               </div>
-            </>
+          </section>}
+            </div>
+          </div>
+          {selectedAdminBook && (
+            <ModalShell
+              title={selectedAdminBook.title}
+              subtitle="刊登審核詳情"
+              onClose={() => setSelectedAdminBook(null)}
+              dialogClassName="admin-detail-drawer"
+            >
+              <div className="admin-detail-drawer-content">
+                <div className="admin-detail-cover"><Image src={selectedAdminBook.imageUrl} alt={selectedAdminBook.title} width={180} height={240} /></div>
+                <div className="admin-detail-summary"><span className="review-badge pending">待審核</span><h3>{selectedAdminBook.title}</h3><p>{[selectedAdminBook.author, selectedAdminBook.edition, selectedAdminBook.publisher].filter(Boolean).join(" · ") || "二手商品"}</p></div>
+                <dl className="admin-detail-facts"><div><dt>賣家</dt><dd>{profile(selectedAdminBook.sellerId)?.name || "使用者"}</dd></div><div><dt>價格</dt><dd>{money(selectedAdminBook.price)}</dd></div><div><dt>書況</dt><dd>{selectedAdminBook.condition}</dd></div><div><dt>面交方式</dt><dd>{meetupSummary(selectedAdminBook)}</dd></div>{selectedAdminBook.isbn13 && <div><dt>ISBN-13</dt><dd>{selectedAdminBook.isbn13}</dd></div>}{selectedAdminBook.approvalNumber && <div><dt>審定字號</dt><dd>{selectedAdminBook.approvalNumber}</dd></div>}</dl>
+                <div className="admin-detail-description"><span className="section-kicker">DESCRIPTION</span><p>{selectedAdminBook.description || "賣家沒有補充說明。"}</p></div>
+                <div className="admin-detail-actions"><button type="button" className="reject" onClick={() => { setSelectedAdminBook(null); void reviewBook(selectedAdminBook.id, "rejected"); }}><X size={17} />拒絕刊登</button><button type="button" className="accept" onClick={() => { setSelectedAdminBook(null); void reviewBook(selectedAdminBook.id, "approved"); }}><Check size={17} />通過上架</button></div>
+              </div>
+            </ModalShell>
           )}
         </section>
       )}
@@ -5077,12 +5126,14 @@ function ModalShell({
   subtitle,
   onClose,
   closeOnBackdrop = true,
+  dialogClassName,
   children,
 }: {
   title: string;
   subtitle: string;
   onClose: () => void;
   closeOnBackdrop?: boolean;
+  dialogClassName?: string;
   children: React.ReactNode;
 }) {
   const headingId = useId();
@@ -5147,7 +5198,7 @@ function ModalShell({
   }, []);
 
   return (
-    <NativeDialog className="modal-backdrop" onClose={onClose} closeOnBackdrop={closeOnBackdrop}>
+    <NativeDialog className={`modal-backdrop ${dialogClassName || ""}`} onClose={onClose} closeOnBackdrop={closeOnBackdrop}>
       {closeOnBackdrop && (
         <button
           type="button"
