@@ -3983,29 +3983,56 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   >
                     <div className="card-image">
                       <Image src={book.imageUrl} alt="" width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
-                      {book.sellerVerified && <span className="verified-seller-badge"><ShieldCheck size={13} />已驗證賣家</span>}
+                      {book.sellerVerified && <span className="verified-seller-badge"><ShieldCheck size={13} />{book.listingType === "giveaway" ? "已驗證贈送者" : "已驗證賣家"}</span>}
                       <span className={`status ${book.status}`}>{book.listingType === "giveaway" ? "免費贈送" : statusLabels[book.status]}</span>
                     </div>
-                    <div className="card-body">
-                      <span
-                        className={`course-tag ${cardContextLabel(book) ? "" : "is-empty"}`}
-                        aria-hidden={cardContextLabel(book) ? undefined : true}
-                      >
-                        {giveawayCategoryLabel(book) || "\u00a0"}
-                      </span>
+                    <div className={`card-body ${book.listingType === "giveaway" ? "giveaway-card-details" : ""}`}>
+                      {book.listingType !== "giveaway" && (
+                        <span
+                          className={`course-tag ${cardContextLabel(book) ? "" : "is-empty"}`}
+                          aria-hidden={cardContextLabel(book) ? undefined : true}
+                        >
+                          {giveawayCategoryLabel(book) || "\u00a0"}
+                        </span>
+                      )}
                       <h3>{book.title}</h3>
-                      <p>{book.listingType === "giveaway" ? (book.description || "校園零元贈送") : book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
+                      <p className={book.listingType === "giveaway" ? "giveaway-card-description" : undefined}>{book.listingType === "giveaway" ? (book.description || "填寫意願即可申請，面交前可先使用站內訊息確認。") : book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
                       {book.listingType === "book" && textbookMetadata(book).length > 0 && (
                         <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
                       )}
-                      <div className="card-meta"><span>{book.condition}</span><span>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={13} aria-hidden="true" /> : null}{meetupSummary(book)}</span></div>
+                      <div className={`card-meta ${book.listingType === "giveaway" ? "giveaway-card-meta" : ""}`}>
+                        {book.listingType === "giveaway" ? (
+                          <>
+                            <span><b>書況</b>{book.condition}</span>
+                            <span className={`giveaway-meetup-row meetup-${normalizeMeetupMode(book.meetupMode)}`}>
+                              {normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={14} aria-hidden="true" /> : normalizeMeetupMode(book.meetupMode) === "mutual_discussion" ? <MessageCircle size={14} aria-hidden="true" /> : <UserRound size={14} aria-hidden="true" />}
+                              <span className="giveaway-meetup-copy">
+                                <b>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? "指定位置" : "面交方式"}</b>
+                                <strong>{meetupSummary(book) || "尚未提供詳細資訊"}</strong>
+                              </span>
+                            </span>
+                            <span><Clock3 size={13} aria-hidden="true" /><b>刊登</b>{timeAgo(book.createdAt)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>{book.condition}</span>
+                            <span>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={13} aria-hidden="true" /> : null}{meetupSummary(book)}</span>
+                          </>
+                        )}
+                      </div>
+                      {book.listingType === "giveaway" && (
+                        <div className="giveaway-card-support" aria-label="贈送交易保障">
+                          {book.sellerVerified && <span><ShieldCheck size={13} aria-hidden="true" />已驗證贈送者</span>}
+                          <span><MessageCircle size={13} aria-hidden="true" />可先訊息確認</span>
+                        </div>
+                      )}
                       <div className="card-footer">
                         {book.listingType === "giveaway" ? (
                           <span className="giveaway-card-cta">查看並申請 <ArrowRight size={16} aria-hidden="true" /></span>
                         ) : (
                           <strong>{money(book.price)}</strong>
                         )}
-                        <small>{timeAgo(book.createdAt)}刊登</small>
+                        {book.listingType !== "giveaway" && <small>{timeAgo(book.createdAt)}刊登</small>}
                       </div>
                     </div>
                   </button>
