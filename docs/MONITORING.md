@@ -12,6 +12,17 @@ Both workflows use `scripts/release-smoke.mjs`, which checks:
 - `/api/marketplace/count`
 - `/api/health/release`
 
+Manual production releases use `.github/workflows/release-production.yml`.
+That workflow verifies the exact main SHA, applies migrations through the
+protected approval path when needed, creates a targeted deployment, and runs
+the same smoke checks. If source or release health does not match the expected
+full SHA, report `NOT VERIFIED` and stop.
+
+For human-readable local verification, `npm run dev` exposes the local Release
+dashboard at `/release`. It is workspace-only and runs fixed source, contract,
+test, typecheck, and lint checks; it is not a production deployment control
+plane.
+
 ## Sentry
 
 Set these environment variables in Vercel:

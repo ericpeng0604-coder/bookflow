@@ -125,5 +125,12 @@ assert.match(workflow, /clean worktree/);
 assert.match(workflow, /gh pr checks --watch/);
 assert.match(workflow, /api\/health\/release/);
 assert.match(workflow, /Monitoring and backup expectations/);
+assert.match(workflow, /Manual production release/);
+assert.match(workflow, /check:local-source/);
+assert.match(read("package.json"), /release-source\.mjs/);
+assert.match(read("package.json"), /check-release-dashboard\.mjs/);
+assert.match(read(".github/workflows/release-production.yml"), /release_sha/);
+assert.match(read("scripts/release-plan.mjs"), /Release Production/);
+assert.match(read("app/release/release-dashboard.tsx"), /開始本機檢查/);
 
 console.log("Release flow checks passed.");

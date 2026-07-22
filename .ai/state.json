@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "handoff",
-  "taskId": "20260722-admin-workbench-release",
-  "taskTitle": "BookFlow admin moderation workbench release 0.1.6",
-  "baseCommit": "178cd7d92dc6ae6b531add59aeed00cac47b6189",
-  "updatedAt": "2026-07-22T13:30:00.000Z",
+  "owner": "none",
+  "status": "idle",
+  "taskId": "20260722-bookflow-latest-source-protection-and-ma",
+  "taskTitle": "BookFlow latest-source protection and manual production release",
+  "baseCommit": "d25b52a73124f7e93f0dbb78724fb58840668e0d",
+  "updatedAt": "2026-07-22T06:57:07.833Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260722-admin-workbench-release.md"
+  "historyFile": ".ai/history/20260722-0657-20260722-bookflow-latest-source-protecti.md"
 }

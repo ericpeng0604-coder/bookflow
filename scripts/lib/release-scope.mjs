@@ -73,6 +73,13 @@ function isReleaseInfrastructureFile(file) {
     || file.startsWith("scripts/")
     || file.startsWith("docs/")
     || file.startsWith(".ai/")
+    || file.startsWith("app/release/")
+    || file.startsWith("app/api/release/")
+    || file.startsWith("app/api/health/source/")
+    || file === "tests/release-dashboard.test.mjs"
+    || file === "tests/release-source.test.mjs"
+    || file === "lib/release-dashboard.ts"
+    || file === "lib/release-dashboard-server.ts"
     || [
       "AI_HANDOFF.md",
       "AI_WORK_MANUAL.md",

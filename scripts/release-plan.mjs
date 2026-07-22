@@ -107,6 +107,7 @@ if (touchedMigrations.length) {
 console.log("\nProduction proof after merge:");
 console.log(`  RELEASE_BASE_URL=https://bookflow-green.vercel.app EXPECTED_COMMIT=<merged-sha> ${smokeCommand}`);
 console.log("  Use /api/health/release for the deployed commit before opening large dashboards.");
+console.log("  Manual production release: GitHub Actions > Release Production with release_sha=<current origin/main SHA>.");
 if (scope.hasObservability) {
   console.log("  For Sentry or analytics changes, do not run production smoke until that endpoint reports the merged observability commit.");
 }

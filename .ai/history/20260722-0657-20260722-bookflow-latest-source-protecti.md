@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: BookFlow latest-source protection and manual production release
+- Actor: codex
+- Status: complete
+- Base commit: `d25b52a73124f7e93f0dbb78724fb58840668e0d`
+- Archived at: 2026-07-22T06:57:07.831Z
+
+---
 # BookFlow AI Handoff
 
 ## 任務目標

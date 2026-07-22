@@ -175,6 +175,52 @@ When waiting for PR checks in Codex, use `release:watch-pr` instead of
 failures, while `gh pr checks --watch` repeatedly dumps the full table and can
 consume a large amount of context without adding proof.
 
+## Manual production release
+
+Production release is started manually from the `Release Production` workflow
+with the full 40-character SHA of the current `origin/main` commit. The
+workflow refuses branch names, stale SHAs, and any SHA that is not exactly the
+current main tip. It runs the quality and handoff checks again so the release
+record contains evidence for the exact source being deployed.
+
+When migrations are present, the workflow applies and probes them in staging,
+waits for the protected `production-database` Environment approval, applies the
+same release source to production, then creates a Vercel Git-targeted
+deployment. Configure `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, and
+`VERCEL_GIT_REPO_ID` as repository secrets. Disable Vercel's automatic
+production deployment for `main` so a manual release cannot race a second
+deployment.
+
+The final step runs `release-smoke` with the same full SHA. A failed deployment
+or smoke check stops the workflow, records `NOT VERIFIED`, and points to the
+existing rollback workflow; it never rolls back automatically.
+
+## Latest local preview rule
+
+Use `npm run dev` or `npm run dev:codex` for local testing. These commands stop
+old Node/Next processes, remove the shared `.next` cache, write a source
+manifest, and start Next with the current workspace fingerprint. Before browser
+verification, run:
+
+```text
+npm run check:local-source -- --url http://127.0.0.1:3000
+```
+
+The check compares the running server's commit, dirty state, and fingerprint
+with the current worktree. A mismatch is `NOT LATEST` and must be fixed by
+restarting `dev:latest`; do not continue with browser or production claims.
+Use `npm run dev:raw` only for explicit low-level debugging.
+
+### Local release dashboard
+
+After starting `npm run dev` or `npm run dev:codex`, open
+`http://127.0.0.1:3000/release`. The dashboard explains the local sequence in
+four cards—source fingerprint, release contracts, project tests, and
+typecheck/lint—and shows concise live output. It runs only an allowlisted set
+of local checks; it does not receive deployment secrets and does not deploy
+production. Use the GitHub Actions link in the dashboard for the separate
+full-SHA production release.
+
 ## Recovery changes
 
 The recovery files are:
