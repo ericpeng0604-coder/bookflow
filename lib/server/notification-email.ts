@@ -5,6 +5,8 @@ type NotificationRow = {
   recipient_id: string;
   title: string;
   message: string;
+  request_id: string | null;
+  type: string;
   email_attempts: number;
 };
 
@@ -30,6 +32,16 @@ export function configuredAppUrl() {
   }
 }
 
+function notificationLink(appUrl: string, notification: Pick<NotificationRow, "request_id" | "type">) {
+  const url = new URL(appUrl);
+  if (notification.request_id) {
+    url.searchParams.set("view", "dashboard");
+    url.searchParams.set("tab", notification.type === "request_created" ? "received" : "requests");
+    url.searchParams.set("request", notification.request_id);
+  }
+  return url.toString();
+}
+
 export async function deliverNotificationEmails(
   admin: SupabaseClient,
   options?: { actorId?: string; since?: string; limit?: number },
@@ -43,10 +55,11 @@ export async function deliverNotificationEmails(
   if (!resendKey || !from || !appUrl) {
     throw new Error("Email service is not configured");
   }
+  const safeAppUrl = escapeHtml(appUrl);
 
   let query = admin
     .from("notifications")
-    .select("id,recipient_id,title,message,email_attempts")
+    .select("id,recipient_id,title,message,request_id,type,email_attempts")
     .is("email_sent_at", null)
     .is("email_abandoned_at", null)
     .lt("email_attempts", 5)
@@ -102,7 +115,7 @@ export async function deliverNotificationEmails(
             <div style="font-family:Arial,sans-serif;line-height:1.7;color:#17352f">
               <h2>${escapeHtml(notification.title)}</h2>
               <p>${escapeHtml(notification.message)}</p>
-              <p><a href="${escapeHtml(appUrl)}" style="color:#16745f">開啟虎科書流查看詳情</a></p>
+          <p><a href="${notification.request_id ? escapeHtml(notificationLink(appUrl, notification)) : safeAppUrl}" style="color:#16745f">開啟虎科書流查看詳情</a></p>
             </div>
           `,
         }),

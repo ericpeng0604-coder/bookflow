@@ -30,6 +30,7 @@ import type {
   TrustBadgeType,
   UserRole,
 } from "@/lib/types";
+import { normalizeMeetupMode } from "./meetup.ts";
 
 const MAX_BOOK_IMAGES = 6;
 
@@ -71,6 +72,7 @@ export function mapBook(row: Record<string, unknown>): Book {
     price: Number(row.price),
     imageUrl: imageUrls[0] ?? "",
     imageUrls,
+    meetupMode: normalizeMeetupMode(row.meetup_mode),
     meetup: String(row.meetup),
     description: String(row.description || ""),
     contactMethod: String(row.contact_method || "none") as ContactMethod,

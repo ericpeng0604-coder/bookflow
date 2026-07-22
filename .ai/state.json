@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260720-desktop-active-release",
-  "taskTitle": "BookFlow desktop active navigation release",
-  "baseCommit": "9c378809370ec5a519472dcba4bbfae3393df9ea",
-  "updatedAt": "2026-07-20T00:00:00.000Z",
+  "owner": "codex",
+  "status": "handoff",
+  "taskId": "20260722-zero-giveaway-release",
+  "taskTitle": "BookFlow zero giveaway release 0.1.5",
+  "baseCommit": "971347503a257d4baf4736e19d67c99bf1caf415",
+  "updatedAt": "2026-07-22T12:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260720-desktop-active-release.md"
+  "historyFile": ".ai/history/20260722-zero-giveaway-release.md"
 }

@@ -15,6 +15,12 @@ function storagePath(imageUrl: string) {
   }
 }
 
+function storagePaths(imageUrls: string[]) {
+  return imageUrls
+    .map(storagePath)
+    .filter((path): path is string => Boolean(path));
+}
+
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -38,11 +44,17 @@ export async function GET(request: Request) {
   if (lifecycleError) {
     return NextResponse.json({ error: lifecycleError.message }, { status: 500 });
   }
+  const { data: giveawayDeadlines, error: giveawayDeadlineError } = await admin.rpc("process_giveaway_deadlines", {
+    reference_time: now.toISOString(),
+  });
+  if (giveawayDeadlineError) {
+    return NextResponse.json({ error: giveawayDeadlineError.message }, { status: 500 });
+  }
 
   const cleanupBefore = new Date(now.getTime() - 365 * 86400000).toISOString();
   const { data: dueBooks, error: dueError } = await admin
     .from("books")
-    .select("id,seller_id,image_url")
+    .select("id,seller_id,image_url,image_urls")
     .eq("lifecycle_state", "archived")
     .lte("archived_at", cleanupBefore)
     .limit(100);
@@ -59,9 +71,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: requestError.message }, { status: 500 });
   }
   const booksWithRequests = new Set((requestRows ?? []).map((row) => String(row.book_id)));
-  const imagePaths = books
-    .map((book) => storagePath(String(book.image_url || "")))
-    .filter((path): path is string => Boolean(path));
+  const imagePaths = [...new Set(books.flatMap((book) => storagePaths([
+    String(book.image_url || ""),
+    ...(Array.isArray(book.image_urls) ? book.image_urls.map(String) : []),
+  ])))];
   if (imagePaths.length > 0) {
     const { error: storageError } = await admin.storage.from("book-images").remove(imagePaths);
     if (storageError) {
@@ -94,6 +107,7 @@ export async function GET(request: Request) {
       .from("books")
       .update({
         image_url: "",
+        image_urls: [],
         meetup: "資料已依保留政策移除",
         description: "",
         lifecycle_state: "withdrawn",
@@ -115,15 +129,21 @@ export async function GET(request: Request) {
     sanitized += 1;
   }
 
-  const email = await deliverNotificationEmails(admin, { limit: 100 }).catch((error) => {
+  let email = { enabled: false, sent: 0, failed: 0 };
+  try {
+    email = await deliverNotificationEmails(admin, { limit: 100 });
+  } catch (error) {
+    email = { enabled: true, sent: 0, failed: 1 };
     console.error("Lifecycle email delivery failed", error);
-    return { enabled: true, sent: 0, failed: 1 };
-  });
+  }
 
-  const push = await deliverBrowserPush(admin, { limit: 100 }).catch((error) => {
+  let push = { enabled: false, sent: 0, failed: 0, skipped: 0 };
+  try {
+    push = await deliverBrowserPush(admin, { limit: 100 });
+  } catch (error) {
+    push = { enabled: true, sent: 0, failed: 1, skipped: 0 };
     console.error("Lifecycle browser push delivery failed", error);
-    return { enabled: true, sent: 0, failed: 1, skipped: 0 };
-  });
+  }
 
   const [{ data: verificationCleanup }, { data: operationalCleanup }] = await Promise.all([
     admin.rpc("cleanup_sensitive_verification_data", { reference_time: now.toISOString() }),
@@ -133,6 +153,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     lifecycle,
+    giveawayDeadlines,
     cleanup: { deleted, sanitized, failed: cleanupFailed },
     email,
     push,

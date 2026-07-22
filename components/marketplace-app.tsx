@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Clock3,
   Ellipsis,
+  Gift,
   GraduationCap,
   Heart,
   HelpCircle,
@@ -31,17 +32,13 @@ import {
   Trash2,
   UserRound,
   X,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, type MouseEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-data";
-import { APP_VERSION } from "@/lib/app-version";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import {
-  type AdminWorkspace,
   type DashboardTab,
   type MarketplaceView,
   buildMarketplaceUrl,
@@ -72,8 +69,6 @@ import type {
   StudentVerificationFlags,
   BookOcrDraft,
 } from "@/lib/marketplace/free-ocr";
-import { reviewStudentVerificationWithStorage } from "@/lib/marketplace/student-verification";
-import { normalizeBookImageUrls } from "@/lib/marketplace/mappers";
 import {
   deleteChatImageUploads,
   fetchTradeMessages,
@@ -98,18 +93,15 @@ import {
   type ConversationCursor,
   submitTradeReview,
   fetchUnreadNotificationCount,
-  DEFAULT_RISK_MODERATION_FILTERS,
-  fetchRiskModerationSummary,
-  fetchRiskProfileDetail,
-  fetchRiskProfilesForModeration,
-  updateRiskReviewStatus,
   loadModerationData,
   loadWorkspaceTabData,
   mergeProfiles,
   fetchNotifications,
+  fetchRiskProfileDetail,
   RISK_REVIEW_PAGE_SIZE,
-  type RiskModerationFilters,
 } from "@/lib/marketplace/queries";
+import { giveawayChatBanner, giveawayRequestLabel, sortGiveawayRequests } from "@/lib/marketplace/giveaway";
+import { DEFAULT_MEETUP_MODE, MEETUP_MODE_OPTIONS, meetupModeLabel, normalizeMeetupMode } from "@/lib/marketplace/meetup";
 import { isAbortError, runGuarded } from "@/lib/marketplace/refresh-guard";
 import {
   LISTING_FIELD_LIMITS,
@@ -144,14 +136,10 @@ import type {
   TrustBadge,
   RiskPolicy,
   RiskProfile,
-  RiskProfileSummary,
-  RiskModerationSummary,
-  RiskReviewStatus,
   ListingType,
+  MeetupMode,
   UserRole,
 } from "@/lib/types";
-
-const ACTIVE_REQUEST_CHECK_TIMEOUT_MS = 8_000;
 
 const STORAGE_KEY = "bookflow-market-v1";
 const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
@@ -181,19 +169,6 @@ const messageTimeFormatter = new Intl.DateTimeFormat("zh-TW", {
   hour: "2-digit",
   minute: "2-digit",
 });
-
-function safeImageSource(value: string | null | undefined) {
-  if (!value) return "";
-  if (value.startsWith("blob:")) return value;
-  if (value.startsWith("/") && !value.startsWith("//")) return value;
-
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
-  } catch {
-    return "";
-  }
-}
 
 type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "report" | "feedback" | "tradeReview" | null;
 
@@ -248,10 +223,9 @@ function useActionDialog() {
 }
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 120_000;
-const ADMIN_MODERATION_REFRESH_INTERVAL_MS = 10_000;
-const ADMIN_MODERATION_REFRESH_DEBOUNCE_MS = 400;
 const SECONDHAND_CATEGORIES = [ALL_ITEM_CATEGORIES, "3C 電子", "文具用品", "宿舍生活", "服飾配件", "運動休閒", "其他"];
 const DEFAULT_SECONDHAND_CATEGORY = SECONDHAND_CATEGORIES[1];
+const GIVEAWAY_CATEGORIES = [ALL_ITEM_CATEGORIES, "書籍", "3C 電子", "文具用品", "宿舍生活", "服飾配件", "運動休閒", "其他"];
 
 const REQUEST_PHRASES = [
   "你好，我對這本書有興趣，方便約時間面交嗎？",
@@ -269,7 +243,6 @@ const CHAT_PHRASES = [
 
 const HIDDEN_REQUEST_MESSAGES = new Set(["通用語句提供選擇"]);
 const REQUEST_COORDINATION_MAX_LENGTH = 120;
-const CONFIRMED_ORDER_STATUSES = new Set<RequestStatus>(["reserved", "awaiting_confirmation", "completed"]);
 
 const statusLabels: Record<BookStatus, string> = {
   available: "販售中",
@@ -280,6 +253,7 @@ const statusLabels: Record<BookStatus, string> = {
 const requestLabels: Record<RequestStatus, string> = {
   pending: "等待賣家確認",
   waitlisted: "候補中",
+  awaiting_recipient_confirmation: "等待受贈者確認",
   reserved: "賣家已選定",
   awaiting_confirmation: "等待買家確認",
   completed: "交易完成",
@@ -295,7 +269,7 @@ function sellerRequestNextStep(request: PurchaseRequest) {
       : "你已選定買家，但對方還沒填好面交時間或地點；可先用訊息確認，再安排面交。";
   }
   if (request.status === "awaiting_confirmation") return "你已確認面交，正在等待買家確認收到。";
-  if (request.status === "completed") return "這筆交易已完成，紀錄與訊息仍可用來回查。";
+  if (request.status === "completed") return "這筆交易已完成，訊息與交易紀錄仍可用來回查。";
   if (request.status === "pending" || request.status === "waitlisted") return "尚未選定買家，確認前可先用訊息溝通。";
   return "";
 }
@@ -348,6 +322,13 @@ type ListingImageSubmission = {
 
 type ListingFormSection = "photos" | "book" | "trade";
 
+function bookImageUrls(book: Pick<Book, "imageUrl" | "imageUrls">) {
+  const urls = Array.isArray(book.imageUrls) ? book.imageUrls.filter(Boolean) : [];
+  return book.imageUrl
+    ? [book.imageUrl, ...urls.filter((url) => url !== book.imageUrl)]
+    : urls;
+}
+
 const blankBook: Omit<
   Book,
   | "id"
@@ -385,14 +366,11 @@ const blankBook: Omit<
   price: 0,
   imageUrl: "",
   imageUrls: [],
+  meetupMode: DEFAULT_MEETUP_MODE,
   meetup: "",
   description: "",
   contactMethod: "none",
   contactValue: "",
-};
-
-const bookImageUrls = (book: Pick<Book, "imageUrl" | "imageUrls">) => {
-  return normalizeBookImageUrls(book.imageUrl, book.imageUrls);
 };
 
 const EDUCATION_LEVEL_OPTIONS = [
@@ -453,9 +431,125 @@ function cardContextLabel(book: Book) {
   return listingContextLabel(book) || visibleBookField(book.subject) || visibleBookField(book.course);
 }
 
-function studentVerificationFlagLabelsForDisplay(flags: StudentVerificationFlags) {
-  const labels = [flags.schoolMatched ? "\u6821\u540d\u7591\u4f3c\u7b26\u5408" : "\u672a\u8fa8\u8b58\u5230\u864e\u79d1\u6821\u540d"];
-  if (flags.imageTooSmall) labels.push("\u5716\u7247\u5c3a\u5bf8\u504f\u5c0f");
+function meetupSummary(book: Pick<Book, "meetupMode" | "meetup">) {
+  return normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE
+    ? book.meetup.trim()
+    : meetupModeLabel(book.meetupMode);
+}
+
+const MEETUP_MODE_DETAILS: Record<MeetupMode, { summary: string; detail: string }> = {
+  fixed_location: {
+    summary: "我提供固定地點",
+    detail: "你會先填寫一個校內面交位置，申請者可以依這個位置安排領取。",
+  },
+  mutual_discussion: {
+    summary: "聊天討論地點",
+    detail: "送出後在站內聊天，一起確認雙方都方便且安全的校內面交點。",
+  },
+  applicant_preferred: {
+    summary: "優先配合對方",
+    detail: "不先指定位置，收到申請後優先配合受贈者提出的校內領取地點。",
+  },
+};
+
+function MeetupModePicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: MeetupMode;
+  disabled?: boolean;
+  onChange: (value: MeetupMode) => void;
+}) {
+  const selectedMode = normalizeMeetupMode(value);
+  const [tooltipMode, setTooltipMode] = useState<MeetupMode | null>(null);
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tooltipId = useId();
+
+  useEffect(() => {
+    if (tooltipTimerRef.current !== null) {
+      clearTimeout(tooltipTimerRef.current);
+      tooltipTimerRef.current = null;
+    }
+    setTooltipMode(null);
+  }, [selectedMode]);
+
+  const clearTooltip = useCallback(() => {
+    if (tooltipTimerRef.current !== null) {
+      clearTimeout(tooltipTimerRef.current);
+      tooltipTimerRef.current = null;
+    }
+    setTooltipMode(null);
+  }, []);
+
+  const scheduleTooltip = useCallback((mode: MeetupMode) => {
+    if (tooltipTimerRef.current !== null) clearTimeout(tooltipTimerRef.current);
+    setTooltipMode(null);
+    tooltipTimerRef.current = setTimeout(() => {
+      setTooltipMode(mode);
+      tooltipTimerRef.current = null;
+    }, 650);
+  }, []);
+
+  useEffect(() => () => {
+    if (tooltipTimerRef.current !== null) clearTimeout(tooltipTimerRef.current);
+  }, []);
+
+  return (
+    <div className="meetup-mode-field full">
+      <div className="meetup-mode-label-row">
+        <b>面交方式 *</b>
+        <span>停留一下查看詳細說明</span>
+      </div>
+      <input type="hidden" name="meetupMode" value={selectedMode} />
+      <div className="meetup-mode-picker" role="radiogroup" aria-label="面交方式">
+        {MEETUP_MODE_OPTIONS.map(([mode, label]) => {
+          const detail = MEETUP_MODE_DETAILS[mode];
+          const selected = selectedMode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              className={`meetup-mode-option ${selected ? "selected" : ""} ${tooltipMode === mode ? "has-tooltip" : ""}`}
+              role="radio"
+              aria-checked={selected}
+              disabled={disabled}
+              aria-describedby={tooltipMode === mode ? `${tooltipId}-${mode}` : undefined}
+              onFocus={() => scheduleTooltip(mode)}
+              onBlur={clearTooltip}
+              onClick={() => onChange(mode)}
+            >
+              <span className="meetup-mode-option-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+              <span
+                className="meetup-mode-option-copy"
+                onMouseEnter={() => scheduleTooltip(mode)}
+                onMouseLeave={clearTooltip}
+              >
+                <strong>{label}</strong>
+                <small>{detail.summary}</small>
+                {tooltipMode === mode ? (
+                  <span id={`${tooltipId}-${mode}`} className="meetup-mode-tooltip" role="tooltip">
+                    {detail.detail}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function giveawayCategoryLabel(book: Book) {
+  if (book.listingType !== "giveaway") return cardContextLabel(book);
+  return book.itemCategory === "giveaway" ? "其他" : visibleBookField(book.itemCategory) || "其他";
+}
+
+function studentVerificationFlagLabels(flags: StudentVerificationFlags) {
+  const labels = [flags.schoolMatched ? "校名疑似符合" : "未辨識到虎科校名"];
+  if (flags.textTooShort) labels.push("可讀文字偏少");
+  if (flags.imageTooSmall) labels.push("圖片尺寸偏小");
   return labels;
 }
 
@@ -689,21 +783,17 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [notificationOpen, setNotificationOpen] = useState(false);
   const notificationWrapRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [chatListCollapsed, setChatListCollapsed] = useState(false);
   const [adminOtpEmail, setAdminOtpEmail] = useState("");
   const [contacts, setContacts] = useState<Record<string, TradeContact>>({});
   const [reports, setReports] = useState<Report[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [trustBadges, setTrustBadges] = useState<TrustBadge[]>([]);
-  const [riskProfiles, setRiskProfiles] = useState<RiskProfileSummary[]>([]);
-  const [riskProfileTotal, setRiskProfileTotal] = useState(0);
-  const [riskSummary, setRiskSummary] = useState<RiskModerationSummary | null>(null);
-  const [riskFilters, setRiskFilters] = useState<RiskModerationFilters>(() => ({ ...DEFAULT_RISK_MODERATION_FILTERS }));
-  const [riskPageLoading, setRiskPageLoading] = useState(false);
-  const [selectedRiskProfileId, setSelectedRiskProfileId] = useState<string | null>(null);
-  const [riskProfileDetail, setRiskProfileDetail] = useState<RiskProfile | null>(null);
-  const [riskProfileDetailLoading, setRiskProfileDetailLoading] = useState(false);
+  const [verifiedPartyIds, setVerifiedPartyIds] = useState<Set<string>>(() => new Set());
+  const [riskProfiles, setRiskProfiles] = useState<RiskProfile[]>([]);
   const [riskPolicy, setRiskPolicy] = useState<RiskPolicy | null>(null);
+  const [riskProfileDetail, setRiskProfileDetail] = useState<RiskProfile | null>(null);
+  const [riskFilters, setRiskFilters] = useState({ status: "all", riskLevel: "all" });
+  const riskProfileIds = riskProfiles.map((risk) => risk.userId);
   const [reviewRequest, setReviewRequest] = useState<PurchaseRequest | null>(null);
   const [reviewStatus, setReviewStatus] = useState<{ reviewed: boolean; revieweeId: string; revieweeName: string } | null>(null);
   const [studentVerifications, setStudentVerifications] = useState<StudentVerification[]>([]);
@@ -733,12 +823,12 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [conversationLoadingMore, setConversationLoadingMore] = useState(false);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [pendingReviews, setPendingReviews] = useState<Book[]>([]);
-  const [selectedAdminBook, setSelectedAdminBook] = useState<Book | null>(null);
   const [hiddenBooks, setHiddenBooks] = useState<Book[]>([]);
   const [sellerLifecycle, setSellerLifecycle] = useState<SellerLifecycle | null>(null);
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
   const [activeRequestCheckState, setActiveRequestCheckState] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [activeRequestCheckRetry, setActiveRequestCheckRetry] = useState(0);
+  const [activeRequestCheckKey, setActiveRequestCheckKey] = useState<string | null>(null);
+  const [chatListCollapsed, setChatListCollapsed] = useState(false);
   const [lifecycleSaving, setLifecycleSaving] = useState(false);
   const [pushState, setPushState] = useState<BrowserPushState>("disabled");
   const [pushSaving, setPushSaving] = useState(false);
@@ -746,7 +836,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [showCourseSearchGuide, setShowCourseSearchGuide] = useState(false);
   const bookSavingRef = useRef(false);
   const requestSavingRef = useRef(false);
-  const activeRequestCheckStartedRef = useRef<string | null>(null);
   const adminOtpRequestedRef = useRef<string | null>(null);
   const imageSearchInputRef = useRef<HTMLInputElement>(null);
   const imageSearchRequestRef = useRef(0);
@@ -759,29 +848,39 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const conversationLoadingMoreRef = useRef(false);
   const conversationIdsRef = useRef<Set<string>>(new Set());
   const conversationTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const detailTouchStartXRef = useRef<number | null>(null);
   const [bookSaving, setBookSaving] = useState(false);
   const [requestSaving, setRequestSaving] = useState(false);
   const lastNotificationRefreshRef = useRef(0);
-  const adminModerationDebounceRef = useRef<number | null>(null);
   const debouncedQuery = useDebouncedValue(query, 300);
-  const debouncedRiskQuery = useDebouncedValue(riskFilters.query, 300);
-  const appliedRiskFilters = useMemo(
-    () => ({ ...riskFilters, query: debouncedRiskQuery }),
-    [debouncedRiskQuery, riskFilters],
-  );
   const currentUser = store.currentUser;
+  useEffect(() => {
+    if (!notificationOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !notificationWrapRef.current?.contains(target)) {
+        setNotificationOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNotificationOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [notificationOpen]);
   const {
-    adminWorkspace,
     dashboardTab,
     expandedConversationId,
-    openChatRoute,
     openBookRoute,
     openDashboard: showDashboard,
     returnToChatListRoute,
     returnToMarketRoute,
     selectedId,
     setDashboardTab,
-    setAdminWorkspace,
     setExpandedConversationId,
     setSelectedId,
     setView,
@@ -798,6 +897,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     onBookRouteChange: clearBookDetailRouteState,
     onConversationRoute: openConversation,
   });
+  const isStandaloneChatRoute = view === "chat"
+    || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "chat");
 
   const ensureAdminOtp = useCallback(async (email: string, force = false) => {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
@@ -840,6 +941,22 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       ? "管理員驗證已失效，請按「重新寄送驗證碼」後再試"
       : "管理員驗證已失效，新的 8 位驗證碼已寄出");
     return true;
+  }
+
+  async function ensureCurrentAuthSession() {
+    if (!supabase) return false;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData.session;
+    const expiresAt = session?.expires_at ? session.expires_at * 1000 : 0;
+    if (session?.access_token && expiresAt > Date.now() + 60_000) return true;
+
+    const { data: refreshed, error } = await supabase.auth.refreshSession();
+    if (!error && refreshed.session?.access_token) return true;
+
+    setStore((previous) => ({ ...previous, currentUser: null }));
+    setModal("login");
+    setToast("登入狀態已失效，請重新登入");
+    return false;
   }
 
   const loadMarketplaceBooks = useCallback(async (options?: { append?: boolean }) => {
@@ -927,6 +1044,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             ...new Map([...previous, ...workspace.trustBadges!].map((badge) => [`${badge.userId}:${badge.badgeType}`, badge])).values(),
           ]);
         }
+        if (workspace.verifiedPartyIds) setVerifiedPartyIds(new Set(workspace.verifiedPartyIds));
         if (workspace.sellerLifecycle !== undefined) setSellerLifecycle(workspace.sellerLifecycle);
         if (workspace.studentVerification !== undefined) setMyStudentVerification(workspace.studentVerification);
         if (workspace.conversationPage) {
@@ -946,7 +1064,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }, []);
 
   const loadDashboardWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
-    const tabs = tab === "requests" || tab === "received" || tab === "chats" || tab === "confirmedOrders" || tab === "studentVerification"
+    const tabs = tab === "requests" || tab === "received" || tab === "chats" || tab === "studentVerification"
       ? [tab]
       : [tab, "requests" as const];
     await Promise.all(tabs.map((targetTab) => loadUserWorkspace(user, targetTab)));
@@ -964,6 +1082,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         setReports(data.reports);
         setFeedback(data.feedback);
         setStudentVerifications(data.studentVerifications);
+        setRiskProfiles(data.riskProfiles);
         setRiskPolicy(data.riskPolicy);
         if (data.adminProfiles.length > 0) {
           setStore((previous) => ({
@@ -976,31 +1095,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         if (!isAbortError(error)) {
           setToast(`讀取審核資料失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
         }
-      }
-    });
-  }, []);
-
-  const loadRiskModeration = useCallback(async (user: Profile, filters: RiskModerationFilters) => {
-    if (!supabase) return;
-    const client = supabase;
-    await runGuarded("risk-moderation", async (signal) => {
-      setRiskPageLoading(true);
-      try {
-        const [page, summary] = await Promise.all([
-          fetchRiskProfilesForModeration(client, filters),
-          fetchRiskModerationSummary(client),
-        ]);
-        if (signal.aborted) return;
-        setRiskProfiles(page.profiles);
-        setRiskProfileTotal(page.total);
-        setRiskSummary(summary);
-      } catch (error) {
-        if (await recoverAdminVerification(error instanceof Error ? error.message : "", user)) return;
-        if (!isAbortError(error)) {
-          setToast(`讀取交易風險失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
-        }
-      } finally {
-        if (!signal.aborted) setRiskPageLoading(false);
       }
     });
   }, []);
@@ -1098,7 +1192,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         ...new Map([...previous, ...books].map((book) => [book.id, book])).values(),
       ]);
     } catch (error) {
-      setToast(`載入更多訊息失敗：${error instanceof Error ? error.message : "請稍後再試"}`);
+      setToast(`載入更多訊息失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
     } finally {
       conversationLoadingMoreRef.current = false;
       setConversationLoadingMore(false);
@@ -1132,21 +1226,13 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     ]);
   }, [dashboardTab, loadDashboardWorkspace, loadMarketplaceBooks, store.currentUser]);
 
-  const reloadAfterModerationMutation = useCallback(() => {
+  const reloadAfterModerationMutation = useCallback(async () => {
     if (!supabase || !store.currentUser) return;
-    void Promise.all([
+    await Promise.all([
       loadModerationPanel(store.currentUser),
       loadMarketplaceBooks(),
     ]);
   }, [loadMarketplaceBooks, loadModerationPanel, store.currentUser]);
-
-  const refreshModerationInBackground = useCallback(() => {
-    if (!supabase || !store.currentUser) return;
-    void Promise.all([
-      loadModerationPanel(store.currentUser),
-      loadRiskModeration(store.currentUser, appliedRiskFilters),
-    ]);
-  }, [appliedRiskFilters, loadModerationPanel, loadRiskModeration, store.currentUser]);
 
   const openDashboard = useCallback(() => {
     showDashboard();
@@ -1156,22 +1242,27 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }, [loadDashboardWorkspace, showDashboard, store.currentUser]);
 
   const openDashboardTab = useCallback((tab: DashboardTab) => {
+    setDashboardTab(tab);
+    if (view === "dashboard" && store.currentUser) {
+      void loadDashboardWorkspace(store.currentUser, tab);
+    }
     if (tab === "chats") {
-      openChatRoute();
+      setView("chat");
       return;
     }
-    setDashboardTab(tab);
     showDashboard();
-  }, [openChatRoute, setDashboardTab, showDashboard]);
+  }, [loadDashboardWorkspace, setDashboardTab, setView, showDashboard, store.currentUser, view]);
 
   function openMessages() {
     setNotificationOpen(false);
     setMobileMenuOpen(false);
     requireLogin(() => {
-      if (currentUser && ((view === "dashboard" && dashboardTab === "chats") || view === "chat")) {
-        void loadDashboardWorkspace(currentUser, "chats");
+      if ((view === "dashboard" && dashboardTab === "chats") || view === "chat") {
+        if (currentUser) {
+          void loadDashboardWorkspace(currentUser, "chats");
+        }
       }
-      openChatRoute();
+      openDashboardTab("chats");
     });
   }
 
@@ -1229,6 +1320,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         setNotifications([]);
         setUnreadNotificationCount(0);
         setConversations([]);
+        setConversationHasMore(false);
+        conversationCursorRef.current = null;
+        conversationIdsRef.current = new Set();
         setContacts({});
         setSellerLifecycle(null);
         setSelectedArchivedIds(new Set());
@@ -1252,6 +1346,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         setNotifications([]);
         setUnreadNotificationCount(0);
         setConversations([]);
+        setConversationHasMore(false);
+        conversationCursorRef.current = null;
+        conversationIdsRef.current = new Set();
         setContacts({});
         return;
       }
@@ -1379,23 +1476,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }, [notificationOpen, store.currentUser, loadNotificationFeed]);
 
   useEffect(() => {
-    if (!notificationOpen) return;
-    const closeFromOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && notificationWrapRef.current?.contains(event.target)) return;
-      setNotificationOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setNotificationOpen(false);
-    };
-    document.addEventListener("pointerdown", closeFromOutside);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeFromOutside);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [notificationOpen]);
-
-  useEffect(() => {
     if (!supabase || !store.currentUser) {
       setShowPushPrompt(false);
       return;
@@ -1419,72 +1499,15 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }, [view, store.currentUser, loadModerationPanel]);
 
   useEffect(() => {
-    if (!supabase || view !== "admin" || !store.currentUser) return;
-    if (!["admin", "moderator"].includes(store.currentUser.role)) return;
-    void loadRiskModeration(store.currentUser, appliedRiskFilters);
-  }, [view, store.currentUser, appliedRiskFilters, loadRiskModeration]);
-
-  useEffect(() => {
-    if (!supabase || view !== "admin" || !store.currentUser) return;
-    if (!["admin", "moderator"].includes(store.currentUser.role)) return;
-
-    const client = supabase;
-    const user = store.currentUser;
-    const scheduleRefresh = () => {
-      if (document.visibilityState !== "visible") return;
-      if (adminModerationDebounceRef.current !== null) {
-        window.clearTimeout(adminModerationDebounceRef.current);
-      }
-      adminModerationDebounceRef.current = window.setTimeout(() => {
-        adminModerationDebounceRef.current = null;
-        void Promise.all([
-          loadModerationPanel(user),
-          loadRiskModeration(user, appliedRiskFilters),
-        ]);
-      }, ADMIN_MODERATION_REFRESH_DEBOUNCE_MS);
-    };
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") scheduleRefresh();
-    };
-
-    const channel = client
-      .channel(`admin-moderation:${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "student_verifications",
-        },
-        scheduleRefresh,
-      )
-      .subscribe();
-    const interval = window.setInterval(refreshWhenVisible, ADMIN_MODERATION_REFRESH_INTERVAL_MS);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    window.addEventListener("focus", refreshWhenVisible);
-
-    return () => {
-      if (adminModerationDebounceRef.current !== null) {
-        window.clearTimeout(adminModerationDebounceRef.current);
-        adminModerationDebounceRef.current = null;
-      }
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-      window.removeEventListener("focus", refreshWhenVisible);
-      void client.removeChannel(channel);
-    };
-  }, [appliedRiskFilters, loadModerationPanel, loadRiskModeration, store.currentUser, view]);
-
-  useEffect(() => {
-    if (!supabase || (view !== "dashboard" && view !== "chat") || !store.currentUser) return;
+    if (!supabase || !store.currentUser || (view !== "dashboard" && view !== "chat")) return;
     void loadDashboardWorkspace(store.currentUser, view === "chat" ? "chats" : dashboardTab);
   }, [view, dashboardTab, store.currentUser, loadDashboardWorkspace]);
 
   useEffect(() => {
-    if (!supabase || (view !== "dashboard" && view !== "chat") || !store.currentUser) return;
+    if (!supabase || view !== "dashboard" || !store.currentUser) return;
     const refreshDashboardWhenVisible = () => {
       if (document.visibilityState !== "visible") return;
-      void loadDashboardWorkspace(store.currentUser!, view === "chat" ? "chats" : dashboardTab);
+      void loadDashboardWorkspace(store.currentUser!, dashboardTab);
     };
     document.addEventListener("visibilitychange", refreshDashboardWhenVisible);
     return () => document.removeEventListener("visibilitychange", refreshDashboardWhenVisible);
@@ -1500,37 +1523,25 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       ...hiddenBooks,
       ...store.books,
     ].find((book) => book.id === selectedId);
-    const needsGalleryHydration = !knownBook || bookImageUrls(knownBook).length <= 1;
-    if (knownBook && !needsGalleryHydration) {
+    if (knownBook) {
       setDetailBook(knownBook);
       setBookDetailMissing(false);
       setBookDetailLoading(false);
       return;
     }
-    if (knownBook) {
-      setDetailBook(knownBook);
-      setBookDetailMissing(false);
-      setBookDetailLoading(false);
-    } else {
-      setDetailBook(null);
-      setBookDetailMissing(false);
-      setBookDetailLoading(true);
-    }
+    setDetailBook(null);
+    setBookDetailMissing(false);
+    setBookDetailLoading(true);
     const client = supabase;
     const bookId = selectedId;
     void runGuarded("book-detail", async (signal) => {
       try {
         const book = await fetchBookById(client, bookId);
         if (signal.aborted) return;
-        if (book) {
-          setDetailBook(book);
-          setBookDetailMissing(false);
-        } else if (!knownBook) {
-          setDetailBook(null);
-          setBookDetailMissing(true);
-        }
+        setDetailBook(book);
+        setBookDetailMissing(!book);
       } catch (error) {
-        if (!isAbortError(error) && !knownBook) {
+        if (!isAbortError(error)) {
           setDetailBook(null);
           setBookDetailMissing(true);
         }
@@ -1571,7 +1582,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       if (currentUser) window.localStorage.setItem(pushPromptStorageKey(currentUser.id), "true");
       setToast("瀏覽器推播已開啟");
     } catch (error) {
-      const state = window.Notification?.permission === "denied" ? "denied" : "disabled";
+      const state = "Notification" in window && Notification.permission === "denied" ? "denied" : "disabled";
       setPushState(state);
       setToast(error instanceof Error ? error.message : "無法開啟瀏覽器推播");
     } finally {
@@ -1584,7 +1595,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setPushSaving(true);
     try {
       await disableBrowserPush(supabase);
-      setPushState(window.Notification?.permission === "denied" ? "denied" : "disabled");
+      setPushState("Notification" in window && Notification.permission === "denied" ? "denied" : "disabled");
       if (currentUser) window.localStorage.setItem(pushPromptStorageKey(currentUser.id), "true");
       setToast("瀏覽器推播已關閉");
     } finally {
@@ -1622,46 +1633,37 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     ?? requestBooks.find((book) => book.id === selectedId)
     ?? store.books.find((book) => book.id === selectedId)
     ?? null;
-  const selectedBookImages = useMemo(
-    () => (selectedBook ? bookImageUrls(selectedBook) : []),
-    [selectedBook],
-  );
-  const selectedBookImageSources = useMemo(
-    () => selectedBookImages.map((url) => safeImageSource(url)).filter(Boolean),
-    [selectedBookImages],
-  );
+  const selectedBookImages = selectedBook ? bookImageUrls(selectedBook) : [];
+
+  useEffect(() => {
+    setDetailImageIndex(0);
+    detailTouchStartXRef.current = null;
+  }, [selectedBook?.id]);
+
+  function moveDetailImage(offset: number) {
+    if (selectedBookImages.length < 2) return;
+    setDetailImageIndex((current) => (
+      (current + offset + selectedBookImages.length) % selectedBookImages.length
+    ));
+  }
+
+  function finishDetailSwipe(event: React.TouchEvent<HTMLDivElement>) {
+    const startX = detailTouchStartXRef.current;
+    detailTouchStartXRef.current = null;
+    if (startX === null) return;
+    const delta = event.changedTouches[0]?.clientX - startX;
+    if (delta > 45) moveDetailImage(-1);
+    if (delta < -45) moveDetailImage(1);
+  }
+
   const selectedSellerId = selectedBook?.sellerId ?? null;
   const selectedBookActiveRequest = currentUser && selectedBook
     ? store.requests.find((request) =>
       request.bookId === selectedBook.id
       && request.buyerId === currentUser.id
-      && ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status)
+      && ["pending", "waitlisted", "awaiting_recipient_confirmation", "reserved", "awaiting_confirmation", "completed"].includes(request.status)
     )
     : null;
-  const currentUserRef = useRef(currentUser);
-  const selectedBookRef = useRef(selectedBook);
-  const selectedBookActiveRequestRef = useRef(selectedBookActiveRequest);
-  currentUserRef.current = currentUser;
-  selectedBookRef.current = selectedBook;
-  selectedBookActiveRequestRef.current = selectedBookActiveRequest;
-  useEffect(() => {
-    setDetailImageIndex(0);
-  }, [selectedBook?.id]);
-
-  useEffect(() => {
-    const preloadedImages = selectedBookImageSources.map((source) => {
-      const image = new window.Image();
-      image.decoding = "async";
-      image.src = source;
-      return image;
-    });
-    return () => {
-      for (const image of preloadedImages) {
-        image.onload = null;
-        image.onerror = null;
-      }
-    };
-  }, [selectedBookImageSources]);
   const profile = (id: string) => store.profiles.find((item) => item.id === id);
   const badgeFor = (userId: string, badgeType: "seller" | "buyer") =>
     trustBadges.find((badge) => badge.userId === userId && badge.badgeType === badgeType && badge.status === "approved");
@@ -1680,29 +1682,24 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }, [selectedBook, view, store.profiles]);
 
   useEffect(() => {
-    const user = currentUserRef.current;
-    const book = selectedBookRef.current;
-    const activeRequest = selectedBookActiveRequestRef.current;
-    const requestCheckKey = user && book && book.sellerId !== user.id && view === "book"
-      ? `${book.id}:${user.id}`
+    const requestCheckKey = currentUser && selectedBook && selectedBook.sellerId !== currentUser.id && view === "book"
+      ? `${selectedBook.id}:${currentUser.id}`
       : null;
-    if (!supabase || !user || !book || view !== "book" || book.sellerId === user.id) {
-      activeRequestCheckStartedRef.current = null;
+    if (!supabase || !currentUser || !selectedBook || view !== "book" || selectedBook.sellerId === currentUser.id) {
+      setActiveRequestCheckKey(null);
       setActiveRequestCheckState("idle");
       return;
     }
-    if (activeRequest) {
+    if (selectedBookActiveRequest) {
+      setActiveRequestCheckKey(requestCheckKey);
       setActiveRequestCheckState("ready");
       return;
     }
-    if (activeRequestCheckStartedRef.current === requestCheckKey) return;
-    activeRequestCheckStartedRef.current = requestCheckKey;
+    if (activeRequestCheckKey === requestCheckKey && activeRequestCheckState !== "idle") return;
+    setActiveRequestCheckKey(requestCheckKey);
     setActiveRequestCheckState("loading");
     let active = true;
-    const timeoutId = window.setTimeout(() => {
-      if (active) setActiveRequestCheckState("error");
-    }, ACTIVE_REQUEST_CHECK_TIMEOUT_MS);
-    void fetchActiveRequestForBook(supabase, book.id, user.id)
+    void fetchActiveRequestForBook(supabase, selectedBook.id, currentUser.id)
       .then((request) => {
         if (!active) return;
         if (request) {
@@ -1718,15 +1715,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       })
       .catch(() => {
         if (active) setActiveRequestCheckState("error");
-      })
-      .finally(() => {
-        window.clearTimeout(timeoutId);
       });
     return () => {
       active = false;
-      window.clearTimeout(timeoutId);
     };
-  }, [activeRequestCheckRetry, currentUser?.id, selectedBook?.id, selectedBook?.sellerId, selectedBookActiveRequest?.id, view]);
+  }, [activeRequestCheckKey, activeRequestCheckState, currentUser, selectedBook, selectedBookActiveRequest, view]);
 
   function clearBookDetailRouteState() {
     setDetailBook(null);
@@ -1749,7 +1742,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     const target = filteredBooks.find((book) => book.id === id)
       ?? myBooks.find((book) => book.id === id)
       ?? requestBooks.find((book) => book.id === id);
-    setDetailImageIndex(0);
     openBookRoute(id, target?.listingType || listingType);
   }
 
@@ -1765,7 +1757,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setImageSearchActive(false);
     setImageSearchResultCount(null);
     setImageSearchQuery("");
-    if (nextType === "book") {
+    if (nextType !== "secondhand") {
       setItemCategory(ALL_ITEM_CATEGORIES);
     } else {
       setDepartment(departments[0]);
@@ -1774,7 +1766,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       listingType: nextType,
       view: "home",
       selectedId: null,
-      adminWorkspace,
       currentUser,
       dashboardTab,
       expandedConversationId: null,
@@ -1949,7 +1940,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         contentType: file.type || "image/jpeg",
         upsert: false,
       });
-    if (uploadError) return "目前無法上傳學生證，請稍後再試。";
+    if (uploadError) return `學生證上傳失敗：${uploadError.message}`;
 
     const { error: rawError } = await supabase.rpc("submit_student_verification", {
       image_path: path,
@@ -1959,11 +1950,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     });
     if (rawError) {
       await supabase.storage.from("student-verifications").remove([path]);
-      const message = rawError.message.toLowerCase();
-      if (message.includes("pending")) return "你已有一筆審核中的學生證，請等待審核完成。";
-      if (message.includes("daily") || message.includes("limit")) return "今日提交次數已達上限，請明天再試。";
-      if (message.includes("active account") || message.includes("auth")) return "請重新登入後再試。";
-      return "目前無法送出學生證審核，請稍後再試。";
+      return `學生證提交失敗：${rawError.message}`;
     }
 
     setToast("學生證已送出，管理員會人工審核");
@@ -1976,6 +1963,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setMyBooks([]);
     setRequestBooks([]);
     setNotifications([]);
+    conversationSummaryUserRef.current = null;
+    conversationSummaryLoadingRef.current = false;
+    lastConversationRefreshRef.current = 0;
+    setConversations([]);
     setContacts({});
     setPendingReviews([]);
     setHiddenBooks([]);
@@ -2010,13 +2001,39 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           : []);
       const uploadedImagePaths: string[] = [];
       let imageUrls = editingBook ? bookImageUrls(editingBook) : [];
-      let imageUrl: string | undefined;
+      let imageUrl = imageUrls[0] ?? "";
       const cleanupUploadedImages = async () => {
-        if (uploadedImagePaths.length > 0) await supabase?.storage.from("book-images").remove(uploadedImagePaths);
+        if (uploadedImagePaths.length > 0) {
+          await supabase?.storage.from("book-images").remove(uploadedImagePaths);
+        }
       };
-      if (imageItems.some((item) => item.file) && !supabase) {
-        setToast("圖片上傳服務尚未完成設定");
-        return;
+
+      const firstNewImage = imageItems.find((item) => item.file);
+      const image = firstNewImage?.file;
+      if (image) {
+        if (!supabase) {
+          setToast("圖片上傳服務尚未完成設定");
+          return;
+        }
+        try {
+          const compressed = await compressBookImage(image);
+          const extension = compressed.name.split(".").pop()?.toLowerCase() || "jpg";
+          const filePath = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+          const { error: uploadError } = await supabase.storage
+            .from("book-images")
+            .upload(filePath, compressed, { cacheControl: BOOK_IMAGE_CACHE_CONTROL, upsert: false });
+
+          if (uploadError) {
+            setToast(`圖片上傳失敗：${uploadError.message}`);
+            return;
+          }
+
+          imageUrl = supabase.storage.from("book-images").getPublicUrl(filePath).data.publicUrl;
+          uploadedImagePaths.push(filePath);
+        } catch (error) {
+          setToast(error instanceof Error ? error.message : "圖片處理失敗");
+          return;
+        }
       }
 
       const resolvedImages: ListingImageItem[] = [];
@@ -2026,17 +2043,22 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             resolvedImages.push(item);
             continue;
           }
+          if (item.id === firstNewImage?.id) {
+            resolvedImages.push({ ...item, url: imageUrl });
+            continue;
+          }
+          if (!supabase) throw new Error("圖片上傳服務尚未完成設定");
           const compressed = await compressBookImage(item.file);
           const extension = compressed.name.split(".").pop()?.toLowerCase() || "jpg";
           const filePath = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
-          const { error: uploadError } = await supabase!.storage
+          const { error: uploadError } = await supabase.storage
             .from("book-images")
             .upload(filePath, compressed, { cacheControl: BOOK_IMAGE_CACHE_CONTROL, upsert: false });
           if (uploadError) throw uploadError;
           uploadedImagePaths.push(filePath);
           resolvedImages.push({
             ...item,
-            url: supabase!.storage.from("book-images").getPublicUrl(filePath).data.publicUrl,
+            url: supabase.storage.from("book-images").getPublicUrl(filePath).data.publicUrl,
           });
         }
         const coverId = imageSubmission?.coverId || resolvedImages[0]?.id;
@@ -2056,6 +2078,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         return;
       }
 
+      const listingType = (String(fields.listingType) === "giveaway" ? "giveaway" : String(fields.listingType) === "secondhand" ? "secondhand" : "book") as ListingType;
+      const meetupMode: MeetupMode = listingType === "book"
+        ? DEFAULT_MEETUP_MODE
+        : normalizeMeetupMode(fields.meetupMode);
       const validated = normalizeAndValidateListingFields({
         title: String(fields.title),
         author: String(fields.author),
@@ -2063,6 +2089,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         publisher: String(fields.publisher),
         course: String(fields.course),
         teacher: String(fields.teacher),
+        meetupMode,
         meetup: String(fields.meetup),
         description: String(fields.description),
         educationLevel: String(fields.educationLevel || ""),
@@ -2074,7 +2101,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         bookType: String(fields.bookType || ""),
         isbn13: String(fields.isbn13 || ""),
         approvalNumber: String(fields.approvalNumber || ""),
-        price: Number(fields.price),
+        price: listingType === "giveaway" ? 0 : Number(fields.price),
       });
       if ("error" in validated) {
         await cleanupUploadedImages();
@@ -2083,8 +2110,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       }
       const clean = validated.value;
       const payload = {
-        listingType: (String(fields.listingType) === "secondhand" ? "secondhand" : "book") as ListingType,
-        itemCategory: String(fields.itemCategory || "book"),
+        listingType,
+        itemCategory: String(fields.listingType) === "giveaway" ? String(fields.itemCategory || "其他") : String(fields.itemCategory || "book"),
         title: clean.title,
         author: clean.author,
         department: String(fields.department),
@@ -2102,9 +2129,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         isbn13: clean.isbn13,
         approvalNumber: clean.approvalNumber,
         condition: String(fields.condition),
-        price: clean.price,
+        price: String(fields.listingType) === "giveaway" ? 0 : clean.price,
         imageUrl,
         imageUrls,
+        meetupMode,
         meetup: clean.meetup,
         description: clean.description,
         contactMethod: editingBook?.contactMethod ?? "none",
@@ -2129,6 +2157,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       }
       if (payload.listingType === "secondhand" && !SECONDHAND_CATEGORIES.slice(1).includes(payload.itemCategory)) {
         setToast("請選擇正確的二手分類");
+        return;
+      }
+      if (payload.listingType === "giveaway" && !GIVEAWAY_CATEGORIES.slice(1).includes(payload.itemCategory)) {
+        setToast("請選擇正確的贈送分類");
         return;
       }
 
@@ -2156,6 +2188,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           price: payload.price,
           image_url: payload.imageUrl,
           image_urls: payload.imageUrls,
+          meetup_mode: payload.meetupMode,
           meetup: payload.meetup,
           description: payload.description,
         };
@@ -2174,7 +2207,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           const oldImagePaths = bookImageUrls(editingBook)
             .map((url) => extractStoragePath(url))
             .filter((path): path is string => Boolean(path) && !retainedPaths.has(path));
-          if (oldImagePaths.length > 0) void supabase.storage.from("book-images").remove(oldImagePaths);
+          if (oldImagePaths.length > 0) {
+            void supabase.storage.from("book-images").remove(oldImagePaths);
+          }
         }
         if (ocrOriginal && JSON.stringify(ocrOriginal) !== JSON.stringify(correctedOcrFields)) {
           await supabase.rpc("record_textbook_ocr_feedback", {
@@ -2244,129 +2279,175 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setRequestSaving(true);
     try {
       const formData = new FormData(event.currentTarget);
-    const message = String(formData.get("message") || "").trim();
-    const preferredMeetupLocation = String(formData.get("preferredMeetupLocation") || "")
-      .trim()
-      .slice(0, REQUEST_COORDINATION_MAX_LENGTH);
-    const preferredMeetupTime = String(formData.get("preferredMeetupTime") || "")
-      .trim()
-      .slice(0, REQUEST_COORDINATION_MAX_LENGTH);
-    const duplicate = store.requests.find(
-      (request) =>
-        request.bookId === selectedBook.id &&
-        request.buyerId === currentUser.id &&
-        ["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status),
-    );
-    if (supabase) {
-      let existingMessage = duplicate?.message;
-      let existingMeetupLocation = duplicate?.preferredMeetupLocation;
-      let existingMeetupTime = duplicate?.preferredMeetupTime;
-      if (!duplicate) {
-        const { data: existing, error: existingError } = await supabase
-          .from("purchase_requests")
-          .select("id,message,status,preferred_meetup_location,preferred_meetup_time")
-          .eq("book_id", selectedBook.id)
-          .eq("buyer_id", currentUser.id)
-          .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation"])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .abortSignal(AbortSignal.timeout(10_000))
-          .maybeSingle();
-        if (existingError) {
-          setToast(`無法確認既有購買意願：${existingError.message}`);
+      const message = String(formData.get("message") || "").trim();
+      const preferredMeetupLocation = String(formData.get("preferredMeetupLocation") || "")
+        .trim()
+        .slice(0, REQUEST_COORDINATION_MAX_LENGTH);
+      const preferredMeetupTime = String(formData.get("preferredMeetupTime") || "")
+        .trim()
+        .slice(0, REQUEST_COORDINATION_MAX_LENGTH);
+      if (selectedBook.listingType === "giveaway") {
+        if (supabase) {
+          const { error } = await supabase.rpc("create_giveaway_request", {
+            target_book_id: selectedBook.id,
+            request_message: message,
+            preferred_location: preferredMeetupLocation,
+            preferred_time: preferredMeetupTime,
+          });
+          if (error) {
+            setToast(`申請失敗：${error.message}`);
+            return;
+          }
+          await reloadAfterUserMutation();
+          void dispatchNotificationDeliveries();
+        } else {
+          const duplicateGiveaway = store.requests.find((request) =>
+            request.bookId === selectedBook.id
+            && request.buyerId === currentUser.id
+            && ["pending", "waitlisted", "awaiting_recipient_confirmation", "reserved", "awaiting_confirmation"].includes(request.status),
+          );
+          if (duplicateGiveaway) {
+            setStore((previous) => ({
+              ...previous,
+              requests: previous.requests.map((request) => request.id === duplicateGiveaway.id
+                ? { ...request, message, preferredMeetupLocation, preferredMeetupTime, updatedAt: new Date().toISOString() }
+                : request),
+            }));
+          } else {
+            setStore((previous) => ({
+              ...previous,
+              requests: [...previous.requests, {
+                id: crypto.randomUUID(), bookId: selectedBook.id, buyerId: currentUser.id,
+                message, preferredMeetupLocation, preferredMeetupTime, status: "pending",
+                titleSnapshot: selectedBook.title, priceSnapshot: 0, editionSnapshot: selectedBook.edition,
+                imageSnapshot: selectedBook.imageUrl, meetupSnapshot: selectedBook.meetup,
+                reservationExpiresAt: null, sellerHandoffAt: null, buyerConfirmedAt: null,
+                cancelledAt: null, cancellationReason: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+              }],
+            }));
+          }
+        }
+        setModal(null);
+        setEditingRequest(null);
+        setToast("零元贈送申請已送出");
+        return;
+      }
+      const duplicate = store.requests.find(
+        (request) =>
+          request.bookId === selectedBook.id &&
+          request.buyerId === currentUser.id &&
+          ["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status),
+      );
+      if (supabase) {
+        let existingMessage = duplicate?.message;
+        let existingMeetupLocation = duplicate?.preferredMeetupLocation;
+        let existingMeetupTime = duplicate?.preferredMeetupTime;
+        if (!duplicate) {
+          const { data: existing, error: existingError } = await supabase
+            .from("purchase_requests")
+            .select("id,message,status,preferred_meetup_location,preferred_meetup_time")
+            .eq("book_id", selectedBook.id)
+            .eq("buyer_id", currentUser.id)
+            .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation"])
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .abortSignal(AbortSignal.timeout(10_000))
+            .maybeSingle();
+          if (existingError) {
+            setToast(`無法確認既有購買意願：${existingError.message}`);
+            return;
+          }
+          existingMessage = existing ? String(existing.message || "") : undefined;
+          existingMeetupLocation = existing ? String(existing.preferred_meetup_location || "") : undefined;
+          existingMeetupTime = existing ? String(existing.preferred_meetup_time || "") : undefined;
+        }
+        if (
+          existingMessage?.trim() === message
+          && String(existingMeetupLocation || "").trim() === preferredMeetupLocation
+          && String(existingMeetupTime || "").trim() === preferredMeetupTime
+        ) {
+          setModal(null);
+          setEditingRequest(null);
+          setToast("已送出購買意願");
           return;
         }
-        existingMessage = existing ? String(existing.message || "") : undefined;
-        existingMeetupLocation = existing ? String(existing.preferred_meetup_location || "") : undefined;
-        existingMeetupTime = existing ? String(existing.preferred_meetup_time || "") : undefined;
-      }
-      if (
-        existingMessage?.trim() === message
-        && String(existingMeetupLocation || "").trim() === preferredMeetupLocation
-        && String(existingMeetupTime || "").trim() === preferredMeetupTime
-      ) {
+        const { error } = await supabase.rpc("create_purchase_request", {
+          target_book_id: selectedBook.id,
+          request_message: message,
+          preferred_meetup_location: preferredMeetupLocation,
+          preferred_meetup_time: preferredMeetupTime,
+        });
+        if (error) {
+          setToast(error.code === "23505" ? "你已送出過購買意願" : `送出失敗：${error.message}`);
+          return;
+        }
+        await reloadAfterUserMutation();
+        void dispatchNotificationDeliveries();
         setModal(null);
         setEditingRequest(null);
-        setToast("已送出購買意願");
+        setToast("購買意願已送出");
         return;
       }
-      const { error } = await supabase.rpc("create_purchase_request", {
-        target_book_id: selectedBook.id,
-        request_message: message,
-        preferred_meetup_location: preferredMeetupLocation,
-        preferred_meetup_time: preferredMeetupTime,
-      });
-      if (error) {
-        setToast(error.code === "23505" ? "你已送出過購買意願" : `送出失敗：${error.message}`);
-        return;
-      }
-      await reloadAfterUserMutation();
-      void dispatchNotificationDeliveries();
-      setModal(null);
-      setEditingRequest(null);
-      setToast("購買意願已送出");
-      return;
-    }
-    if (duplicate) {
-      if (
-        duplicate.message.trim() === message
-        && duplicate.preferredMeetupLocation.trim() === preferredMeetupLocation
-        && duplicate.preferredMeetupTime.trim() === preferredMeetupTime
-      ) {
+      if (duplicate) {
+        if (
+          duplicate.message.trim() === message
+          && duplicate.preferredMeetupLocation.trim() === preferredMeetupLocation
+          && duplicate.preferredMeetupTime.trim() === preferredMeetupTime
+        ) {
+          setModal(null);
+          setEditingRequest(null);
+          setToast("已送出購買意願");
+          return;
+        }
+        setStore((previous) => ({
+          ...previous,
+          requests: previous.requests.map((request) =>
+            request.id === duplicate.id
+              ? {
+                ...request,
+                message,
+                preferredMeetupLocation,
+                preferredMeetupTime,
+                updatedAt: new Date().toISOString(),
+              }
+              : request,
+          ),
+        }));
         setModal(null);
         setEditingRequest(null);
-        setToast("已送出購買意願");
+        setToast("購買意願已送出");
         return;
       }
       setStore((previous) => ({
         ...previous,
-        requests: previous.requests.map((request) =>
-          request.id === duplicate.id
-            ? {
-              ...request,
-              message,
-              preferredMeetupLocation,
-              preferredMeetupTime,
-              updatedAt: new Date().toISOString(),
-            }
-            : request,
-        ),
+        requests: [
+          ...previous.requests,
+          {
+            id: crypto.randomUUID(),
+            bookId: selectedBook.id,
+            buyerId: currentUser.id,
+            message,
+            preferredMeetupLocation,
+            preferredMeetupTime,
+            status: "pending",
+            titleSnapshot: selectedBook.title,
+            priceSnapshot: selectedBook.price,
+            editionSnapshot: selectedBook.edition,
+            imageSnapshot: selectedBook.imageUrl,
+            meetupSnapshot: selectedBook.meetup,
+            reservationExpiresAt: null,
+            sellerHandoffAt: null,
+            buyerConfirmedAt: null,
+            cancelledAt: null,
+            cancellationReason: "",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
       }));
       setModal(null);
       setEditingRequest(null);
       setToast("購買意願已送出");
-      return;
-    }
-    setStore((previous) => ({
-      ...previous,
-      requests: [
-        ...previous.requests,
-        {
-          id: crypto.randomUUID(),
-          bookId: selectedBook.id,
-          buyerId: currentUser.id,
-          message,
-          preferredMeetupLocation,
-          preferredMeetupTime,
-          status: "pending",
-          titleSnapshot: selectedBook.title,
-          priceSnapshot: selectedBook.price,
-          editionSnapshot: selectedBook.edition,
-          imageSnapshot: selectedBook.imageUrl,
-          meetupSnapshot: selectedBook.meetup,
-          reservationExpiresAt: null,
-          sellerHandoffAt: null,
-          buyerConfirmedAt: null,
-          cancelledAt: null,
-          cancellationReason: "",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    }));
-    setModal(null);
-    setEditingRequest(null);
-    setToast("購買意願已送出");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "購買意願送出失敗，請稍後再試");
     } finally {
@@ -2445,6 +2526,46 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setToast(status === "accepted" ? "已接受意願，雙方聯絡資訊已開放" : "已婉拒這筆意願");
   }
 
+  async function selectGiveawayRecipient(requestId: string) {
+    const target = store.requests.find((request) => request.id === requestId);
+    if (!target || !supabase) return;
+    const { error } = await supabase.rpc("select_giveaway_recipient", { target_request_id: requestId });
+    if (error) {
+      setToast(`選定受贈者失敗：${error.message}`);
+      return;
+    }
+    await reloadAfterUserMutation();
+    void dispatchNotificationDeliveries();
+    setToast("已選定受贈者，等待對方 24 小時內確認");
+  }
+
+  async function respondToGiveawayRecipient(requestId: string, response: "accepted" | "declined") {
+    if (!supabase) return;
+    const { error } = await supabase.rpc("respond_to_giveaway_recipient", {
+      target_request_id: requestId,
+      response,
+    });
+    if (error) {
+      setToast(`回覆失敗：${error.message}`);
+      return;
+    }
+    await reloadAfterUserMutation();
+    void dispatchNotificationDeliveries();
+    setToast(response === "accepted" ? "已接受贈送，請與贈送者確認面交" : "已回覆無法領取，贈送者可以改選候補");
+  }
+
+  async function confirmGiveawayHandoff(requestId: string) {
+    if (!supabase) return;
+    const { error } = await supabase.rpc("giveaway_confirm_handoff", { target_request_id: requestId });
+    if (error) {
+      setToast(`完成確認失敗：${error.message}`);
+      return;
+    }
+    await reloadAfterUserMutation();
+    void dispatchNotificationDeliveries();
+    setToast("已送出面交完成確認，等待另一方回覆");
+  }
+
   async function cancelRequest(requestId: string) {
     if (!currentUser) return;
     if (currentUser.accountStatus === "suspended") {
@@ -2458,7 +2579,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     const sellerCancellingReservation = Boolean(
       targetRequest
       && targetBook?.sellerId === currentUser.id
-      && ["reserved", "awaiting_confirmation"].includes(targetRequest.status),
+      && ["awaiting_recipient_confirmation", "reserved", "awaiting_confirmation"].includes(targetRequest.status),
     );
     const reason = await actionDialog.ask({
       title: sellerCancellingReservation ? "取消保留" : "取消購買意願",
@@ -2502,7 +2623,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       return;
     }
     await loadUserWorkspace(currentUser, "chats");
-    openChatRoute(String(data));
+    openDashboardTab("chats");
     void openConversation(String(data));
   }
 
@@ -2516,7 +2637,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       return;
     }
     await loadUserWorkspace(currentUser, "chats");
-    openChatRoute(String(data));
+    openDashboardTab("chats");
     void openConversation(String(data));
   }
 
@@ -2625,15 +2746,31 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       setToast("你的帳號目前為唯讀模式，不能修改刊登");
       return;
     }
+    const targetListing = myListings.find((book) => book.id === bookId);
     const confirmed = await actionDialog.ask({
-      title: "下架刊登",
-      message: "下架後不會再公開顯示；既有交易與訊息不會被刪除。若目前沒有進行中的交易，之後可從刊登管理恢復。",
-      confirmLabel: "確認下架",
+      title: targetListing?.listingType === "giveaway" ? "取消零元贈送" : "下架刊登",
+      message: targetListing?.listingType === "giveaway"
+        ? "取消後會通知所有申請者，申請與聊天紀錄仍會保留。"
+        : "下架後不會再公開顯示；既有交易與訊息不會被刪除。若目前沒有進行中的交易，之後可從刊登管理恢復。",
+      inputLabel: targetListing?.listingType === "giveaway" ? "取消原因（必填）" : undefined,
+      minLength: targetListing?.listingType === "giveaway" ? 2 : undefined,
+      confirmLabel: targetListing?.listingType === "giveaway" ? "確認取消" : "確認下架",
       danger: true,
     });
     if (confirmed === null) return;
     if (supabase && currentUser) {
       const client = supabase;
+      if (targetListing?.listingType === "giveaway") {
+        const { error } = await client.rpc("cancel_giveaway_listing", { target_book_id: bookId, cancellation_reason: confirmed });
+        if (error) {
+          setToast(`取消失敗：${error.message}`);
+          return;
+        }
+        await reloadAfterUserMutation();
+        void dispatchNotificationDeliveries();
+        setToast("零元贈送已取消，申請者已收到通知");
+        return;
+      }
       void client.rpc("set_listing_lifecycle", {
         target_book_id: bookId,
         new_state: "withdrawn",
@@ -2756,28 +2893,35 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     const note = dialogResult.trim();
     if (decision === "rejected" && !note) return;
 
-    const pendingVerification = studentVerifications.find((item) => item.id === verificationId);
-    if (!pendingVerification) {
-      setToast("這筆學生證已被其他管理員處理，清單即將更新");
-      refreshModerationInBackground();
-      return;
-    }
-    setStudentVerifications((previous) => previous.filter((item) => item.id !== verificationId));
-    setToast("正在送出審核結果…");
+    if (!(await ensureCurrentAuthSession())) return;
 
-    try {
-      await reviewStudentVerificationWithStorage(supabase, verificationId, decision, note || "");
-    } catch (error) {
-      setStudentVerifications((previous) => previous.some((item) => item.id === verificationId)
-        ? previous
-        : [...previous, pendingVerification].sort((left, right) =>
-            new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
-          ));
-      const message = error instanceof Error ? error.message : "學生證審核失敗";
-      setToast(`學生證審核失敗：${message}`);
+    const reviewPayload = {
+      target_id: verificationId,
+      decision,
+      note: note || "",
+    };
+    let { error } = await supabase.rpc("review_student_verification", reviewPayload);
+    const authErrorText = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
+    if (error && (error.code === "PGRST301"
+      || authErrorText.includes("jwt expired")
+      || authErrorText.includes("invalid jwt")
+      || authErrorText.includes("登入狀態已失效"))) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError && refreshed.session?.access_token) {
+        ({ error } = await supabase.rpc("review_student_verification", reviewPayload));
+      } else {
+        setStore((previous) => ({ ...previous, currentUser: null }));
+        setModal("login");
+        setToast("登入狀態已失效，請重新登入");
+        return;
+      }
+    }
+    if (error) {
+      if (await recoverAdminVerification(error.message, currentUser)) return;
+      setToast(`學生證審核失敗：${error.message}`);
       return;
     }
-    refreshModerationInBackground();
+    await reloadAfterModerationMutation();
     setToast(decision === "approved" ? "學生證已通過" : "學生證已拒絕");
   }
 
@@ -2911,57 +3055,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       return;
     }
     await loadModerationPanel(currentUser);
-    await loadRiskModeration(currentUser, appliedRiskFilters);
     setToast(decision === "approve" ? "徽章已核准公開" : "徽章已撤下");
-  }
-
-  function updateRiskFilter<K extends keyof RiskModerationFilters>(key: K, value: RiskModerationFilters[K]) {
-    setRiskFilters((previous) => ({ ...previous, [key]: value, offset: 0 }));
-  }
-
-  function changeRiskPage(direction: -1 | 1) {
-    setRiskFilters((previous) => ({
-      ...previous,
-      offset: Math.max(0, previous.offset + direction * RISK_REVIEW_PAGE_SIZE),
-    }));
-  }
-
-  async function openRiskProfile(userId: string) {
-    if (!supabase || !currentUser) return;
-    setSelectedRiskProfileId(userId);
-    setRiskProfileDetail(null);
-    setRiskProfileDetailLoading(true);
-    try {
-      const detail = await fetchRiskProfileDetail(supabase, userId);
-      if (!detail) {
-        setToast("找不到這筆風險資料");
-        return;
-      }
-      setRiskProfileDetail(detail);
-      if (detail.reviewStatus === "pending") {
-        await updateRiskReviewStatus(supabase, userId, "viewed");
-        setRiskProfileDetail((previous) => previous ? { ...previous, reviewStatus: "viewed", reviewUpdatedAt: new Date().toISOString() } : previous);
-        await loadRiskModeration(currentUser, appliedRiskFilters);
-      }
-    } catch (error) {
-      if (await recoverAdminVerification(error instanceof Error ? error.message : "", currentUser)) return;
-      setToast(`讀取風險詳情失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
-    } finally {
-      setRiskProfileDetailLoading(false);
-    }
-  }
-
-  async function changeRiskReviewStatus(status: RiskReviewStatus) {
-    if (!supabase || !currentUser || !riskProfileDetail) return;
-    try {
-      await updateRiskReviewStatus(supabase, riskProfileDetail.userId, status);
-      setRiskProfileDetail((previous) => previous ? { ...previous, reviewStatus: status, reviewUpdatedAt: new Date().toISOString() } : previous);
-      await loadRiskModeration(currentUser, appliedRiskFilters);
-      setToast(status === "processed" ? "風險項目已標記為已處理" : status === "pending" ? "風險項目已重新開啟" : "風險項目已標記為已查看");
-    } catch (error) {
-      if (await recoverAdminVerification(error instanceof Error ? error.message : "", currentUser)) return;
-      setToast(`更新風險狀態失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
-    }
   }
 
   async function saveRiskPolicy(event: FormEvent<HTMLFormElement>) {
@@ -2992,8 +3086,16 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       return;
     }
     await loadModerationPanel(currentUser);
-    await loadRiskModeration(currentUser, appliedRiskFilters);
     setToast("風險門檻已更新");
+  }
+
+  async function openRiskProfileDetail(userId: string) {
+    if (!supabase || !currentUser || !isModerator) return;
+    try {
+      setRiskProfileDetail(await fetchRiskProfileDetail(supabase, userId));
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "無法載入風險明細");
+    }
   }
 
   async function resolveReport(reportId: string, action: "dismiss" | "resolve" | "hide_book" | "suspend_user") {
@@ -3135,12 +3237,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       return;
     }
     if (notification.type === "trade_message") {
-      if (notification.conversationId) {
-        openChatRoute(notification.conversationId);
-        void openConversation(notification.conversationId);
-      } else {
-        openMessages();
-      }
+      openMessages();
+      if (notification.conversationId) void openConversation(notification.conversationId);
       return;
     }
     if (notification.bookId) {
@@ -3181,47 +3279,20 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const knownBooks = supabase
     ? [...favoriteBookCache, ...marketplaceBooks, ...myBooks, ...requestBooks, ...pendingReviews, ...hiddenBooks]
     : store.books;
-  const requestBookSource = supabase ? [...myBooks, ...requestBooks, ...marketplaceBooks] : store.books;
   const favoriteBooks = uniqueFavoriteBooks(knownBooks, favoriteIds);
-  const confirmedOrders = currentUser
-    ? store.requests.filter((request) => {
-        if (!CONFIRMED_ORDER_STATUSES.has(request.status)) return false;
-        const book = requestBookSource.find((item) => item.id === request.bookId);
-        return request.buyerId === currentUser.id || book?.sellerId === currentUser.id;
-      })
-    : [];
-  const myRequests = currentUser
-    ? store.requests.filter((request) => request.buyerId === currentUser.id && !CONFIRMED_ORDER_STATUSES.has(request.status))
-    : [];
+  const myRequests = currentUser ? store.requests.filter((request) => request.buyerId === currentUser.id) : [];
   const activeMyRequestCount = myRequests.filter((request) => request.status !== "expired").length;
   const receivedRequests = currentUser
     ? store.requests.filter((request) =>
-        !CONFIRMED_ORDER_STATUSES.has(request.status)
-        && requestBookSource.some((book) => book.id === request.bookId && book.sellerId === currentUser.id),
+        (supabase ? myBooks : store.books).some((book) => book.id === request.bookId && book.sellerId === currentUser.id),
       )
     : [];
+  const displayedReceivedRequests = sortGiveawayRequests(receivedRequests, verifiedPartyIds);
   const activeReceivedRequestCount = receivedRequests.filter((request) => request.status !== "expired").length;
   const isModerator = currentUser?.accountStatus === "active"
     && (currentUser.role === "admin" || currentUser.role === "moderator");
   const pendingReports = reports.filter((report) => report.status === "pending");
   const pendingFeedback = feedback.filter((item) => item.status === "pending");
-  const adminPendingCount = pendingReports.length + pendingReviews.length + pendingFeedback.length + studentVerifications.length;
-  const adminWorkspaceItems: Array<{ id: AdminWorkspace; label: string; description: string; count?: number }> = [
-    { id: "overview", label: "後台總覽", description: "今天需要注意的工作" },
-    { id: "listings", label: "刊登審核", description: "處理待上架商品", count: pendingReviews.length },
-    { id: "reports", label: "檢舉處理", description: "查看使用者回報", count: pendingReports.length },
-    { id: "feedback", label: "網站回饋", description: "整理產品意見", count: pendingFeedback.length },
-    { id: "studentVerification", label: "學生證審核", description: "確認學籍資料", count: studentVerifications.length },
-    { id: "risk", label: "交易風險", description: "優先處理高／中風險", count: riskSummary?.queueCount ?? 0 },
-    { id: "hiddenListings", label: "已隱藏商品", description: "檢視與恢復內容", count: hiddenBooks.length },
-    ...(currentUser?.role === "admin" ? [{ id: "permissions" as const, label: "權限管理", description: "角色與帳號狀態" }] : []),
-  ];
-
-  function openAdminWorkspace(workspace: AdminWorkspace) {
-    setAdminWorkspace(workspace);
-    setView("admin");
-    setMobileMenuOpen(false);
-  }
   const unreadNotifications = unreadNotificationCount;
   const unreadMessages = conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
   const activeAvailableListings = myListings.filter((book) => book.lifecycleState === "active" && book.status === "available");
@@ -3231,13 +3302,21 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     : null;
   const confirmationDue = Boolean(nextConfirmationAt && new Date(nextConfirmationAt).getTime() <= Date.now());
   const isSecondhandMode = listingType === "secondhand";
-  const activeMarketLabel = isSecondhandMode ? "二手物品" : "二手書籍";
+  const isGiveawayMode = listingType === "giveaway";
+  const activeMarketLabel = isGiveawayMode ? "零元贈送" : isSecondhandMode ? "二手物品" : "二手書籍";
   const hasMarketplaceFilters = Boolean(
     query.trim()
     || minPrice !== NO_MIN_PRICE
     || maxPrice !== NO_MAX_PRICE
-    || (isSecondhandMode ? itemCategory !== ALL_ITEM_CATEGORIES : !isAllDepartments(department)),
+    || (isSecondhandMode && itemCategory !== ALL_ITEM_CATEGORIES)
+    || (isGiveawayMode && itemCategory !== ALL_ITEM_CATEGORIES)
+    || (!isSecondhandMode && !isGiveawayMode && !isAllDepartments(department)),
   );
+  const giveawayRecentBooks = isGiveawayMode ? filteredBooks.slice(0, 6) : [];
+  const giveawayHotBooks = isGiveawayMode ? filteredBooks.slice(0, 4) : [];
+  const giveawayApplyingBooks = isGiveawayMode
+    ? filteredBooks.filter((book) => book.status === "negotiating").slice(0, 4)
+    : [];
 
   function clearMarketplaceFilters() {
     setQuery("");
@@ -3414,11 +3493,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     void runImageSearch(file);
   }
 
-  const isStandaloneChatRoute = view === "chat"
-    || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "chat");
-
   return (
-    <main className={isSecondhandMode ? "theme-secondhand" : undefined}>
+    <main className={isGiveawayMode ? "theme-giveaway" : isSecondhandMode ? "theme-secondhand" : undefined}>
       <input
         ref={imageSearchInputRef}
         className="visually-hidden"
@@ -3434,10 +3510,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         </button>
         <nav>
           <div className="market-switch" role="group" aria-label="選擇市場">
-            <button type="button" className={!isSecondhandMode ? "active" : ""} aria-pressed={!isSecondhandMode} onClick={() => { switchListingType("book"); setView("home"); }}><BookOpen size={16} aria-hidden="true" />二手書籍</button>
+            <button type="button" className={listingType === "book" ? "active" : ""} aria-pressed={listingType === "book"} onClick={() => { switchListingType("book"); setView("home"); }}><BookOpen size={16} aria-hidden="true" />二手書籍</button>
             <button type="button" className={isSecondhandMode ? "active" : ""} aria-pressed={isSecondhandMode} onClick={() => { switchListingType("secondhand"); setView("home"); }}><Sparkles size={16} aria-hidden="true" />二手物品</button>
+            <button type="button" className={isGiveawayMode ? "active" : ""} aria-pressed={isGiveawayMode} onClick={() => { switchListingType("giveaway"); setView("home"); }}><Gift size={16} aria-hidden="true" />零元贈送</button>
           </div>
-          <button type="button" className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isSecondhandMode ? "找二手物品" : "找二手書籍"}</button>
+          <button type="button" className={view === "home" ? "active" : ""} onClick={() => setView("home")}>{isGiveawayMode ? "找零元贈送" : isSecondhandMode ? "找二手物品" : "找二手書籍"}</button>
           <button type="button" onClick={() => requireActive(() => openListingForm(listingType))}>我要刊登</button>
           <button type="button" className={view === "dashboard" ? "active" : ""} onClick={() => requireLogin(openDashboard)}>我的交易</button>
           {isModerator && <button type="button" className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>管理</button>}
@@ -3450,13 +3527,13 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             aria-label={`訊息，${unreadMessages} 則未讀`}
             onClick={openMessages}
           >
-            <MessageCircle size={18} aria-hidden="true" />
+            <MessageCircle size={18} />
             {unreadMessages > 0 && <span className="notification-count message-count">{unreadMessages > 9 ? "9+" : unreadMessages}</span>}
           </button>
           {currentUser ? (
             <>
               {isModerator && <button type="button" className="icon-button admin-shortcut" title="管理" onClick={() => setView("admin")}><UserCog size={18} /></button>}
-              <div ref={notificationWrapRef} className="notification-wrap">
+              <div className="notification-wrap" ref={notificationWrapRef}>
                 <button type="button"
                   className="icon-button notification-button"
                   title="通知"
@@ -3536,6 +3613,15 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
               onClick={() => setMobileMenuOpen(false)}
             />
             <div id="mobile-navigation" className="mobile-nav">
+              <button type="button" className={isGiveawayMode ? "active" : ""}
+                onClick={() => {
+                  switchListingType("giveaway");
+                  setView("home");
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <Gift size={18} />零元贈送
+              </button>
               <button type="button"
                 onClick={() => {
                   switchListingType(isSecondhandMode ? "book" : "secondhand");
@@ -3571,14 +3657,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 }}
               >
                 我的交易
-              </button>
-              <button
-                type="button"
-                className={view === "chat" || (view === "dashboard" && dashboardTab === "chats") ? "active" : ""}
-                onClick={openMessages}
-              >
-                <MessageCircle size={18} />訊息
-                {unreadMessages > 0 && <span className="mobile-nav-count">{unreadMessages > 9 ? "9+" : unreadMessages}</span>}
               </button>
               {isModerator && (
                 <button type="button"
@@ -3642,8 +3720,17 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             <div className="hero-art hero-reference-art" aria-hidden="true" />
             <div className="hero-copy hero-search-panel">
               <div className="hero-message">
-                <h1 id="home-hero-title">{isSecondhandMode ? <>Good Finds,<br />Next Chapter.</> : <>Used Books,<br />New Chapter.</>}</h1>
-                <p>{isSecondhandMode ? "在虎科找到適合你的二手物品，也讓閒置好物繼續被需要。" : "在虎科找到需要的二手書，也讓讀過的故事繼續流動。"}</p>
+                {isGiveawayMode ? (
+                  <h1 id="home-hero-title" className="giveaway-compact-intro">
+                    <Gift size={20} aria-hidden="true" />
+                    <span><b>零元贈送</b><small>把用不到的好物，送給下一個需要的人。</small></span>
+                  </h1>
+                ) : (
+                  <>
+                    <h1 id="home-hero-title">{isSecondhandMode ? <>Good Finds,<br />Next Chapter.</> : <>Used Books,<br />New Chapter.</>}</h1>
+                    <p>{isSecondhandMode ? "在虎科找到適合你的二手物品，也讓閒置好物繼續被需要。" : "在虎科找到需要的二手書，也讓讀過的故事繼續流動。"}</p>
+                  </>
+                )}
               </div>
               <form
                 className="hero-search"
@@ -3658,17 +3745,17 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     id="hero-search-input"
                     value={query}
                     onChange={(event) => updateMarketplaceQuery(event.target.value)}
-                    placeholder={isSecondhandMode ? "搜尋物品名稱、類別或描述..." : "搜尋二手書名、課程或老師..."}
+                    placeholder={isGiveawayMode ? "搜尋零元贈送物品..." : isSecondhandMode ? "搜尋物品名稱、類別或描述..." : "搜尋二手書名、課程或老師..."}
                   />
                   <button
                     type="submit"
                     className="hero-search-arrow"
-                    aria-label={isSecondhandMode ? "依目前輸入開始找二手物品" : "依目前輸入開始找二手書籍"}
+                    aria-label={isSecondhandMode ? "依目前輸入開始找二手物品" : isGiveawayMode ? "依目前輸入搜尋零元贈送" : "依目前輸入開始找二手書籍"}
                   >
                     <ArrowRight size={18} aria-hidden="true" />
                   </button>
                 </label>
-                {!isSecondhandMode && (
+                {!isSecondhandMode && !isGiveawayMode && (
                   <button
                     type="button"
                     className="image-search-trigger"
@@ -3680,15 +3767,52 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     {imageSearchBusy ? "辨識中" : "用照片找二手書"}
                   </button>
                 )}
-                <button type="submit">{isSecondhandMode ? "開始找二手物品" : "開始找二手書"}</button>
+                <button type="submit">{isGiveawayMode ? "開始找零元贈送" : isSecondhandMode ? "開始找二手物品" : "開始找二手書"}</button>
               </form>
               <div className="hero-trust hero-assurance" aria-label="平台特色">
                 <span><ShieldCheck size={17} aria-hidden="true" />校園面交更安心</span>
                 <span><MessageCircle size={17} aria-hidden="true" />接受後依賣家設定分享聯絡方式</span>
-                {isSecondhandMode ? <span><Sparkles size={17} aria-hidden="true" />探索校園二手好物</span> : <button type="button" onClick={openCourseSearchGuide}><GraduationCap size={17} aria-hidden="true" />依課程快速找到二手書</button>}
+                {isGiveawayMode ? <span><Gift size={17} aria-hidden="true" />先聊天、再確認受贈者</span> : isSecondhandMode ? <span><Sparkles size={17} aria-hidden="true" />探索校園二手好物</span> : <button type="button" onClick={openCourseSearchGuide}><GraduationCap size={17} aria-hidden="true" />依課程快速找到二手書</button>}
               </div>
             </div>
           </section>
+
+          {isGiveawayMode && (
+            <section className="giveaway-discovery" aria-labelledby="giveaway-discovery-title">
+              <div className="giveaway-discovery-heading">
+                <div>
+                  <span className="section-kicker">JUST SHARED</span>
+                  <h2 id="giveaway-discovery-title">剛剛有人送出</h2>
+                </div>
+                <span className="giveaway-discovery-note">校園裡的好物，正在找到下一位需要的人</span>
+              </div>
+              {giveawayRecentBooks.length > 0 ? (
+                <div className="giveaway-recent-rail" aria-label="最近送出的零元贈送物品">
+                  {giveawayRecentBooks.map((book) => (
+                    <button type="button" className="giveaway-recent-card" key={book.id} onClick={() => openBook(book.id)}>
+                      <div className="giveaway-recent-image">
+                        <Image src={book.imageUrl} alt="" width={240} height={240} sizes="220px" />
+                        <span>剛剛送出</span>
+                      </div>
+                      <div className="giveaway-recent-body">
+                        <strong>{book.title}</strong>
+                        <small><MapPin size={13} aria-hidden="true" />{book.meetup || "校園面交"}</small>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="giveaway-guide-card">
+                  <div className="giveaway-guide-icon"><Gift size={25} aria-hidden="true" /></div>
+                  <div>
+                    <strong>還沒有最新贈送物品</strong>
+                    <p>把用不到但仍然完好的東西送出，讓它繼續幫上別人的忙。</p>
+                  </div>
+                  <button type="button" className="secondary-action" onClick={() => requireActive(() => openListingForm("giveaway"))}>我要送出</button>
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="market" id="market" aria-labelledby="home-market-title">
             <div className="section-heading">
@@ -3698,13 +3822,28 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 className="sell-cta"
                 disabled={currentUser?.accountStatus === "suspended"}
                 aria-disabled={currentUser?.accountStatus === "suspended"}
-                onClick={() => requireActive(() => openListingForm(isSecondhandMode ? "secondhand" : "book"))}
+                onClick={() => requireActive(() => openListingForm(isGiveawayMode ? "giveaway" : isSecondhandMode ? "secondhand" : "book"))}
               >
-                <Plus size={18} aria-hidden="true" />{isSecondhandMode ? "刊登二手物品" : "刊登一本書"}
+                <Plus size={18} aria-hidden="true" />{isGiveawayMode ? "刊登零元贈送" : isSecondhandMode ? "刊登二手物品" : "刊登一本書"}
               </button>
             </div>
-            <form className="filters" aria-label={isSecondhandMode ? "篩選二手物品" : "篩選課本"} onSubmit={(event) => event.preventDefault()}>
-              {showCourseSearchGuide && !isSecondhandMode && (
+            {isGiveawayMode && (
+              <div className="giveaway-category-pills" aria-label="零元贈送分類">
+                {GIVEAWAY_CATEGORIES.map((category) => (
+                  <button
+                    type="button"
+                    key={category}
+                    className={itemCategory === category ? "active" : ""}
+                    aria-pressed={itemCategory === category}
+                    onClick={() => setItemCategory(category)}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            )}
+            <form className="filters" aria-label={isGiveawayMode ? "篩選零元贈送" : isSecondhandMode ? "篩選二手物品" : "篩選課本"} onSubmit={(event) => event.preventDefault()}>
+              {showCourseSearchGuide && !isSecondhandMode && !isGiveawayMode && (
                 <div className="course-search-guide" role="status">
                   <GraduationCap size={17} aria-hidden="true" />
                   <span>在這裡輸入課堂名稱、老師或書名；也可以先選科系，再縮小課本範圍。</span>
@@ -3718,11 +3857,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   id="home-filter-query"
                   value={query}
                   onChange={(event) => updateMarketplaceQuery(event.target.value)}
-                  placeholder={isSecondhandMode ? "搜尋二手物品..." : "搜尋課本..."}
-                  aria-label={isSecondhandMode ? "搜尋二手物品" : "搜尋課本"}
+                  placeholder={isGiveawayMode ? "搜尋零元贈送..." : isSecondhandMode ? "搜尋二手物品..." : "搜尋課本..."}
+                  aria-label={isGiveawayMode ? "搜尋零元贈送" : isSecondhandMode ? "搜尋二手物品" : "搜尋課本"}
                 />
               </label>
-              {!isSecondhandMode && (
+              {!isSecondhandMode && !isGiveawayMode && (
                 <button
                   type="button"
                   className="image-search-filter-button"
@@ -3747,7 +3886,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   </select>
                   <ChevronDown size={16} aria-hidden="true" />
                 </label>
-              ) : (
+              ) : !isGiveawayMode ? (
                 <label className="select-filter" htmlFor="home-filter-category">
                   <span className="visually-hidden">分類</span>
                   <select
@@ -3760,8 +3899,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   </select>
                   <ChevronDown size={16} aria-hidden="true" />
                 </label>
-              )}
-              <label className="price-filter select-filter" htmlFor="home-filter-price">
+              ) : null}
+              {!isGiveawayMode && <label className="price-filter select-filter" htmlFor="home-filter-price">
                 <span className="visually-hidden">最高價格</span>
                 <select
                   id="home-filter-price"
@@ -3779,14 +3918,14 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   <option value={MIN_PRICE_500}>NT$500 以上</option>
                 </select>
                 <ChevronDown size={16} aria-hidden="true" />
-              </label>
+              </label>}
             </form>
             {(imageSearchPreview || imageSearchMessage) && (
               <section className="image-search-status" aria-live="polite">
                 {imageSearchPreview && (
                   <div className="image-search-preview">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={safeImageSource(imageSearchPreview)} alt="用來搜尋站內課本的書封照片" />
+                    <img src={imageSearchPreview} alt="用來搜尋站內課本的書封照片" />
                   </div>
                 )}
                 <div>
@@ -3813,32 +3952,39 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             </p>
             <ul className={`book-grid ${marketplaceLoading ? "is-refreshing" : ""}`} aria-label={`${activeMarketLabel}列表`} aria-busy={marketplaceLoading}>
               {filteredBooks.map((book) => (
-                <li className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id}>
+                <li className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""} ${book.listingType === "giveaway" ? "giveaway-card" : ""}`} key={book.id}>
                   <button
                     type="button"
                     className="book-card-main"
                     onClick={() => openBook(book.id)}
-                    aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
+                    aria-label={`查看《${book.title}》，${book.listingType === "giveaway" ? "零元贈送" : book.listingType === "secondhand" ? book.itemCategory : book.author}，${book.listingType === "giveaway" ? "免費" : money(book.price)}，${book.condition}`}
                   >
                     <div className="card-image">
-                      <ResilientBookCover book={book} />
+                      <Image src={book.imageUrl} alt="" width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
                       {book.sellerVerified && <span className="verified-seller-badge"><ShieldCheck size={13} />已驗證賣家</span>}
-                      <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
+                      <span className={`status ${book.status}`}>{book.listingType === "giveaway" ? "免費贈送" : statusLabels[book.status]}</span>
                     </div>
                     <div className="card-body">
                       <span
                         className={`course-tag ${cardContextLabel(book) ? "" : "is-empty"}`}
                         aria-hidden={cardContextLabel(book) ? undefined : true}
                       >
-                        {cardContextLabel(book) || "\u00a0"}
+                        {giveawayCategoryLabel(book) || "\u00a0"}
                       </span>
                       <h3>{book.title}</h3>
-                      <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
+                      <p>{book.listingType === "giveaway" ? (book.description || "校園零元贈送") : book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
                       {book.listingType === "book" && textbookMetadata(book).length > 0 && (
                         <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
                       )}
-                      <div className="card-meta"><span>{book.condition}</span><span><MapPin size={13} aria-hidden="true" />{book.meetup}</span></div>
-                      <div className="card-footer"><strong>{money(book.price)}</strong><small>{timeAgo(book.createdAt)}刊登</small></div>
+                      <div className="card-meta"><span>{book.condition}</span><span>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={13} aria-hidden="true" /> : null}{meetupSummary(book)}</span></div>
+                      <div className="card-footer">
+                        {book.listingType === "giveaway" ? (
+                          <span className="giveaway-card-cta">查看並申請 <ArrowRight size={16} aria-hidden="true" /></span>
+                        ) : (
+                          <strong>{money(book.price)}</strong>
+                        )}
+                        <small>{timeAgo(book.createdAt)}刊登</small>
+                      </div>
                     </div>
                   </button>
                   <button
@@ -3853,6 +3999,38 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 </li>
               ))}
             </ul>
+            {isGiveawayMode && (
+              <div className="giveaway-status-grid">
+                <section className="giveaway-status-panel" aria-labelledby="giveaway-hot-title">
+                  <div className="giveaway-status-heading"><div><span className="section-kicker">POPULAR NOW</span><h3 id="giveaway-hot-title">熱門贈送</h3></div><Sparkles size={19} aria-hidden="true" /></div>
+                  {giveawayHotBooks.length > 0 ? (
+                    <div className="giveaway-status-list">
+                      {giveawayHotBooks.map((book) => (
+                        <button type="button" className="giveaway-status-card" key={book.id} onClick={() => openBook(book.id)}>
+                          <Image src={book.imageUrl} alt="" width={84} height={84} sizes="84px" />
+                          <span><strong>{book.title}</strong><small>{giveawayCategoryLabel(book)} · {book.meetup || "校園面交"}</small></span>
+                          <ArrowRight size={17} aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : <div className="giveaway-status-empty"><Sparkles size={20} aria-hidden="true" /><span>等待第一件熱門贈送物品</span></div>}
+                </section>
+                <section className="giveaway-status-panel" aria-labelledby="giveaway-applying-title">
+                  <div className="giveaway-status-heading"><div><span className="section-kicker">IN PROGRESS</span><h3 id="giveaway-applying-title">正在被申請</h3></div><MessageCircle size={19} aria-hidden="true" /></div>
+                  {giveawayApplyingBooks.length > 0 ? (
+                    <div className="giveaway-status-list">
+                      {giveawayApplyingBooks.map((book) => (
+                        <button type="button" className="giveaway-status-card" key={book.id} onClick={() => openBook(book.id)}>
+                          <Image src={book.imageUrl} alt="" width={84} height={84} sizes="84px" />
+                          <span><strong>{book.title}</strong><small>已有申請 · {book.meetup || "校園面交"}</small></span>
+                          <ArrowRight size={17} aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : <div className="giveaway-status-empty"><MessageCircle size={20} aria-hidden="true" /><span>目前還沒有申請中的物品</span></div>}
+                </section>
+              </div>
+            )}
             {marketplaceLoading && filteredBooks.length > 0 && (
               <output className="market-refresh-note">正在更新搜尋結果...</output>
             )}
@@ -3871,7 +4049,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             )}
             {filteredBooks.length === 0 && !marketplaceLoading && (
               <section className="empty" aria-live="polite">
-                <BookOpen size={40} aria-hidden="true" />
+                {isGiveawayMode ? <Gift size={40} aria-hidden="true" /> : <BookOpen size={40} aria-hidden="true" />}
                 <h3>{hasMarketplaceFilters ? `找不到符合條件的${activeMarketLabel}` : `目前還沒有${activeMarketLabel}`}</h3>
                 <p>{hasMarketplaceFilters ? "清除篩選後看看其他刊登。" : `成為第一位刊登${activeMarketLabel}的人，讓校園交換開始流動。`}</p>
                 <button
@@ -3879,7 +4057,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   className="secondary-action"
                   onClick={hasMarketplaceFilters
                     ? clearMarketplaceFilters
-                    : () => requireActive(() => openListingForm(isSecondhandMode ? "secondhand" : "book"))}
+                    : () => requireActive(() => openListingForm(isGiveawayMode ? "giveaway" : isSecondhandMode ? "secondhand" : "book"))}
                 >
                   {hasMarketplaceFilters ? "清除篩選" : `刊登${activeMarketLabel}`}
                 </button>
@@ -3887,7 +4065,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             )}
             {marketplaceLoading && filteredBooks.length === 0 && (
               <section className="empty" aria-live="polite" aria-busy="true">
-                <BookOpen size={40} aria-hidden="true" />
+                {isGiveawayMode ? <Gift size={40} aria-hidden="true" /> : <BookOpen size={40} aria-hidden="true" />}
                 <h3>載入中...</h3>
               </section>
             )}
@@ -3899,50 +4077,66 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         <section className="detail-page">
           <button type="button" className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
           <div className="detail-grid">
-            <div className="detail-gallery-shell">
-              <div className="detail-image detail-gallery">
-                {safeImageSource(selectedBookImages[detailImageIndex] || selectedBook.imageUrl) ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    className="detail-gallery-main-image"
-                    src={safeImageSource(selectedBookImages[detailImageIndex] || selectedBook.imageUrl)}
-                    alt={selectedBook.title}
-                    loading="eager"
-                    decoding="async"
-                  />
-                ) : (
-                  <div className="detail-gallery-image-fallback" role="img" aria-label={selectedBook.title}>
-                    <BookOpen size={36} aria-hidden="true" />
-                  </div>
-                )}
-                {selectedBookImages.length > 1 && (
-                  <>
-                    <button type="button" className="detail-gallery-arrow detail-gallery-arrow-prev" aria-label="上一張照片" onClick={() => setDetailImageIndex((index) => (index - 1 + selectedBookImages.length) % selectedBookImages.length)}>
-                      <ArrowLeft size={18} />
-                    </button>
-                    <button type="button" className="detail-gallery-arrow detail-gallery-arrow-next" aria-label="下一張照片" onClick={() => setDetailImageIndex((index) => (index + 1) % selectedBookImages.length)}>
-                      <ArrowRight size={18} />
-                    </button>
-                    <span className="detail-gallery-count" aria-live="polite">{detailImageIndex + 1} / {selectedBookImages.length}</span>
-                  </>
-                )}
+            <div
+              className="detail-image detail-gallery"
+              onTouchStart={(event) => { detailTouchStartXRef.current = event.touches[0]?.clientX ?? null; }}
+              onTouchEnd={finishDetailSwipe}
+            >
+              <Image
+                src={selectedBookImages[detailImageIndex] || selectedBook.imageUrl}
+                alt={`${selectedBook.title} 第 ${detailImageIndex + 1} 張照片`}
+                width={720}
+                height={960}
+                sizes="(max-width: 800px) 100vw, 42vw"
+                priority
+              />
+              {selectedBookImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className="detail-gallery-arrow detail-gallery-arrow-prev"
+                    aria-label="上一張商品照片"
+                    onClick={() => moveDetailImage(-1)}
+                  >
+                    <ArrowLeft size={20} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="detail-gallery-arrow detail-gallery-arrow-next"
+                    aria-label="下一張商品照片"
+                    onClick={() => moveDetailImage(1)}
+                  >
+                    <ArrowRight size={20} aria-hidden="true" />
+                  </button>
+                  <span className="detail-gallery-count" aria-live="polite">
+                    {detailImageIndex + 1} / {selectedBookImages.length}
+                  </span>
+                </>
+              )}
               {selectedBook.lifecycleState === "active" && selectedBook.reviewStatus === "approved" && (
                 <span className={`status ${selectedBook.status}`}>{statusLabels[selectedBook.status]}</span>
               )}
-              </div>
-              {selectedBookImages.length > 1 && (
-                <div className="detail-gallery-thumbnails" aria-label="商品照片選擇">
-                  {selectedBookImages.map((url, index) => (
-                    <button type="button" key={`${url}-${index}`} className={index === detailImageIndex ? "active" : ""} aria-label={`查看第 ${index + 1} 張照片`} onClick={() => setDetailImageIndex(index)}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={safeImageSource(url)} alt="" />
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
+            {selectedBookImages.length > 1 && (
+              <div className="detail-gallery-thumbnails" aria-label="商品照片選擇">
+                {selectedBookImages.map((url, index) => (
+                  <button
+                    type="button"
+                    key={`${url}-${index}`}
+                    className={index === detailImageIndex ? "active" : ""}
+                    aria-label={`查看第 ${index + 1} 張商品照片`}
+                    aria-pressed={index === detailImageIndex}
+                    onClick={() => setDetailImageIndex(index)}
+                  >
+                    <Image src={url} alt="" width={84} height={108} sizes="84px" />
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="detail-content">
-              {selectedBook.listingType === "secondhand" ? (
+              {selectedBook.listingType === "giveaway" ? (
+                <span className="course-tag">零元贈送</span>
+              ) : selectedBook.listingType === "secondhand" ? (
                 <span className="course-tag">{selectedBook.itemCategory}</span>
               ) : (visibleBookField(selectedBook.department) || visibleBookField(selectedBook.course)) && (
                 <span className="course-tag">{[visibleBookField(selectedBook.department), visibleBookField(selectedBook.course)].filter(Boolean).join(" · ")}</span>
@@ -3954,7 +4148,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   {textbookMetadata(selectedBook).map((item) => <span key={item}>{item}</span>)}
                 </div>
               )}
-              <strong className="detail-price">{money(selectedBook.price)}</strong>
+              <strong className="detail-price">{selectedBook.listingType === "giveaway" ? "免費贈送" : money(selectedBook.price)}</strong>
               {currentUser?.id !== selectedBook.sellerId && (
                 <button
                   type="button"
@@ -3973,7 +4167,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 {selectedBook.listingType === "book" && selectedBook.isbn13 && <div><small>ISBN-13</small><b>{selectedBook.isbn13}</b></div>}
                 {selectedBook.listingType === "book" && selectedBook.approvalNumber && <div><small>審定字號</small><b>{selectedBook.approvalNumber}</b></div>}
                 {selectedBook.listingType === "secondhand" && <div><small>分類</small><b>{selectedBook.itemCategory}</b></div>}
-                <div><small>面交地點</small><b>{selectedBook.meetup}</b></div>
+                <div><small>{normalizeMeetupMode(selectedBook.meetupMode) === DEFAULT_MEETUP_MODE ? "面交地點" : "面交方式"}</small><b>{meetupSummary(selectedBook)}</b></div>
               </div>
               <div className="description"><h3>賣家說明</h3><p>{selectedBook.description}</p></div>
               <div className="seller-row">
@@ -3998,28 +4192,22 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     <button type="button"
                       className="primary wide"
                       disabled={Boolean(selectedBookActiveRequest)
-                        || (currentUser
-                          && currentUser.id !== selectedBook.sellerId
-                          && !["ready", "error"].includes(activeRequestCheckState))
+                        || (currentUser && currentUser.id !== selectedBook.sellerId && activeRequestCheckState !== "ready")
                         || selectedBook.status !== "available"
                         || currentUser?.accountStatus === "suspended"}
                       onClick={() => {
                         if (selectedBookActiveRequest) return;
-                        if (activeRequestCheckState === "error") {
-                          activeRequestCheckStartedRef.current = null;
-                          setActiveRequestCheckRetry((retry) => retry + 1);
-                          setActiveRequestCheckState("idle");
-                          return;
-                        }
                         requireActive(() => setModal("request"));
                       }}
                     >
-                      <Check size={18} />{selectedBookActiveRequest
+                      <Check size={18} />{selectedBook.listingType === "giveaway"
+                        ? selectedBookActiveRequest ? `已申請：${giveawayRequestLabel(selectedBookActiveRequest.status)}` : activeRequestCheckState === "loading" ? "確認中..." : selectedBook.status === "available" ? "申請領取" : "暫停新的申請"
+                        : selectedBookActiveRequest
                         ? `已下訂：${requestLabels[selectedBookActiveRequest.status]}`
                         : activeRequestCheckState === "loading"
                           ? "確認中..."
                           : activeRequestCheckState === "error"
-                            ? "重試確認"
+                            ? "暫時無法確認"
                             : selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
                     </button>
                   </div>
@@ -4045,7 +4233,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   </div>
                 )}
               </div>
-              <p className="safety-note"><ShieldCheck size={15} />只有被選定的買家，才會依賣家設定看到 Email 或 LINE ID。</p>
+              <p className="safety-note"><ShieldCheck size={15} />{selectedBook.listingType === "giveaway" ? "申請與聊天不代表已獲選；贈送者確認後才會進入保留。" : "只有被選定的買家，才會依賣家設定看到 Email 或 LINE ID。"}</p>
             </div>
           </div>
         </section>
@@ -4065,67 +4253,62 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
       {(view === "dashboard" || isStandaloneChatRoute) && currentUser && (
         <section className={`dashboard ${isStandaloneChatRoute ? "chat-route-page" : ""}`}>
-          {view === "dashboard" && !isStandaloneChatRoute && (
-            <>
-              <div className="dashboard-head">
-                <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
-                <div className="dashboard-head-actions">
-                  <button type="button" className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => setModal("profile"))}><UserRound size={18} />個人資料</button>
-                  <button type="button" className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm(listingType))}><Plus size={18} />{isSecondhandMode ? "刊登二手物品" : "刊登課本"}</button>
-                </div>
-              </div>
-              {currentUser.accountStatus === "suspended" && (
-                <div className="readonly-notice"><Ban size={18} /><div><b>唯讀模式</b><span>{currentUser.suspensionReason || "你可以查看既有交易，但暫時不能新增或修改資料。"}</span></div></div>
-              )}
-              {activeAvailableListings.length > 0 && confirmationDue && (
-                <div className="listing-confirmation-panel">
-                  <div>
-                    <b>定期確認課本仍在販售</b>
-                    <span>
-                      {nextConfirmationAt
-                        ? `目前 ${activeAvailableListings.length} 本公開販售中，下次確認日為 ${dateLabel(nextConfirmationAt)}。`
-                        : `目前 ${activeAvailableListings.length} 本公開販售中。`}
-                      每 30 天確認一次；最後確認後滿 120 天仍未處理，才會暫時封存。
-                    </span>
-                  </div>
-                  <button type="button" className="primary" disabled={lifecycleSaving} onClick={() => void confirmAllListings()}>
-                    <CheckCheck size={17} />全部仍在販售
-                  </button>
-                </div>
-              )}
-              {archivedListings.length > 0 && (
-                <div className="archived-review-panel">
-                  <div>
-                    <b>有 {archivedListings.length} 本課本因逾期暫時封存</b>
-                    <span>勾選後選擇恢復販售或正式下架；系統不會自動讓舊書重新公開。</span>
-                  </div>
-                  <div className="archived-review-actions">
-                    <button type="button"
-                      disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
-                      onClick={() => void reviewArchivedListings("keep")}
-                    >
-                      <RotateCcw size={16} />恢復勾選項目
-                    </button>
-                    <button type="button"
-                      className="danger"
-                      disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
-                      onClick={() => void reviewArchivedListings("withdraw")}
-                    >
-                      <Trash2 size={16} />勾選項目已下架
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="dashboard-tabs">
-                <button type="button" className={dashboardTab === "studentVerification" ? "active" : ""} onClick={() => setDashboardTab("studentVerification")}>學生身分驗證</button>
-                <button type="button" className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
-                <button type="button" className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 {activeMyRequestCount > 0 && <span>{activeMyRequestCount}</span>}</button>
-                <button type="button" className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
-                <button type="button" className={dashboardTab === "confirmedOrders" ? "active" : ""} onClick={() => setDashboardTab("confirmedOrders")}>已確認訂單 {confirmedOrders.length > 0 && <span>{confirmedOrders.length}</span>}</button>
-                <button type="button" className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
-              </div>
-            </>
+          <div className="dashboard-head">
+            <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
+            <div className="dashboard-head-actions">
+              <button type="button" className="secondary-action" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => setModal("profile"))}><UserRound size={18} />個人資料</button>
+              <button type="button" className="primary" disabled={currentUser.accountStatus === "suspended"} onClick={() => requireActive(() => openListingForm(listingType))}><Plus size={18} />{isSecondhandMode ? "刊登二手物品" : "刊登課本"}</button>
+            </div>
+          </div>
+          {currentUser.accountStatus === "suspended" && (
+            <div className="readonly-notice"><Ban size={18} /><div><b>唯讀模式</b><span>{currentUser.suspensionReason || "你可以查看既有交易，但暫時不能新增或修改資料。"}</span></div></div>
           )}
+          {activeAvailableListings.length > 0 && confirmationDue && (
+            <div className="listing-confirmation-panel">
+              <div>
+                <b>定期確認課本仍在販售</b>
+                <span>
+                  {nextConfirmationAt
+                    ? `目前 ${activeAvailableListings.length} 本公開販售中，下次確認日為 ${dateLabel(nextConfirmationAt)}。`
+                    : `目前 ${activeAvailableListings.length} 本公開販售中。`}
+                  每 30 天確認一次；最後確認後滿 120 天仍未處理，才會暫時封存。
+                </span>
+              </div>
+              <button type="button" className="primary" disabled={lifecycleSaving} onClick={() => void confirmAllListings()}>
+                <CheckCheck size={17} />全部仍在販售
+              </button>
+            </div>
+          )}
+          {archivedListings.length > 0 && (
+            <div className="archived-review-panel">
+              <div>
+                <b>有 {archivedListings.length} 本課本因逾期暫時封存</b>
+                <span>勾選後選擇恢復販售或正式下架；系統不會自動讓舊書重新公開。</span>
+              </div>
+              <div className="archived-review-actions">
+                <button type="button"
+                  disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
+                  onClick={() => void reviewArchivedListings("keep")}
+                >
+                  <RotateCcw size={16} />恢復勾選項目
+                </button>
+                <button type="button"
+                  className="danger"
+                  disabled={selectedArchivedIds.size === 0 || lifecycleSaving}
+                  onClick={() => void reviewArchivedListings("withdraw")}
+                >
+                  <Trash2 size={16} />勾選項目已下架
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="dashboard-tabs">
+            <button type="button" className={dashboardTab === "studentVerification" ? "active" : ""} onClick={() => setDashboardTab("studentVerification")}>學生身分驗證</button>
+            <button type="button" className={dashboardTab === "listings" ? "active" : ""} onClick={() => setDashboardTab("listings")}>我的刊登 <span>{myListings.length}</span></button>
+            <button type="button" className={dashboardTab === "requests" ? "active" : ""} onClick={() => setDashboardTab("requests")}>我送出的意願 {activeMyRequestCount > 0 && <span>{activeMyRequestCount}</span>}</button>
+            <button type="button" className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
+            <button type="button" className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
+          </div>
 
           {dashboardTab === "studentVerification" && (
             <StudentVerificationPanel
@@ -4155,7 +4338,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       <span>選取</span>
                     </label>
                   )}
-                  <ResilientBookCover book={book} variant="listing" />
+                  {book.imageUrl
+                    ? <Image src={book.imageUrl} alt="" width={160} height={210} sizes="80px" />
+                    : <div className="listing-image-placeholder"><BookOpen size={24} /></div>}
                   <div className="listing-main">
                     <div className="listing-badges">
                       {book.lifecycleState === "active" && book.reviewStatus === "approved" ? (
@@ -4271,7 +4456,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     const conversationRequest = store.requests.find((request) =>
                       request.bookId === conversation.bookId
                       && request.buyerId === conversation.buyerId
-                      && ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status)
+                      && ["pending", "waitlisted", "awaiting_recipient_confirmation", "reserved", "awaiting_confirmation", "completed"].includes(request.status)
                     ) || null;
                     return (
                       <TradeChatPanel
@@ -4324,8 +4509,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   <div className="request-row" key={request.id}>
                     <div className="request-icon"><MessageCircle /></div>
                     <div className="request-main">
-                      <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
-                      <h3>{book.title}</h3>
+                      <span className={`request-status ${request.status}`}>{book.listingType === "giveaway" ? giveawayRequestLabel(request.status) : requestLabels[request.status]}</span>
+                      <h3>{book.listingType === "giveaway" ? `申請領取《${book.title}》` : book.title}</h3>
                       {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
                       {["reserved", "awaiting_confirmation", "completed"].includes(request.status) && contact && (
                         <div className="contact-box">
@@ -4338,10 +4523,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       <OrderTimeline request={request} />
                     </div>
                     <div className="request-actions">
-                      {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
+                      {["pending", "waitlisted", "awaiting_recipient_confirmation", "reserved", "awaiting_confirmation"].includes(request.status) && (
                         <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消訂單</button>
                       )}
-                      {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
+                      {["pending", "waitlisted", "awaiting_recipient_confirmation", "reserved", "awaiting_confirmation"].includes(request.status) && (
                         <button type="button" onClick={() => {
                           setEditingRequest(request);
                           setSelectedId(request.bookId);
@@ -4352,8 +4537,14 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       {["pending", "waitlisted", "reserved", "awaiting_confirmation"].includes(request.status) && (
                         <button type="button" onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />訊息</button>
                       )}
+                      {request.status === "awaiting_recipient_confirmation" && book.listingType === "giveaway" && (
+                        <>
+                          <button type="button" className="accept" onClick={() => void respondToGiveawayRecipient(request.id, "accepted")}><Check size={16} />接受贈送</button>
+                          <button type="button" onClick={() => void respondToGiveawayRecipient(request.id, "declined")}><X size={16} />無法領取</button>
+                        </>
+                      )}
                       {request.status === "awaiting_confirmation" && (
-                        <button type="button" className="accept" onClick={() => void buyerConfirmTrade(request.id)}><CheckCheck size={16} />確認收到</button>
+                        <button type="button" className="accept" onClick={() => void (book.listingType === "giveaway" ? confirmGiveawayHandoff(request.id) : buyerConfirmTrade(request.id))}><CheckCheck size={16} />{book.listingType === "giveaway" ? "確認面交完成" : "確認收到"}</button>
                       )}
                       {request.status === "completed" && (
                         <button type="button" className="review-action" onClick={() => void openTradeReview(request)}><ShieldCheck size={16} />評價交易</button>
@@ -4369,7 +4560,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
           {dashboardTab === "received" && (
             <div className="dashboard-list">
-              {receivedRequests.map((request) => {
+              {displayedReceivedRequests.map((request) => {
                 const book = (supabase ? [...myBooks, ...requestBooks, ...marketplaceBooks] : store.books)
                   .find((item) => item.id === request.bookId);
                 const buyer = profile(request.buyerId);
@@ -4378,30 +4569,38 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   <div className="request-row" key={request.id}>
                     <span className="avatar">{buyer?.name.slice(0, 1)}</span>
                     <div className="request-main">
-                      <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
-                      {badgeFor(request.buyerId, "buyer") && <span className="trust-badge inline"><ShieldCheck size={13} />推薦買家</span>}
-                      <h3>{buyer?.name} 想買《{book.title}》</h3>
+                      <span className={`request-status ${request.status}`}>{book.listingType === "giveaway" ? giveawayRequestLabel(request.status) : requestLabels[request.status]}</span>
+                      {book.listingType === "giveaway" && verifiedPartyIds.has(request.buyerId) && <span className="trust-badge inline"><ShieldCheck size={13} />已驗證學生</span>}
+                      {book.listingType !== "giveaway" && badgeFor(request.buyerId, "buyer") && <span className="trust-badge inline"><ShieldCheck size={13} />推薦買家</span>}
+                      <h3>{book.listingType === "giveaway" ? `${buyer?.name || "申請者"} 申請領取《${book.title}》` : `${buyer?.name} 想買《${book.title}》`}</h3>
                       {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
                       {["reserved", "awaiting_confirmation"].includes(request.status) && <div className="contact-note">聯絡請使用獨立的「訊息」頁籤。</div>}
                       <RequestCoordinationPanel request={request} viewer="seller" />
-                      {sellerRequestNextStep(request) && <p className="order-next-step">{sellerRequestNextStep(request)}</p>}
+                      {book.listingType === "giveaway" && <p className="order-next-step">申請時間：{dateLabel(request.createdAt)}{request.preferredMeetupLocation ? ` · 希望地點：${request.preferredMeetupLocation}` : ""}{request.preferredMeetupTime ? ` · 可面交時間：${request.preferredMeetupTime}` : ""}</p>}
+                      {book.listingType !== "giveaway" && sellerRequestNextStep(request) && <p className="order-next-step">{sellerRequestNextStep(request)}</p>}
                       <OrderTimeline request={request} />
                     </div>
                     <div className="request-actions">
-                      {["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status) && (
+                      {["pending", "waitlisted", "awaiting_recipient_confirmation", "reserved", "awaiting_confirmation", "completed"].includes(request.status) && (
                         <button type="button" onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />訊息</button>
                       )}
                       {["pending", "waitlisted"].includes(request.status) && book.status === "available" && (
-                        <button type="button" className="accept" onClick={() => void respondToRequest(request.id, "accepted")}><Check size={16} />選定買家</button>
+                        <button type="button" className="accept" onClick={() => void (book.listingType === "giveaway" ? selectGiveawayRecipient(request.id) : respondToRequest(request.id, "accepted"))}><Check size={16} />{book.listingType === "giveaway" ? "選為受贈者" : "選定買家"}</button>
                       )}
-                      {["pending", "waitlisted"].includes(request.status) && (
+                      {["pending", "waitlisted"].includes(request.status) && book.listingType !== "giveaway" && (
                         <button type="button" onClick={() => void respondToRequest(request.id, "rejected")}><X size={16} />婉拒</button>
+                      )}
+                      {request.status === "awaiting_recipient_confirmation" && book.listingType === "giveaway" && (
+                        <p className="order-next-step">受贈者確認期限：{request.reservationExpiresAt ? dateLabel(request.reservationExpiresAt) : "24 小時內"}；逾時不自動取消，可改選候補。</p>
                       )}
                       {request.status === "reserved" && (
                         <>
-                          <button type="button" className="accept" onClick={() => void sellerConfirmHandoff(request.id)}><CheckCheck size={16} />已完成面交</button>
+                          <button type="button" className="accept" onClick={() => void (book.listingType === "giveaway" ? confirmGiveawayHandoff(request.id) : sellerConfirmHandoff(request.id))}><CheckCheck size={16} />{book.listingType === "giveaway" ? "確認面交完成" : "已完成面交"}</button>
                           <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消保留</button>
                         </>
+                      )}
+                      {request.status === "awaiting_confirmation" && book.listingType === "giveaway" && (
+                        <button type="button" className="accept" onClick={() => void confirmGiveawayHandoff(request.id)}><CheckCheck size={16} />確認面交完成</button>
                       )}
                       {request.status === "completed" && (
                         <button type="button" className="review-action" onClick={() => void openTradeReview(request)}><ShieldCheck size={16} />評價交易</button>
@@ -4424,71 +4623,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             </div>
           )}
 
-          {dashboardTab === "confirmedOrders" && (
-            <div className="dashboard-list confirmed-orders-list">
-              {confirmedOrders.map((request) => {
-                const book = requestBookSource.find((item) => item.id === request.bookId);
-                if (!book || !currentUser) return null;
-                const isBuyer = request.buyerId === currentUser.id;
-                const otherParty = profile(isBuyer ? book.sellerId : request.buyerId);
-                const contact = contacts[request.id];
-                return (
-                  <div className="request-row confirmed-order-row" key={request.id}>
-                    <div className="request-icon"><CheckCheck /></div>
-                    <div className="request-main">
-                      <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
-                      {!isBuyer && badgeFor(request.buyerId, "buyer") && <span className="trust-badge inline"><ShieldCheck size={13} />推薦買家</span>}
-                      <h3>{book.title}</h3>
-                      <p className="confirmed-order-party">{isBuyer ? "賣家" : "買家"}：{otherParty?.name || "交易對方"} · {money(book.price)}</p>
-                      {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
-                      {contact ? (
-                        <div className="contact-box">
-                          <Check size={16} />
-                          {isBuyer ? "賣家" : "買家"}{contact.method === "line" ? " LINE ID" : " Email"}：<b>{contact.value}</b>
-                        </div>
-                      ) : (
-                        <div className="contact-note">尚未分享額外聯絡方式，請使用新版訊息確認交易細節。</div>
-                      )}
-                      <RequestCoordinationPanel request={request} viewer={isBuyer ? "buyer" : "seller"} />
-                      {!isBuyer && sellerRequestNextStep(request) && <p className="order-next-step">{sellerRequestNextStep(request)}</p>}
-                      {isBuyer && request.status === "reserved" && <p className="order-next-step">賣家已選定你，請使用訊息確認面交細節。</p>}
-                      {isBuyer && request.status === "awaiting_confirmation" && <p className="order-next-step">面交完成後，請確認已收到商品。</p>}
-                      <OrderTimeline request={request} />
-                    </div>
-                    <div className="request-actions">
-                      <button type="button" onClick={() => void openOrderConversation(request.id)}><MessageCircle size={16} />訊息</button>
-                      {isBuyer && ["reserved", "awaiting_confirmation"].includes(request.status) && (
-                        <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消訂單</button>
-                      )}
-                      {isBuyer && ["reserved", "awaiting_confirmation"].includes(request.status) && (
-                        <button type="button" onClick={() => {
-                          setEditingRequest(request);
-                          setSelectedId(request.bookId);
-                          setDetailBook(null);
-                          setModal("request");
-                        }}><Pencil size={16} />編輯</button>
-                      )}
-                      {!isBuyer && request.status === "reserved" && (
-                        <button type="button" className="accept" onClick={() => void sellerConfirmHandoff(request.id)}><CheckCheck size={16} />已完成面交</button>
-                      )}
-                      {!isBuyer && ["reserved", "awaiting_confirmation"].includes(request.status) && (
-                        <button type="button" onClick={() => void cancelRequest(request.id)}><X size={16} />取消保留</button>
-                      )}
-                      {isBuyer && request.status === "awaiting_confirmation" && (
-                        <button type="button" className="accept" onClick={() => void buyerConfirmTrade(request.id)}><CheckCheck size={16} />確認收到</button>
-                      )}
-                      {request.status === "completed" && (
-                        <button type="button" className="review-action" onClick={() => void openTradeReview(request)}><ShieldCheck size={16} />評價交易</button>
-                      )}
-                    </div>
-                    <small>{timeAgo(request.updatedAt || request.createdAt)}</small>
-                  </div>
-                );
-              })}
-              {confirmedOrders.length === 0 && <EmptyDashboard text="目前沒有已確認訂單" />}
-            </div>
-          )}
-
           {dashboardTab === "favorites" && (
             <section className="favorites-shelf" aria-labelledby="favorites-shelf-title">
               <div className="favorites-shelf-heading">
@@ -4497,49 +4631,46 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   <h2 id="favorites-shelf-title">我的收藏</h2>
                   <p>把想留住的課本放在自己的書架裡，隨時回來查看。</p>
                 </div>
-                <span className="favorites-shelf-count" aria-label={`共 ${favoriteBooks.length} 件收藏`}>
-                  <Heart size={16} fill="currentColor" aria-hidden="true" />
-                  {favoriteBooks.length} 件收藏
-                </span>
+                <span className="favorites-shelf-count" aria-label={`共 ${favoriteBooks.length} 件收藏`}><Heart size={16} fill="currentColor" aria-hidden="true" />{favoriteBooks.length} 件收藏</span>
               </div>
               <div className="book-grid favorites-grid">
-                {favoriteBooks.map((book) => (
-                  <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id}>
-                    <button
-                      type="button"
-                      className="book-card-main"
-                      onClick={() => openBook(book.id)}
-                      aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
-                    >
-                      <div className="card-image">
-                        <ResilientBookCover book={book} />
-                        <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
-                      </div>
-                      <div className="card-body">
-                        {cardContextLabel(book) && (
-                          <span className="course-tag">{cardContextLabel(book)}</span>
-                        )}
-                        <h3>{book.title}</h3>
-                        <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
-                        {book.listingType === "book" && textbookMetadata(book).length > 0 && (
-                          <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
-                        )}
-                        <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      className="heart active"
-                      aria-label={`取消收藏《${book.title}》`}
-                      aria-pressed="true"
-                      title={`取消收藏《${book.title}》`}
-                      onClick={(event) => toggleFavorite(book.id, event)}
-                    >
-                      <Heart size={18} fill="currentColor" aria-hidden="true" />
-                    </button>
-                  </article>
-                ))}
-                {favoriteBooks.length === 0 && <EmptyDashboard text="你還沒有收藏任何課本" />}
+              {favoriteBooks.map((book) => (
+                <article className={`book-card ${book.listingType === "secondhand" ? "secondhand-card" : ""}`} key={book.id}>
+                  <button
+                    type="button"
+                    className="book-card-main"
+                    onClick={() => openBook(book.id)}
+                    aria-label={`查看《${book.title}》，${book.listingType === "secondhand" ? book.itemCategory : book.author}，${money(book.price)}，${book.condition}`}
+                  >
+                    <div className="card-image">
+                      <ResilientBookCover book={book} />
+                      <span className={`status ${book.status}`}>{statusLabels[book.status]}</span>
+                    </div>
+                    <div className="card-body">
+                      {cardContextLabel(book) && (
+                        <span className="course-tag">{cardContextLabel(book)}</span>
+                      )}
+                      <h3>{book.title}</h3>
+                      <p>{book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
+                      {book.listingType === "book" && textbookMetadata(book).length > 0 && (
+                        <small className="textbook-meta">{textbookMetadata(book).slice(0, 4).join(" · ")}</small>
+                      )}
+                      <div className="card-footer"><strong>{money(book.price)}</strong><small>{book.condition}</small></div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="heart active"
+                    title={`取消收藏《${book.title}》`}
+                    aria-label={`取消收藏《${book.title}》`}
+                    aria-pressed="true"
+                    onClick={(event) => toggleFavorite(book.id, event)}
+                  >
+                    <Heart size={18} fill="currentColor" />
+                  </button>
+                </article>
+              ))}
+              {favoriteBooks.length === 0 && <EmptyDashboard text="你還沒有收藏任何課本" />}
               </div>
             </section>
           )}
@@ -4548,160 +4679,94 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
       {view === "admin" && currentUser && isModerator && (
         <section className="dashboard admin-page">
-          <div className="dashboard-head admin-page-head">
+          <div className="dashboard-head">
             <div>
               <span className="section-kicker">MODERATION</span>
-              <h1>管理工作台</h1>
+              <h1>安全與審核後台</h1>
               <p>處理檢舉、刊登審核、商品隱藏與會員權限。</p>
             </div>
-            <div className="admin-head-status"><span className="admin-status-dot" />系統正常<span className="admin-count">{adminPendingCount} 筆待處理</span></div>
+            <div className="admin-count">{pendingReports.length + pendingReviews.length + pendingFeedback.length + studentVerifications.length} 筆待處理</div>
           </div>
 
-          <div className="admin-workbench">
-            <aside className="admin-sidebar" aria-label="管理工作區">
-              <div className="admin-sidebar-heading"><span className="section-kicker">WORKSPACE</span><strong>管理導覽</strong></div>
-              <nav>
-                {adminWorkspaceItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={adminWorkspace === item.id ? "active" : ""}
-                    aria-current={adminWorkspace === item.id ? "page" : undefined}
-                    onClick={() => openAdminWorkspace(item.id)}
-                  >
-                    <span className="admin-nav-copy"><b>{item.label}</b><small>{item.description}</small></span>
-                    {typeof item.count === "number" && <span className={`admin-nav-count ${item.count > 0 ? "has-items" : ""}`}>{item.count}</span>}
-                  </button>
-                ))}
-              </nav>
-              <div className="admin-sidebar-footer"><span className="admin-sidebar-avatar">{currentUser.name.slice(0, 1)}</span><span><b>{currentUser.name}</b><small>{currentUser.role === "admin" ? "系統管理員" : "內容審查員"}</small></span></div>
-            </aside>
-
-            <div className="admin-workspace-content">
-              {adminWorkspace === "overview" && (
-                <section className="admin-overview" aria-labelledby="admin-overview-title">
-                  <div className="admin-workspace-heading"><div><span className="section-kicker">TODAY AT A GLANCE</span><h2 id="admin-overview-title">今天的審查概況</h2><p>從這裡開始，直接進入最需要處理的工作。</p></div><button type="button" className="secondary admin-refresh-button" onClick={() => void loadModerationPanel(currentUser)}><RotateCcw size={15} />重新整理</button></div>
-                  <div className="admin-overview-grid">
-                    <button type="button" className="admin-overview-card accent" onClick={() => openAdminWorkspace("listings")}><span className="admin-overview-card-icon"><BookOpen size={20} /></span><span><small>待審核刊登</small><strong>{pendingReviews.length}</strong><em>立即處理 →</em></span></button>
-                    <button type="button" className="admin-overview-card danger" onClick={() => openAdminWorkspace("risk")}><span className="admin-overview-card-icon"><ShieldCheck size={20} /></span><span><small>風險待處理</small><strong>{riskSummary?.queueCount ?? 0}</strong><em>查看風險佇列 →</em></span></button>
-                    <button type="button" className="admin-overview-card" onClick={() => openAdminWorkspace("reports")}><span className="admin-overview-card-icon"><Flag size={20} /></span><span><small>待處理檢舉</small><strong>{pendingReports.length}</strong><em>查看回報 →</em></span></button>
-                    <button type="button" className="admin-overview-card" onClick={() => openAdminWorkspace("studentVerification")}><span className="admin-overview-card-icon"><GraduationCap size={20} /></span><span><small>學生證審核</small><strong>{studentVerifications.length}</strong><em>查看申請 →</em></span></button>
-                  </div>
-                  <div className="admin-overview-lower"><div className="admin-next-step"><div><span className="section-kicker">NEXT BEST ACTION</span><h3>先處理待審核刊登</h3><p>目前有 {pendingReviews.length} 筆刊登等待審核。開啟列表後可在右側抽屜查看完整內容並直接決定。</p></div><button type="button" className="primary" onClick={() => openAdminWorkspace("listings")}>開始審核 <ArrowRight size={16} /></button></div><div className="admin-quick-links"><span className="section-kicker">QUICK LINKS</span><button type="button" onClick={() => openAdminWorkspace("feedback")}>網站回饋 <ArrowRight size={15} /></button><button type="button" onClick={() => openAdminWorkspace("hiddenListings")}>已隱藏商品 <ArrowRight size={15} /></button></div></div>
-                </section>
-              )}
-
-              {adminWorkspace === "risk" && (
-                <section className="risk-panel" aria-labelledby="risk-panel-title">
+          <section className="risk-panel" aria-labelledby="risk-panel-title">
             <div className="risk-panel-head">
               <div>
                 <span className="section-kicker">TRUST & SAFETY</span>
                 <h2 id="risk-panel-title">交易風險預警</h2>
-                <p>先處理高／中風險項目；完整評價與檢舉證據只在開啟詳情後載入。</p>
+                <p>只供管理員查看原始評價、已處理檢舉與公開徽章資格。</p>
               </div>
-              <div className="risk-kpi-grid" aria-label="風險摘要">
-                <div><small>待處理</small><b>{riskSummary?.queueCount ?? 0}</b></div>
-                <div><small>高風險</small><b>{riskSummary?.highCount ?? 0}</b></div>
-                <div><small>中風險</small><b>{riskSummary?.mediumCount ?? 0}</b></div>
-                <div><small>全部名冊</small><b>{riskSummary?.allCount ?? 0}</b></div>
-              </div>
-            </div>
-            <div className="risk-toolbar">
-              <div className="risk-status-tabs" role="tablist" aria-label="風險審查狀態">
-                {([
-                  ["pending", "待處理"],
-                  ["viewed", "已查看"],
-                  ["processed", "已處理"],
-                  ["all", "全部狀態"],
-                ] as const).map(([status, label]) => (
-                  <button key={status} type="button" role="tab" className={riskFilters.status === status ? "active" : ""} aria-selected={riskFilters.status === status} onClick={() => updateRiskFilter("status", status)}>{label}</button>
-                ))}
-              </div>
-              <label className="risk-search"><Search size={16} aria-hidden="true" /><span className="visually-hidden">搜尋姓名或系所</span><input value={riskFilters.query} onChange={(event) => updateRiskFilter("query", event.target.value)} placeholder="搜尋姓名或系所" /></label>
-              <select aria-label="風險等級" value={riskFilters.riskLevel} onChange={(event) => updateRiskFilter("riskLevel", event.target.value as RiskModerationFilters["riskLevel"])}>
-                <option value="all">全部風險</option>
-                <option value="high">高風險</option>
-                <option value="medium">中風險</option>
-                <option value="low">低風險</option>
-              </select>
-              <select aria-label="系所" value={riskFilters.department} onChange={(event) => updateRiskFilter("department", event.target.value)}>
-                <option value="">全部系所</option>
-                {departments.filter((item) => item !== departments[0]).map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-              <button type="button" className={riskFilters.scope === "all" ? "risk-scope-button active" : "risk-scope-button"} onClick={() => updateRiskFilter("scope", riskFilters.scope === "all" ? "queue" : "all")}>
-                {riskFilters.scope === "all" ? "只看風險佇列" : "查看完整名冊"}
-              </button>
+              <strong>{riskProfiles.length} 位使用者</strong>
             </div>
             {currentUser.role === "admin" && riskPolicy && (
-              <details className="risk-policy-settings">
-                <summary>風險規則設定</summary>
-                <form className="risk-policy-form" onSubmit={saveRiskPolicy}>
-                  <label>最少完成交易<input name="minCompletedTrades" type="number" min="1" max="1000" defaultValue={riskPolicy.minCompletedTrades} /></label>
-                  <label>優良最低平均<input name="goodBadgeMinAverage" type="number" min="1" max="5" step="0.1" defaultValue={riskPolicy.goodBadgeMinAverage} /></label>
-                  <label>優良最多嚴重檢舉<input name="goodBadgeMaxSeriousReports" type="number" min="0" max="1000" defaultValue={riskPolicy.goodBadgeMaxSeriousReports} /></label>
-                  <label>中風險分數<input name="mediumRiskScore" type="number" min="1" defaultValue={riskPolicy.mediumRiskScore} /></label>
-                  <label>高風險分數<input name="highRiskScore" type="number" min="1" defaultValue={riskPolicy.highRiskScore} /></label>
-                  <div className="risk-actions"><button type="submit" className="primary">儲存風險門檻</button></div>
-                </form>
+              <form className="risk-policy-form" onSubmit={saveRiskPolicy}>
+                <label>最少完成交易<input name="minCompletedTrades" type="number" min="1" max="1000" defaultValue={riskPolicy.minCompletedTrades} /></label>
+                <label>優良最低平均<input name="goodBadgeMinAverage" type="number" min="1" max="5" step="0.1" defaultValue={riskPolicy.goodBadgeMinAverage} /></label>
+                <label>優良最多嚴重檢舉<input name="goodBadgeMaxSeriousReports" type="number" min="0" max="1000" defaultValue={riskPolicy.goodBadgeMaxSeriousReports} /></label>
+                <label>中風險分數<input name="mediumRiskScore" type="number" min="1" defaultValue={riskPolicy.mediumRiskScore} /></label>
+                <label>高風險分數<input name="highRiskScore" type="number" min="1" defaultValue={riskPolicy.highRiskScore} /></label>
+                <div className="risk-actions"><button type="submit" className="primary">儲存風險門檻</button></div>
+              </form>
+            )}
+            <div className="risk-actions" aria-label="風險篩選">
+              <label>審核狀態
+                <select value={riskFilters.status} onChange={(event) => setRiskFilters((previous) => ({ ...previous, status: event.target.value }))}>
+                  <option value="all">全部</option>
+                  <option value="pending">待處理</option>
+                  <option value="viewed">已查看</option>
+                  <option value="processed">已處理</option>
+                </select>
+              </label>
+              <label>風險等級
+                <select value={riskFilters.riskLevel} onChange={(event) => setRiskFilters((previous) => ({ ...previous, riskLevel: event.target.value }))}>
+                  <option value="all">全部</option>
+                  <option value="high">高風險</option>
+                  <option value="medium">中風險</option>
+                  <option value="low">低風險</option>
+                </select>
+              </label>
+              <small>每頁最多 {RISK_REVIEW_PAGE_SIZE} 筆</small>
+            </div>
+            {riskProfileDetail && (
+              <details className="risk-evidence" open>
+                <summary>風險明細</summary>
+                <p>評價證據 {riskProfileDetail.reviewEvidence.length} 筆，檢舉證據 {riskProfileDetail.reportEvidence.length} 筆。</p>
               </details>
             )}
-            <div className="risk-list-head"><strong>{riskFilters.scope === "all" ? "完整使用者名冊" : "待審查風險佇列"}</strong><span>{riskPageLoading ? "讀取中…" : `${riskProfileTotal} 筆`}</span></div>
-            <div className="risk-profile-list">
-              {riskProfiles.map((risk) => (
-                <button type="button" className={`risk-profile-row ${risk.riskLevel}`} key={risk.userId} onClick={() => void openRiskProfile(risk.userId)}>
-                  <span className={`risk-profile-avatar ${risk.riskLevel}`} aria-hidden="true">{risk.userName.slice(0, 1)}</span>
-                  <span className="risk-profile-main"><strong>{risk.userName}</strong><small>{risk.userDepartment || "未填系所"} · {risk.completedTradeCount} 筆完成交易 · {risk.reviewCount ? `${risk.averageRating.toFixed(2)} 平均評分` : "尚無評分"}</small></span>
-                  <span className={`risk-level ${risk.riskLevel}`}>{risk.riskLevel === "high" ? "高風險" : risk.riskLevel === "medium" ? "中風險" : "低風險"} · {risk.riskScore}</span>
-                  <span className={`risk-review-status ${risk.reviewStatus}`}>{risk.reviewStatus === "pending" ? "待處理" : risk.reviewStatus === "viewed" ? "已查看" : "已處理"}</span>
-                  <span className="risk-profile-arrow" aria-hidden="true">›</span>
-                </button>
-              ))}
-              {!riskPageLoading && riskProfiles.length === 0 && <EmptyDashboard text={riskFilters.scope === "all" ? "找不到符合條件的使用者" : "目前沒有待處理的交易風險"} />}
-            </div>
-            <div className="risk-pagination">
-              <span>{riskProfileTotal === 0 ? "0" : `${riskFilters.offset + 1}–${Math.min(riskFilters.offset + RISK_REVIEW_PAGE_SIZE, riskProfileTotal)}`} / {riskProfileTotal} 筆</span>
-              <div><button type="button" disabled={riskFilters.offset === 0 || riskPageLoading} onClick={() => changeRiskPage(-1)}>上一頁</button><button type="button" disabled={riskFilters.offset + RISK_REVIEW_PAGE_SIZE >= riskProfileTotal || riskPageLoading} onClick={() => changeRiskPage(1)}>下一頁</button></div>
-            </div>
-                </section>
-              )}
-
-          {selectedRiskProfileId && (
-            <ModalShell
-              title={riskProfileDetail?.userName || "風險詳情"}
-              subtitle={riskProfileDetail ? `${riskProfileDetail.userDepartment || "未填系所"} · 交易風險審查` : "正在載入風險資料"}
-              onClose={() => { setSelectedRiskProfileId(null); setRiskProfileDetail(null); }}
-              dialogClassName="risk-detail-modal"
-            >
-              {riskProfileDetailLoading && <div className="risk-detail-loading">正在載入評價與檢舉證據…</div>}
-              {!riskProfileDetailLoading && riskProfileDetail && (
-                <div className="risk-detail-content">
-                  <div className="risk-detail-topline"><span className={`risk-level ${riskProfileDetail.riskLevel}`}>{riskProfileDetail.riskLevel === "high" ? "高風險" : riskProfileDetail.riskLevel === "medium" ? "中風險" : "低風險"} · {riskProfileDetail.riskScore}</span><span className={`risk-review-status ${riskProfileDetail.reviewStatus}`}>{riskProfileDetail.reviewStatus === "pending" ? "待處理" : riskProfileDetail.reviewStatus === "viewed" ? "已查看" : "已處理"}</span></div>
+            <div className="risk-profile-list" aria-label={`風險使用者列表，共 ${riskProfileIds.length} 位`}>
+              {riskProfiles
+                .filter((risk) => (riskFilters.status === "all" || risk.reviewStatus === riskFilters.status)
+                  && (riskFilters.riskLevel === "all" || risk.riskLevel === riskFilters.riskLevel))
+                .slice(0, RISK_REVIEW_PAGE_SIZE)
+                .map((risk) => (
+                <article className="risk-profile-card" key={risk.userId} onClick={() => void openRiskProfileDetail(risk.userId)}>
+                  <header><div><h3>{risk.userName}</h3><small>{risk.userDepartment || "未填系所"}</small></div><span className={"risk-level " + risk.riskLevel}>{risk.riskLevel === "high" ? "高風險" : risk.riskLevel === "medium" ? "中風險" : "低風險"} · {risk.riskScore}</span></header>
                   <div className="risk-summary-grid">
-                    <div><small>完成交易</small><b>{riskProfileDetail.completedTradeCount}</b></div>
-                    <div><small>平均評分</small><b>{riskProfileDetail.reviewCount ? riskProfileDetail.averageRating.toFixed(2) : "尚無"}</b></div>
-                    <div><small>已解決檢舉</small><b>{riskProfileDetail.resolvedReportCount}</b></div>
-                    <div><small>嚴重檢舉</small><b>{riskProfileDetail.seriousReportCount}</b></div>
+                    <div><small>完成交易</small><b>{risk.completedTradeCount}</b></div>
+                    <div><small>平均評分</small><b>{risk.reviewCount ? risk.averageRating.toFixed(2) : "尚無"}</b></div>
+                    <div><small>已解決檢舉</small><b>{risk.resolvedReportCount}</b></div>
+                    <div><small>嚴重檢舉</small><b>{risk.seriousReportCount}</b></div>
                   </div>
-                  <p className="risk-detail-meta">風險計算更新於 {timeAgo(riskProfileDetail.computedAt)}；狀態更新於 {riskProfileDetail.reviewUpdatedAt ? timeAgo(riskProfileDetail.reviewUpdatedAt) : "尚未更新"}</p>
-                  <div className="risk-evidence-block"><h3>評價證據（{riskProfileDetail.reviewEvidence.length}）</h3>{riskProfileDetail.reviewEvidence.length === 0 ? <p>目前沒有評價證據。</p> : riskProfileDetail.reviewEvidence.map((evidence) => <p key={evidence.id}>評價 {evidence.rating} 星 · {evidence.reviewerName || "使用者"} · {evidence.comment || "無文字評論"}</p>)}</div>
-                  <div className="risk-evidence-block"><h3>檢舉證據（{riskProfileDetail.reportEvidence.length}）</h3>{riskProfileDetail.reportEvidence.length === 0 ? <p>目前沒有檢舉證據。</p> : riskProfileDetail.reportEvidence.map((evidence) => <p key={evidence.id}>檢舉 {evidence.reason || "其他"} · {evidence.status} · {evidence.details || "無補充說明"}</p>)}</div>
-                  <div className="risk-actions risk-detail-actions">
-                    {riskProfileDetail.reviewStatus !== "viewed" && riskProfileDetail.reviewStatus !== "processed" && <button type="button" className="secondary" onClick={() => void changeRiskReviewStatus("viewed")}>標記已查看</button>}
-                    {riskProfileDetail.reviewStatus !== "processed" && <button type="button" className="primary" onClick={() => void changeRiskReviewStatus("processed")}>標記已處理</button>}
-                    {riskProfileDetail.reviewStatus === "processed" && <button type="button" className="secondary" onClick={() => void changeRiskReviewStatus("pending")}>重新開啟</button>}
-                    {riskProfileDetail.sellerBadgeEligible && riskProfileDetail.sellerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(riskProfileDetail.userId, "seller", "approve")}><ShieldCheck size={16} />核准優良賣家</button>}
-                    {riskProfileDetail.sellerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(riskProfileDetail.userId, "seller", "revoke")}><EyeOff size={16} />撤下賣家徽章</button>}
-                    {riskProfileDetail.buyerBadgeEligible && riskProfileDetail.buyerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(riskProfileDetail.userId, "buyer", "approve")}><ShieldCheck size={16} />核准推薦買家</button>}
-                    {riskProfileDetail.buyerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(riskProfileDetail.userId, "buyer", "revoke")}><EyeOff size={16} />撤下買家徽章</button>}
+                  <div className="risk-evidence">評價證據 {risk.reviewEvidence.length} 筆 · 檢舉證據 {risk.reportEvidence.length} 筆 · 更新於 {timeAgo(risk.computedAt)}</div>
+                  {(risk.reviewEvidence.length > 0 || risk.reportEvidence.length > 0) && (
+                    <details className="risk-evidence">
+                      <summary>查看證據明細</summary>
+                      {risk.reviewEvidence.map((evidence) => <p key={evidence.id}>評價 {evidence.rating} 星 · {evidence.reviewerName || "使用者"} · {evidence.comment || "無文字評論"}</p>)}
+                      {risk.reportEvidence.map((evidence) => <p key={evidence.id}>檢舉 {evidence.reason || "其他"} · {evidence.status} · {evidence.details || "無補充說明"}</p>)}
+                    </details>
+                  )}
+                  <div className="risk-actions">
+                    {risk.sellerBadgeEligible && risk.sellerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(risk.userId, "seller", "approve")}><ShieldCheck size={16} />核准優良賣家</button>}
+                    {risk.sellerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(risk.userId, "seller", "revoke")}><EyeOff size={16} />撤下賣家徽章</button>}
+                    {risk.buyerBadgeEligible && risk.buyerBadgeStatus !== "approved" && <button type="button" className="accept" onClick={() => void reviewTrustBadge(risk.userId, "buyer", "approve")}><ShieldCheck size={16} />核准推薦買家</button>}
+                    {risk.buyerBadgeStatus === "approved" && <button type="button" className="warn" onClick={() => void reviewTrustBadge(risk.userId, "buyer", "revoke")}><EyeOff size={16} />撤下買家徽章</button>}
                   </div>
-                </div>
-              )}
-            </ModalShell>
-          )}
+                </article>
+              ))}
+              {riskProfiles.length === 0 && <EmptyDashboard text="目前沒有可分析的交易風險資料" />}
+            </div>
+          </section>
 
-          {adminWorkspace === "feedback" && (
-            <section className="admin-workspace-panel" aria-labelledby="admin-feedback-title">
-              <div className="admin-workspace-heading"><div><span className="section-kicker">PRODUCT FEEDBACK</span><h2 id="admin-feedback-title">網站問題回報</h2><p>集中處理使用者提出的體驗與功能問題。</p></div><span className="admin-panel-count">{pendingFeedback.length} 筆待處理</span></div>
+          <h2 className="admin-section-title">網站問題回報</h2>
           <div className="reports-list">
             {pendingFeedback.map((item) => (
               <article className="report-card" key={item.id}>
@@ -4718,15 +4783,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             ))}
           </div>
           {pendingFeedback.length === 0 && <EmptyDashboard text="目前沒有等待處理的問題回報" />}
-            </section>
-          )}
 
-          {adminWorkspace === "studentVerification" && (
-            <section className="admin-workspace-panel" aria-labelledby="admin-student-title">
-              <div className="admin-workspace-heading"><div><span className="section-kicker">VERIFICATION</span><h2 id="admin-student-title">學生證審核</h2><p>核對學生身分資料，完成後系統會保留審查紀錄。</p></div><span className="admin-panel-count">{studentVerifications.length} 筆待處理</span></div>
+          <h2 className="admin-section-title">學生證審核</h2>
           <div className="reports-list">
             {studentVerifications.map((verification) => (
-              <StudentVerificationCardWithZoom
+              <StudentVerificationCard
                 key={verification.id}
                 verification={verification}
                 onReview={reviewStudentVerification}
@@ -4734,12 +4795,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             ))}
           </div>
           {studentVerifications.length === 0 && <EmptyDashboard text="目前沒有等待審核的學生證" />}
-            </section>
-          )}
 
-          {adminWorkspace === "reports" && (
-            <section className="admin-workspace-panel" aria-labelledby="admin-reports-title">
-              <div className="admin-workspace-heading"><div><span className="section-kicker">REPORTS</span><h2 id="admin-reports-title">待處理檢舉</h2><p>依檢舉內容判斷是否駁回、解決或採取限制措施。</p></div><span className="admin-panel-count">{pendingReports.length} 筆待處理</span></div>
+          <h2 className="admin-section-title">待處理檢舉</h2>
           <div className="reports-list">
             {pendingReports.map((report) => (
               <article className="report-card" key={report.id}>
@@ -4760,31 +4817,44 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             ))}
           </div>
           {pendingReports.length === 0 && <EmptyDashboard text="目前沒有等待處理的檢舉" />}
-            </section>
-          )}
 
-          {adminWorkspace === "listings" && (
-            <section className="admin-workspace-panel" aria-labelledby="admin-listings-title">
-              <div className="admin-workspace-heading"><div><span className="section-kicker">LISTING REVIEW</span><h2 id="admin-listings-title">待審核刊登</h2><p>點選「查看詳情」後，在右側抽屜完成審核，不必離開列表。</p></div><span className="admin-panel-count">{pendingReviews.length} 筆待處理</span></div>
-          <div className="admin-listing-table-wrap">
-            <table className="admin-listing-table"><thead><tr><th>刊登內容</th><th>賣家</th><th>價格</th><th>送審時間</th><th><span className="visually-hidden">操作</span></th></tr></thead><tbody>
+          <h2 className="admin-section-title">待審核刊登</h2>
+          <div className="moderation-grid">
             {pendingReviews.map((book) => {
               const seller = profile(book.sellerId);
               return (
-                <tr key={book.id}><td><div className="admin-listing-title"><span className="admin-listing-thumb"><Image src={book.imageUrl} alt="" width={48} height={64} /></span><span><b>{book.title}</b><small>{[book.author, book.edition, book.publisher].filter(Boolean).join(" · ") || "二手商品"}</small></span></div></td><td><span className="admin-table-person"><b>{seller?.name || "使用者"}</b><small>{seller?.department || "未填系所"}</small></span></td><td><strong>{money(book.price)}</strong><small className="admin-table-muted">{book.condition}</small></td><td><span className="admin-table-muted">{timeAgo(book.createdAt)}</span></td><td><button type="button" className="admin-table-open" onClick={() => setSelectedAdminBook(book)}>查看詳情 <ArrowRight size={15} /></button></td></tr>
+                <article className="moderation-card" key={book.id}>
+                  <div className="moderation-image">
+                    <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="220px" />
+                    <span className="review-badge pending">待審核</span>
+                  </div>
+                  <div className="moderation-body">
+                    <h3>{book.title}</h3>
+                    <p>{[book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
+                    <dl>
+                      <div><dt>賣家</dt><dd>{seller?.name || "使用者"}<br /><small>{seller?.email}</small></dd></div>
+                      <div><dt>書況</dt><dd>{book.condition}</dd></div>
+                      <div><dt>價格</dt><dd>{money(book.price)}</dd></div>
+                      <div><dt>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? "面交地點" : "面交方式"}</dt><dd>{meetupSummary(book)}</dd></div>
+                      {textbookMetadata(book).length > 0 && <div><dt>課本資訊</dt><dd>{textbookMetadata(book).join(" · ")}</dd></div>}
+                      {book.isbn13 && <div><dt>ISBN-13</dt><dd>{book.isbn13}</dd></div>}
+                      {book.approvalNumber && <div><dt>審定字號</dt><dd>{book.approvalNumber}</dd></div>}
+                    </dl>
+                    <div className="moderation-description">{book.description}</div>
+                    <div className="moderation-actions">
+                      <button type="button" className="accept" onClick={() => void reviewBook(book.id, "approved")}><Check size={17} />通過上架</button>
+                      <button type="button" className="reject" onClick={() => void reviewBook(book.id, "rejected")}><X size={17} />拒絕</button>
+                    </div>
+                  </div>
+                </article>
               );
             })}
-            </tbody></table>
           </div>
           {pendingReviews.length === 0 && <EmptyDashboard text="目前沒有等待審核的書籍" />}
-            </section>
-          )}
 
-          {adminWorkspace === "hiddenListings" && (
-            <section className="admin-workspace-panel" aria-labelledby="admin-hidden-title">
-              <div className="admin-workspace-heading"><div><span className="section-kicker">HIDDEN LISTINGS</span><h2 id="admin-hidden-title">已隱藏商品</h2><p>檢視被暫時隱藏的刊登，確認後可恢復公開。</p></div><span className="admin-panel-count">{hiddenBooks.length} 筆</span></div>
-              {hiddenBooks.length > 0 ? (
-                <>
+          {hiddenBooks.length > 0 && (
+            <>
+              <h2 className="admin-section-title permissions-title">已隱藏商品</h2>
               <div className="permissions-list">
                 {hiddenBooks.map((book) => (
                   <div className="permission-row" key={book.id}>
@@ -4794,14 +4864,12 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   </div>
                 ))}
               </div>
-                </>
-              ) : <EmptyDashboard text="目前沒有已隱藏的商品" />}
-            </section>
+            </>
           )}
 
-          {adminWorkspace === "permissions" && currentUser.role === "admin" && (
-            <section className="admin-workspace-panel" aria-labelledby="admin-permissions-title">
-              <div className="admin-workspace-heading"><div><span className="section-kicker">ACCESS CONTROL</span><h2 id="admin-permissions-title">管理權限</h2><p>調整角色與帳號狀態，只有系統管理員可以進入此工作區。</p></div><span className="admin-panel-count">{store.profiles.length} 位使用者</span></div>
+          {currentUser.role === "admin" && (
+            <>
+              <h2 className="admin-section-title permissions-title">管理權限</h2>
               <div className="permissions-list">
                 {store.profiles.map((user) => (
                   <div className="permission-row" key={user.id}>
@@ -4824,41 +4892,22 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   </div>
                 ))}
               </div>
-            </section>
-          )}
-            </div>
-          </div>
-          {selectedAdminBook && (
-            <ModalShell
-              title={selectedAdminBook.title}
-              subtitle="刊登審核詳情"
-              onClose={() => setSelectedAdminBook(null)}
-              dialogClassName="admin-detail-drawer"
-            >
-              <div className="admin-detail-drawer-content">
-                <div className="admin-detail-cover"><Image src={selectedAdminBook.imageUrl} alt={selectedAdminBook.title} width={180} height={240} /></div>
-                <div className="admin-detail-summary"><span className="review-badge pending">待審核</span><h3>{selectedAdminBook.title}</h3><p>{[selectedAdminBook.author, selectedAdminBook.edition, selectedAdminBook.publisher].filter(Boolean).join(" · ") || "二手商品"}</p></div>
-                <dl className="admin-detail-facts"><div><dt>賣家</dt><dd>{profile(selectedAdminBook.sellerId)?.name || "使用者"}</dd></div><div><dt>價格</dt><dd>{money(selectedAdminBook.price)}</dd></div><div><dt>書況</dt><dd>{selectedAdminBook.condition}</dd></div><div><dt>面交方式</dt><dd>{selectedAdminBook.meetup}</dd></div>{selectedAdminBook.isbn13 && <div><dt>ISBN-13</dt><dd>{selectedAdminBook.isbn13}</dd></div>}{selectedAdminBook.approvalNumber && <div><dt>審定字號</dt><dd>{selectedAdminBook.approvalNumber}</dd></div>}</dl>
-                <div className="admin-detail-description"><span className="section-kicker">DESCRIPTION</span><p>{selectedAdminBook.description || "賣家沒有補充說明。"}</p></div>
-                <div className="admin-detail-actions"><button type="button" className="reject" onClick={() => { setSelectedAdminBook(null); void reviewBook(selectedAdminBook.id, "rejected"); }}><X size={17} />拒絕刊登</button><button type="button" className="accept" onClick={() => { setSelectedAdminBook(null); void reviewBook(selectedAdminBook.id, "approved"); }}><Check size={17} />通過上架</button></div>
-              </div>
-            </ModalShell>
+            </>
           )}
         </section>
       )}
 
       <footer>
         <div className="brand footer-brand"><span className="brand-mark"><BookOpen size={20} /></span><span><b>虎科書流</b><small>HUST BOOKFLOW</small></span></div>
-        <p>{isSecondhandMode ? "讓每件校園好物，都找到下一位需要它的人。" : "讓每一本課本，都找到下一位需要它的人。"}</p>
+        <p>{isGiveawayMode ? "讓每件用不到的好物，都找到下一位需要它的人。" : isSecondhandMode ? "讓每件校園好物，都找到下一位需要它的人。" : "讓每一本課本，都找到下一位需要它的人。"}</p>
         <button className="footer-feedback" type="button" onClick={() => requireLogin(() => setModal("feedback"))}>問題回報</button>
         <div className="footer-meta">
-          <span>{isSecondhandMode ? "虎科校園二手交流平台" : "虎科校園課本交流平台"} · 2026</span>
+          <span>{isGiveawayMode ? "虎科校園零元贈送平台" : isSecondhandMode ? "虎科校園二手交流平台" : "虎科校園課本交流平台"} · 2026</span>
           <nav aria-label="網站政策">
             <Link href="/privacy">隱私權</Link>
             <Link href="/terms">使用條款</Link>
             <Link href="/safety">交易安全</Link>
           </nav>
-          <small className="footer-version">v{APP_VERSION}</small>
         </div>
       </footer>
 
@@ -4926,7 +4975,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
               || store.requests.find((request) =>
                 request.bookId === selectedBook.id
                 && request.buyerId === currentUser?.id
-                && ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"].includes(request.status),
+                && ["pending", "waitlisted", "awaiting_recipient_confirmation", "reserved", "awaiting_confirmation", "completed"].includes(request.status),
               )
               || null;
             if (activeRequest) {
@@ -5028,27 +5077,90 @@ function ModalShell({
   subtitle,
   onClose,
   closeOnBackdrop = true,
-  dialogClassName = "",
   children,
 }: {
   title: string;
   subtitle: string;
   onClose: () => void;
   closeOnBackdrop?: boolean;
-  dialogClassName?: string;
   children: React.ReactNode;
 }) {
   const headingId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const activeDialog = dialog;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const backdrop = dialog.parentElement;
+    const root = backdrop?.parentElement;
+    const hiddenSiblings = root
+      ? Array.from(root.children).filter((child) => child !== backdrop && child instanceof HTMLElement) as HTMLElement[]
+      : [];
+    hiddenSiblings.forEach((element) => {
+      element.setAttribute("inert", "");
+      element.setAttribute("aria-hidden", "true");
+    });
+    const focusable = () => Array.from(activeDialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+    ));
+    (focusable()[0] ?? activeDialog).focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (items.length === 0) {
+        event.preventDefault();
+        activeDialog.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      hiddenSiblings.forEach((element) => {
+        element.removeAttribute("inert");
+        element.removeAttribute("aria-hidden");
+      });
+      previouslyFocused?.focus();
+    };
+  }, []);
 
   return (
-    <NativeDialog
-      className="modal-backdrop"
-      labelledBy={headingId}
-      onClose={onClose}
-      closeOnBackdrop={closeOnBackdrop}
-    >
+    <NativeDialog className="modal-backdrop" onClose={onClose} closeOnBackdrop={closeOnBackdrop}>
+      {closeOnBackdrop && (
+        <button
+          type="button"
+          className="modal-backdrop-dismiss"
+          aria-label="關閉視窗"
+          onClick={onClose}
+        />
+      )}
       <div
-        className={`modal ${dialogClassName}`.trim()}
+        ref={dialogRef}
+        className="modal"
+        aria-labelledby={headingId}
+        tabIndex={-1}
       >
         <button className="modal-close" type="button" onClick={onClose} aria-label="關閉視窗"><X aria-hidden="true" /></button>
         <div className="modal-heading">
@@ -5071,9 +5183,16 @@ function ActionDialog({
   onConfirm: (value: string) => void;
 }) {
   const [value, setValue] = useState(request.initialValue || "");
+  const headingId = useId();
 
   return (
-    <ModalShell title={request.title} subtitle="請確認這項操作的影響" onClose={onCancel}>
+    <NativeDialog className="modal-backdrop" labelledBy={headingId} onClose={onCancel}>
+      <div className="modal">
+        <button className="modal-close" type="button" onClick={onCancel} aria-label="關閉視窗"><X aria-hidden="true" /></button>
+        <div className="modal-heading">
+          <span className="brand-mark"><BookOpen size={21} /></span>
+          <div><h2 id={headingId}>{request.title}</h2><p>請確認這項操作的影響</p></div>
+        </div>
       <form
         className="form action-dialog"
         onSubmit={(event) => {
@@ -5102,7 +5221,8 @@ function ActionDialog({
           </button>
         </div>
       </form>
-    </ModalShell>
+      </div>
+    </NativeDialog>
   );
 }
 
@@ -5125,28 +5245,18 @@ function AdminOtpModal({
     event.preventDefault();
     setLoading(true);
     setError("");
-    try {
-      const message = await onVerify(code);
-      if (message) setError(message);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "驗證失敗，請稍後再試");
-    } finally {
-      setLoading(false);
-    }
+    const message = await onVerify(code);
+    setLoading(false);
+    if (message) setError(message);
   }
 
   async function resend() {
     setLoading(true);
     setError("");
-    try {
-      const message = await onResend();
-      if (message) setError(message);
-      else setCode("");
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "驗證碼寄送失敗，請稍後再試");
-    } finally {
-      setLoading(false);
-    }
+    const message = await onResend();
+    setLoading(false);
+    if (message) setError(message);
+    else setCode("");
   }
 
   return (
@@ -5199,6 +5309,7 @@ function StudentVerificationPanel({
   const [studentIdPreview, setStudentIdPreview] = useState("");
   const [studentIdBusy, setStudentIdBusy] = useState(false);
   const [studentAiBusy, setStudentAiBusy] = useState(false);
+  const [studentAiRequestKey, setStudentAiRequestKey] = useState<string | null>(null);
   const [studentIdConsent, setStudentIdConsent] = useState(false);
   const [error, setError] = useState("");
   const [localPending, setLocalPending] = useState(false);
@@ -5216,6 +5327,7 @@ function StudentVerificationPanel({
     const file = event.target.files?.[0] ?? null;
     event.target.value = "";
     setStudentIdFile(file);
+    setStudentAiRequestKey(file ? crypto.randomUUID() : null);
     setStudentIdOcrText("");
     setStudentIdFlags(null);
     setStudentIdDetails(null);
@@ -5231,19 +5343,19 @@ function StudentVerificationPanel({
       const { imageQualityFlags, recognizeStudentCardText } = await import("@/lib/marketplace/free-ocr");
       const { text: ocrText } = await Promise.race([
         recognizeStudentCardText(file),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("照片暫時無法辨識，請重新上傳清晰的學生證照片。")), 15000)),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("本機 OCR 較慢，請勾選同意後使用 AI 補強。")), 15000)),
       ]);
       const details = findStudentIdCandidates(ocrText)[0] ?? null;
       setStudentIdOcrText(ocrText);
       setStudentIdFlags(await imageQualityFlags(file, ocrText));
       setStudentIdDetails(details);
       if (!details) {
-        setError("照片暫時無法辨識，請重新上傳清晰的學生證照片。");
+        setError("OCR 找不到符合近五年規則的學號，請重新拍攝並確保學生證上的 8 碼學號清楚可見。");
       }
     } catch (ocrError) {
       const { imageQualityFlags } = await import("@/lib/marketplace/free-ocr");
       setStudentIdFlags(await imageQualityFlags(file, ""));
-      setError(ocrError instanceof Error ? ocrError.message : "照片暫時無法辨識，請重新上傳清晰的學生證照片。");
+      setError(ocrError instanceof Error ? ocrError.message : "OCR 讀取失敗，請重新上傳清楚的學生證照片。");
     } finally {
       setStudentIdBusy(false);
     }
@@ -5259,13 +5371,18 @@ function StudentVerificationPanel({
     try {
       const { recognizeStudentCardWithAi } = await import("@/lib/marketplace/student-card-ai");
       const { parseStudentId } = await import("@/lib/marketplace/student-id");
-      const result = await recognizeStudentCardWithAi(supabase!, studentIdFile, studentIdOcrText);
+      const result = await recognizeStudentCardWithAi(
+        supabase!,
+        studentIdFile,
+        studentIdOcrText,
+        studentAiRequestKey || crypto.randomUUID(),
+      );
       const details = parseStudentId(result.studentNumber);
-      if (!details) throw new Error("照片暫時無法辨識，請重新上傳清晰的學生證照片。");
-      setStudentIdOcrText((previous) => `${previous}\n${details.value}`.trim());
+      if (!details) throw new Error("AI 找不到符合近五年規則的學號，請重新拍攝學生證。");
+      setStudentIdOcrText((previous) => `${previous}\nAI 候選學號：${details.value}`.trim());
       setStudentIdDetails(details);
     } catch (aiError) {
-      setError(aiError instanceof Error ? aiError.message : "目前無法完成辨識，請稍後再試。");
+      setError(aiError instanceof Error ? aiError.message : "AI 學生證辨識失敗，請重新上傳。");
     } finally {
       setStudentAiBusy(false);
     }
@@ -5294,6 +5411,7 @@ function StudentVerificationPanel({
     } else {
       setLocalPending(true);
       setStudentIdFile(null);
+      setStudentAiRequestKey(null);
       setStudentIdOcrText("");
       setStudentIdFlags(null);
       setStudentIdDetails(null);
@@ -5329,15 +5447,22 @@ function StudentVerificationPanel({
             {studentIdPreview && (
               <div className="student-id-preview">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={safeImageSource(studentIdPreview)} alt="學生證預覽" />
+                <img src={studentIdPreview} alt="學生證預覽" />
+              </div>
+            )}
+            {studentIdFlags && (
+              <div className="ocr-flags">
+                {studentVerificationFlagLabels(studentIdFlags!).map((label) => <span key={label}>{label}</span>)}
               </div>
             )}
             {studentIdDetails && (
-              <div className="student-id-result">
-                <b>辨識出的學號：{studentIdDetails.value}</b>
-                <span>請核對這 8 碼是否與學生證一致，再送出審核。</span>
+              <div className="student-id-result" aria-live="polite">
+                <b>OCR 辨識出的學號：{studentIdDetails.value}</b>
+                <span>請先核對這 8 碼是否與學生證一致，再送交管理員審核。</span>
+                <span>{studentIdDetails.programLabel} · 民國 {studentIdDetails.admissionYear} 年 · 系所 {studentIdDetails.departmentCode} · {studentIdDetails.classLabel}</span>
               </div>
             )}
+            {studentIdOcrText && <textarea className="ocr-text" readOnly value={studentIdOcrText} aria-label="學生證 OCR 結果" />}
             <label className="student-id-consent">
               <input type="checkbox" checked={studentIdConsent} onChange={(event) => setStudentIdConsent(event.target.checked)} />
               <span>我同意學生證圖片與 OCR 結果僅供身分驗證，必要時送交 AI 辨識服務，審核完成後清除敏感內容。</span>
@@ -5347,7 +5472,7 @@ function StudentVerificationPanel({
             <button className="secondary-action wide" type="button" disabled={studentIdBusy || !studentIdFile || !studentIdDetails || !studentIdConsent} onClick={() => void submitStudentId()}>
               {studentIdBusy ? "OCR 處理中..." : "送交學生身分審核"}
             </button>
-            {!studentIdDetails && studentIdFile && !studentIdBusy && <p className="form-note">若無法讀取，請重新上傳清晰的學生證照片。</p>}
+            {!studentIdDetails && studentIdFile && !studentIdBusy && <p className="form-note">找不到有效學號時不能送出，請重新拍攝學生證。</p>}
           </>
         )}
       </section>
@@ -5355,7 +5480,7 @@ function StudentVerificationPanel({
   );
 }
 
-function StudentVerificationCardWithZoom({
+function StudentVerificationCard({
   verification,
   onReview,
 }: {
@@ -5363,11 +5488,8 @@ function StudentVerificationCardWithZoom({
   onReview: (verificationId: string, decision: "approved" | "rejected") => void | Promise<void>;
 }) {
   const [imageUrl, setImageUrl] = useState("");
-  const [imageViewerOpen, setImageViewerOpen] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
   const flags = verification.qualityFlags as Partial<StudentVerificationFlags>;
-  const flagLabels = studentVerificationFlagLabelsForDisplay({
+  const flagLabels = studentVerificationFlagLabels({
     schoolMatched: Boolean(flags.schoolMatched),
     textTooShort: Boolean(flags.textTooShort),
     imageTooSmall: Boolean(flags.imageTooSmall),
@@ -5387,73 +5509,38 @@ function StudentVerificationCardWithZoom({
     };
   }, [verification.imagePath]);
 
-  useEffect(() => {
-    if (!imageViewerOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setImageViewerOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [imageViewerOpen]);
-
   return (
-    <>
-      <article className="student-review-card">
-        <div className="student-review-image">
-          {imageUrl ? (
-            <button
-              type="button"
-              className="student-review-image-button"
-              onClick={() => {
-                setZoom(1);
-                setRotation(0);
-                setImageViewerOpen(true);
-              }}
-              aria-label="放大學生證圖片"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imageUrl} alt="學生證圖片，點擊放大" />
-            </button>
-          ) : <ShieldCheck size={28} />}
+    <article className="student-review-card">
+      <div className="student-review-image">
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt={`${verification.userName} 的學生證`} />
+        ) : (
+          <ShieldCheck size={28} />
+        )}
+      </div>
+      <div className="student-review-body">
+        <div className="report-card-head">
+          <span className="report-target user"><ShieldCheck size={14} />待人工審核</span>
+          <time>{timeAgo(verification.createdAt)}</time>
         </div>
-        <div className="student-review-body">
-          <div className="report-card-head">
-            <span className="report-target user"><ShieldCheck size={14} />學生證審核</span>
-            <time>{timeAgo(verification.createdAt)}</time>
-          </div>
-          <h3>{verification.userName}</h3>
-          <div className="ocr-flags">
-            {verification.programType && <span>{verification.programType === "four_year" ? "四技" : "二技"}</span>}
-            {verification.admissionYear && <span>民國 {verification.admissionYear} 年</span>}
-            {verification.departmentCode && <span>系所 {verification.departmentCode}</span>}
-            {verification.classCode && <span>{verification.classCode} 班</span>}
-          </div>
-          <div className="ocr-flags">
-            {flagLabels.map((label) => <span key={label}>{label}</span>)}
-          </div>
-          <textarea className="ocr-text" readOnly value={verification.ocrText || "OCR 未讀到可用文字，請直接人工檢查圖片。"} aria-label="學生證 OCR 文字" />
-          <div className="report-actions">
-            <button type="button" className="accept" onClick={() => void onReview(verification.id, "approved")}><Check size={16} />通過學生證</button>
-            <button type="button" className="reject" onClick={() => void onReview(verification.id, "rejected")}><X size={16} />拒絕</button>
-          </div>
+        <h3>{verification.userName}</h3>
+        <div className="ocr-flags">
+          {verification.programType && <span>{verification.programType === "four_year" ? "四技" : "二技"}</span>}
+          {verification.admissionYear && <span>民國 {verification.admissionYear} 年</span>}
+          {verification.departmentCode && <span>系所 {verification.departmentCode}</span>}
+          {verification.classCode && <span>{verification.classCode} 班</span>}
         </div>
-      </article>
-      {imageViewerOpen && imageUrl && (
-        <NativeDialog className="student-card-lightbox" label="放大的學生證圖片" onClose={() => setImageViewerOpen(false)}>
-          <button type="button" className="student-card-lightbox-close" onClick={() => setImageViewerOpen(false)} aria-label="關閉圖片"><X size={24} /></button>
-          <div className="student-card-lightbox-content">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imageUrl} alt="放大的學生證圖片" style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }} />
-          </div>
-          <div className="student-card-lightbox-controls">
-            <button type="button" onClick={() => setZoom((value) => Math.min(4, value + 0.25))} aria-label="放大"><ZoomIn size={18} /></button>
-            <button type="button" onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))} aria-label="縮小"><ZoomOut size={18} /></button>
-            <button type="button" onClick={() => setZoom(1)} aria-label="重設大小">100%</button>
-            <button type="button" onClick={() => setRotation((value) => value + 90)} aria-label="旋轉圖片"><RotateCcw size={18} /></button>
-          </div>
-        </NativeDialog>
-      )}
-    </>
+        <div className="ocr-flags">
+          {flagLabels.map((label) => <span key={label}>{label}</span>)}
+        </div>
+        <textarea className="ocr-text" readOnly value={verification.ocrText || "OCR 未讀到可用文字，請直接人工檢查圖片。"} aria-label="學生證 OCR 文字" />
+        <div className="report-actions">
+          <button type="button" className="accept" onClick={() => void onReview(verification.id, "approved")}><Check size={16} />通過學生證</button>
+          <button type="button" className="reject" onClick={() => void onReview(verification.id, "rejected")}><X size={16} />拒絕</button>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -5479,14 +5566,9 @@ function ProfileModal({
     event.preventDefault();
     setError("");
     setSaving(true);
-    try {
-      const message = await onSubmit(name, department);
-      if (message) setError(message);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "個人資料更新失敗，請稍後再試");
-    } finally {
-      setSaving(false);
-    }
+    const message = await onSubmit(name, department);
+    if (message) setError(message);
+    setSaving(false);
   }
 
   async function requestAccountDeletion() {
@@ -5506,12 +5588,9 @@ function ProfileModal({
     }
     setDeletingAccount(true);
     setError("");
-    try {
-      const message = await onDeleteAccount();
-      if (message) setError(message);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "帳號刪除失敗，請稍後再試");
-    } finally {
+    const message = await onDeleteAccount();
+    if (message) {
+      setError(message);
       setDeletingAccount(false);
     }
   }
@@ -5655,12 +5734,9 @@ function LoginModal({
   async function startGoogleLogin() {
     setOauthLoading(true);
     setError("");
-    try {
-      const message = await onGoogleLogin();
-      if (message) setError(message);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Google 登入失敗，請稍後再試");
-    } finally {
+    const message = await onGoogleLogin();
+    if (message) {
+      setError(message);
       setOauthLoading(false);
     }
   }
@@ -5669,14 +5745,9 @@ function LoginModal({
     event.preventDefault();
     setLoading(true);
     setError("");
-    try {
-      const message = await onLogin(email.trim(), password);
-      if (message) setError(message);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "登入失敗，請稍後再試");
-    } finally {
-      setLoading(false);
-    }
+    const message = await onLogin(email.trim(), password);
+    setLoading(false);
+    if (message) setError(message);
   }
 
   async function submitSignup(event: FormEvent<HTMLFormElement>) {
@@ -5699,17 +5770,12 @@ function LoginModal({
       return;
     }
     setLoading(true);
-    try {
-      const message = await onSignUp(name.trim(), department, email.trim(), password);
-      if (message) setError(message);
-      else {
-        setSignupStep("code");
-        setResendCooldown(60);
-      }
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "註冊失敗，請稍後再試");
-    } finally {
-      setLoading(false);
+    const message = await onSignUp(name.trim(), department, email.trim(), password);
+    setLoading(false);
+    if (message) setError(message);
+    else {
+      setSignupStep("code");
+      setResendCooldown(60);
     }
   }
 
@@ -5717,43 +5783,28 @@ function LoginModal({
     event.preventDefault();
     setLoading(true);
     setError("");
-    try {
-      const message = await onVerifySignup(email.trim(), code.trim());
-      if (message) setError(message);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "驗證失敗，請稍後再試");
-    } finally {
-      setLoading(false);
-    }
+    const message = await onVerifySignup(email.trim(), code.trim());
+    setLoading(false);
+    if (message) setError(message);
   }
 
   async function resendCode() {
     if (resendCooldown > 0) return;
     setLoading(true);
     setError("");
-    try {
-      const message = await onResendSignup(email.trim());
-      if (message) setError(message);
-      else setResendCooldown(60);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "驗證碼寄送失敗，請稍後再試");
-    } finally {
-      setLoading(false);
-    }
+    const message = await onResendSignup(email.trim());
+    setLoading(false);
+    if (message) setError(message);
+    else setResendCooldown(60);
   }
 
   async function submitForgotPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError("");
-    try {
-      const message = await onRequestReset(email.trim());
-      if (message) setError(message);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "重設密碼信寄送失敗，請稍後再試");
-    } finally {
-      setLoading(false);
-    }
+    const message = await onRequestReset(email.trim());
+    setLoading(false);
+    if (message) setError(message);
   }
 
   return (
@@ -5986,14 +6037,9 @@ function ResetPasswordModal({
       return;
     }
     setLoading(true);
-    try {
-      const message = await onSubmit(password);
-      if (message) setError(message);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "密碼更新失敗，請稍後再試");
-    } finally {
-      setLoading(false);
-    }
+    const message = await onSubmit(password);
+    setLoading(false);
+    if (message) setError(message);
   }
 
   return (
@@ -6054,13 +6100,14 @@ function BookFormModal({
   const value = book ?? {
     ...blankBook,
     listingType: initialListingType,
-    itemCategory: initialListingType === "secondhand" ? DEFAULT_SECONDHAND_CATEGORY : "book",
+    itemCategory: initialListingType === "secondhand" ? DEFAULT_SECONDHAND_CATEGORY : initialListingType === "giveaway" ? "其他" : "book",
   };
   const initialImageItems = bookImageUrls(value).map((url, index) => ({ id: `existing-${index}`, url }));
   const [imageItems, setImageItems] = useState<ListingImageItem[]>(initialImageItems);
   const [coverId, setCoverId] = useState(initialImageItems[0]?.id || "");
-  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [imageDragActive, setImageDragActive] = useState(false);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [ocrCompletedCoverId, setOcrCompletedCoverId] = useState<string | null>(null);
   const [ocrOriginalDraft, setOcrOriginalDraft] = useState<BookOcrDraft | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -6082,6 +6129,7 @@ function BookFormModal({
     teacher: value.teacher,
     condition: value.condition,
     price: value.price ? String(value.price) : "",
+    meetupMode: value.meetupMode || DEFAULT_MEETUP_MODE,
     meetup: value.meetup,
     description: value.description,
     itemCategory: value.itemCategory === "book" ? DEFAULT_SECONDHAND_CATEGORY : value.itemCategory,
@@ -6094,6 +6142,7 @@ function BookFormModal({
     value.edition,
     value.itemCategory,
     value.meetup,
+    value.meetupMode,
     value.price,
     value.teacher,
     value.title,
@@ -6103,9 +6152,25 @@ function BookFormModal({
   const skipDraftPersistenceRef = useRef(true);
   const [draft, setDraft] = useState(baseDraft);
   const draftChanged = JSON.stringify(draft) !== baseDraftSignatureRef.current;
-  const dirty = imageItems.length > 0 || draftChanged;
-  const isSecondhand = initialListingType === "secondhand";
+  const imageItemsChanged = JSON.stringify(imageItems.map(({ id, url, file }) => ({ id, url, name: file?.name, size: file?.size })))
+    !== JSON.stringify(initialImageItems);
+  const coverChanged = coverId !== (initialImageItems[0]?.id || "");
+  const dirty = imageItemsChanged || coverChanged || draftChanged;
+  const ocrNeedsRefresh = Boolean(ocrOriginalDraft && coverId && ocrCompletedCoverId !== coverId);
   const hasCoverImage = Boolean(coverId && imageItems.some((item) => item.id === coverId && item.url));
+  const isSecondhand = initialListingType === "secondhand";
+  const isGiveaway = initialListingType === "giveaway";
+  const isNonBookListing = isSecondhand || isGiveaway;
+
+  useEffect(() => {
+    imageItemsRef.current = imageItems;
+  }, [imageItems]);
+
+  useEffect(() => () => {
+    for (const item of imageItemsRef.current) {
+      if (item.url.startsWith("blob:")) URL.revokeObjectURL(item.url);
+    }
+  }, []);
 
   useEffect(() => {
     let hydratedBase = baseDraft;
@@ -6118,21 +6183,13 @@ function BookFormModal({
       }
       baseDraftSignatureRef.current = JSON.stringify(hydratedBase);
       const saved = window.localStorage.getItem(draftStorageKey);
-      setDraft(saved
-        ? { ...hydratedBase, ...(JSON.parse(saved) as Partial<typeof baseDraft>) }
-        : hydratedBase);
+      setDraft(saved ? { ...hydratedBase, ...(JSON.parse(saved) as Partial<typeof baseDraft>) } : hydratedBase);
     } catch {
       baseDraftSignatureRef.current = JSON.stringify(hydratedBase);
       setDraft(hydratedBase);
     }
     skipDraftPersistenceRef.current = true;
   }, [baseDraft, book, draftStorageKey, initialListingType, userId]);
-
-  useEffect(() => () => {
-    imageItemsRef.current.forEach((item) => {
-      if (item.url.startsWith("blob:")) URL.revokeObjectURL(item.url);
-    });
-  }, []);
 
   useEffect(() => {
     if (skipDraftPersistenceRef.current) {
@@ -6171,9 +6228,9 @@ function BookFormModal({
     onClose();
   }
 
-  function syncOcrFile(items: ListingImageItem[], nextCoverId: string) {
-    setCoverFile(items.find((item) => item.id === nextCoverId)?.file ?? null);
-    imageItemsRef.current = items;
+  function syncOcrFiles(items: ListingImageItem[], nextCoverId: string) {
+    const coverFile = items.find((item) => item.id === nextCoverId)?.file ?? null;
+    setCoverFile(coverFile);
   }
 
   function selectImage(event: React.ChangeEvent<HTMLInputElement>) {
@@ -6192,11 +6249,11 @@ function BookFormModal({
     setOcrProgress(0);
     setCoverId(nextCoverId);
     setImageItems(nextItems);
-    syncOcrFile(nextItems, nextCoverId);
-    if (!isSecondhand) {
+    syncOcrFiles(nextItems, nextCoverId);
+    if (!isNonBookListing) {
       setOcrMessage(nextItems.length > 1
-        ? "已選取多張照片；目前封面會作為 AI 辨識來源。"
-        : "照片已準備好；請在縮圖上確認封面後再進行辨識。");
+        ? "正面與背面照片已準備好；系統會合併封面文字與背面 ISBN 線索。"
+        : "照片已準備好；若有背面 ISBN，可一次選擇正反兩張照片提高辨識率。");
       void import("@/lib/marketplace/free-ocr")
         .then(({ warmBookOcr }) => warmBookOcr())
         .catch(() => undefined);
@@ -6220,9 +6277,9 @@ function BookFormModal({
     setOcrBusy(false);
     setOcrProgress(0);
     setCoverId(itemId);
-    syncOcrFile(imageItems, itemId);
+    syncOcrFiles(imageItems, itemId);
     setOcrMessage(ocrOriginalDraft
-      ? "封面已變更，原有文字仍保留；請重新辨識以更新課本資料。"
+      ? "封面已變更，原有資料保留；請重新使用新的封面辨識。"
       : "已設定封面；AI 辨識只會使用這張封面照片。");
   }
 
@@ -6236,10 +6293,10 @@ function BookFormModal({
     setOcrProgress(0);
     setImageItems(nextItems);
     setCoverId(nextCoverId);
-    syncOcrFile(nextItems, nextCoverId);
+    syncOcrFiles(nextItems, nextCoverId);
     if (ocrOriginalDraft && itemId === coverId) {
       setOcrMessage(nextCoverId
-        ? "封面已更新，原有文字仍保留；請重新辨識以更新課本資料。"
+        ? "封面已更新，原有資料保留；請重新使用新的封面辨識。"
         : "封面已移除，請先設定封面才能進行辨識。");
     }
   }
@@ -6268,12 +6325,8 @@ function BookFormModal({
   }
 
   async function readBookOcr() {
-    if (isSecondhand) return;
-    if (!coverId) {
-      setOcrProgress(0);
-      setOcrMessage("請先在照片縮圖上選擇「設為封面」。");
-      return;
-    }
+    if (!coverId || isSecondhand) return;
+    if (isGiveaway) return;
     const requestId = ++ocrRequestRef.current;
     setOcrBusy(true);
     setOcrProgress(4);
@@ -6349,19 +6402,19 @@ function BookFormModal({
           aiFallbackError = aiError instanceof Error ? aiError.message : "暫時無法提高辨識準確度";
         }
       }
+      const previousAuto = ocrOriginalDraft;
       setDraft((previous) => {
         const next = { ...previous };
         for (const field of ["title", "author", "edition"] as const) {
           const recognized = ocrDraft[field]?.trim() || "";
           const current = previous[field].trim();
-          const previousAuto = ocrOriginalDraft?.[field]?.trim() || "";
-          if (recognized && (!current || (previousAuto && current === previousAuto))) {
-            next[field] = recognized;
-          }
+          const autoValue = previousAuto?.[field]?.trim() || "";
+          if (recognized && (!current || current === autoValue)) next[field] = recognized;
         }
         return next;
       });
       setOcrOriginalDraft(ocrDraft);
+      setOcrCompletedCoverId(coverId);
       setOcrProgress(100);
       setOcrMessage(ocrDraft.title || ocrDraft.author || ocrDraft.edition
         ? `已填入可辨識的欄位，送出前請再確認。${aiFallbackError ? ` ${aiFallbackError}` : ""}`
@@ -6393,13 +6446,13 @@ function BookFormModal({
   return (
     <>
     <ModalShell
-      title={book ? "編輯刊登" : isSecondhand ? "刊登二手物品" : "刊登一本課本"}
+      title={book ? "編輯刊登" : isGiveaway ? "刊登零元贈送" : isSecondhand ? "刊登二手物品" : "刊登一本課本"}
       subtitle="標示 * 的欄位為必填；文字草稿會自動保留在這台裝置"
       onClose={requestClose}
       closeOnBackdrop={false}
     >
       <form
-        onSubmit={(event) => void onSubmit(event, { items: imageItems, coverId })}
+        onSubmit={(event) => onSubmit(event, { items: imageItems, coverId })}
         onKeyDown={preventImplicitSubmit}
         className="form book-form"
       >
@@ -6408,7 +6461,7 @@ function BookFormModal({
             <span>1</span>照片與封面
           </button>
           <button type="button" className={activeListingSection === "book" ? "active" : ""} aria-current={activeListingSection === "book" ? "step" : undefined} onClick={() => scrollToListingSection(bookSectionRef, "book")}>
-            <span>2</span>課本資料
+            <span>2</span>{isNonBookListing ? "物品資料" : "課本資料"}
           </button>
           <button type="button" className={activeListingSection === "trade" ? "active" : ""} aria-current={activeListingSection === "trade" ? "step" : undefined} onClick={() => scrollToListingSection(tradeSectionRef, "trade")}>
             <span>3</span>交易資訊
@@ -6424,7 +6477,7 @@ function BookFormModal({
             </div>
           </div>
           <p className="listing-file-help full">
-            <b>{isSecondhand ? "商品圖片" : "課本照片"} *</b>
+            <b>{isNonBookListing ? "商品圖片" : "課本照片"} *</b>
             <span>最多 {MAX_BOOK_IMAGES} 張；第一張或標記「封面」的照片會顯示在列表。</span>
           </p>
           <input
@@ -6436,10 +6489,8 @@ function BookFormModal({
             multiple
             accept="image/jpeg,image/png,image/webp"
             onChange={selectImage}
-            aria-label={isSecondhand ? "新增商品照片" : "新增課本照片"}
+            aria-label={isNonBookListing ? "新增商品照片" : "新增課本照片"}
           />
-          <input type="hidden" name="listingType" value={initialListingType} />
-          <input type="hidden" name="ocrOriginal" value={ocrOriginalDraft ? JSON.stringify(ocrOriginalDraft) : ""} />
           <div
             className={`listing-photo-guide full ${imageItems.length > 0 ? "has-images" : ""} ${imageDragActive ? "is-dragging" : ""}`}
             onDragEnter={(event) => { event.preventDefault(); setImageDragActive(true); }}
@@ -6467,22 +6518,24 @@ function BookFormModal({
               </button>
             </div>
           </div>
+          <input type="hidden" name="listingType" value={initialListingType} />
+          <input type="hidden" name="ocrOriginal" value={ocrOriginalDraft ? JSON.stringify(ocrOriginalDraft) : ""} />
           {imageItems.length > 0 && (
             <div className="listing-gallery-editor full" aria-label="已選擇的商品照片">
               {imageItems.map((item, index) => (
                 <div className={`listing-gallery-item ${item.id === coverId ? "is-cover" : ""}`} key={item.id}>
                   <div className="listing-gallery-labels" aria-hidden="true">
                     {item.id === coverId && <span className="listing-gallery-cover-badge">封面</span>}
-                    {item.id === coverId && !isSecondhand && <span className="listing-gallery-ai-badge">AI 辨識來源</span>}
+                    {item.id === coverId && !isNonBookListing && <span className="listing-gallery-ai-badge">AI 辨識來源</span>}
                   </div>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.url} alt={`${isSecondhand ? "商品" : "課本"}照片 ${index + 1}`} />
+                  <img src={item.url} alt={`${isNonBookListing ? "商品" : "課本"}照片 ${index + 1}`} />
                   <div className="listing-gallery-item-actions">
                     <button type="button" className="gallery-cover-button" onClick={() => chooseCover(item.id)}>
                       {item.id === coverId ? "封面" : "設為封面"}
                     </button>
                     <button type="button" className="gallery-remove-button" aria-label={`刪除第 ${index + 1} 張照片`} onClick={() => removeImage(item.id)}>
-                      <X size={14} />
+                      <X size={14} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -6490,12 +6543,13 @@ function BookFormModal({
             </div>
           )}
 
-          {!isSecondhand && imageItems.length > 0 && (
+          {!isNonBookListing && (
             <div className="photo-assist full">
               <div>
                 <Sparkles size={18} aria-hidden="true" />
                 <span>
-                  <b>使用照片填寫課本資料</b>
+                  <b>使用封面照片填寫課本資料</b>
+                  <small>系統只會辨識目前標記為「封面」的照片，協助填入書名、作者與版本；價格仍由你自己填。</small>
                 </span>
               </div>
               <div className="photo-assist-actions">
@@ -6506,13 +6560,20 @@ function BookFormModal({
                   <Sparkles size={16} />{ocrBusy ? "辨識中..." : "使用封面辨識"}
                 </button>
               </div>
+              <p className={`ocr-cover-note ${ocrNeedsRefresh ? "needs-refresh" : ""}`}>
+                {ocrNeedsRefresh
+                  ? "封面已變更，原有文字仍保留；請重新辨識以更新課本資料。"
+                  : coverId
+                    ? "AI 辨識來源：目前標記為封面的照片。"
+                    : "請先在照片縮圖上選擇「設為封面」。"}
+              </p>
               {(ocrBusy || ocrProgress > 0) && (
                 <div className="ocr-progress" aria-live="polite">
                   <progress value={ocrProgress} max={100} aria-label="照片辨識進度" />
                   <span>{ocrBusy ? `${ocrProgress}%` : "辨識完成"}</span>
                 </div>
               )}
-              {ocrMessage && <p>{ocrMessage}</p>}
+              <p>{ocrMessage || "辨識結果只會填入草稿，送出前請再確認。"}</p>
             </div>
           )}
 
@@ -6522,16 +6583,16 @@ function BookFormModal({
             <div className="listing-form-section-heading">
               <span className="listing-form-section-kicker">STEP 2</span>
               <div>
-                <h3>課本資料</h3>
-                <p>先確認 AI 帶入的內容，再補充課程與版本資訊。</p>
+                <h3>{isNonBookListing ? "物品資料" : "課本資料"}</h3>
+                <p>{isNonBookListing ? "填寫商品名稱與分類，補充物品資訊。" : "先確認 AI 帶入的內容，再補充課程與版本資訊。"}</p>
               </div>
             </div>
           <label className="full">
-            {isSecondhand ? "商品名稱" : "書名"} *
-            <input name="title" required maxLength={LISTING_FIELD_LIMITS.title} value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} placeholder={isSecondhand ? "例如：小米檯燈、藍牙耳機" : "例如：資料結構：使用 C++"} />
+            {isNonBookListing ? "商品名稱" : "書名"} *
+            <input name="title" required maxLength={LISTING_FIELD_LIMITS.title} value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} placeholder={isNonBookListing ? "例如：全新文具、生活用品" : "例如：資料結構：使用 C++"} />
           </label>
 
-          {isSecondhand ? (
+          {isNonBookListing ? (
             <>
               <input type="hidden" name="author" value="" />
               <input type="hidden" name="edition" value="" />
@@ -6548,12 +6609,21 @@ function BookFormModal({
               <input type="hidden" name="bookType" value="" />
               <input type="hidden" name="isbn13" value="" />
               <input type="hidden" name="approvalNumber" value="" />
-              <label>
-                二手分類 *
-                <select name="itemCategory" required value={draft.itemCategory} onChange={(event) => updateDraft("itemCategory", event.target.value)}>
-                  {SECONDHAND_CATEGORIES.slice(1).map((item) => <option key={item}>{item}</option>)}
-                </select>
-              </label>
+              {isGiveaway ? (
+                <label>
+                  贈送分類 *
+                  <select name="itemCategory" required value={draft.itemCategory === "giveaway" ? "其他" : draft.itemCategory} onChange={(event) => updateDraft("itemCategory", event.target.value)}>
+                    {GIVEAWAY_CATEGORIES.slice(1).map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+              ) : (
+                <label>
+                  二手分類 *
+                  <select name="itemCategory" required value={draft.itemCategory} onChange={(event) => updateDraft("itemCategory", event.target.value)}>
+                    {SECONDHAND_CATEGORIES.slice(1).map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+              )}
             </>
           ) : (
             <>
@@ -6608,18 +6678,37 @@ function BookFormModal({
               </div>
             </div>
           <label>
-            {isSecondhand ? "物況" : "書況"} *
+            {isNonBookListing ? "物況" : "書況"} *
             <select name="condition" required value={draft.condition} onChange={(event) => updateDraft("condition", event.target.value)}>
               <option>近全新</option>
-              <option>{isSecondhand ? "狀況良好" : "書況良好"}</option>
-              <option>{isSecondhand ? "正常使用痕跡" : "有筆記"}</option>
+              <option>{isNonBookListing ? "狀況良好" : "書況良好"}</option>
+              <option>{isNonBookListing ? "正常使用痕跡" : "有筆記"}</option>
               <option>使用痕跡明顯</option>
               <option>損壞嚴重</option>
             </select>
           </label>
-          <label>價格（NT$）*<input name="price" required type="number" min="0" max={LISTING_FIELD_LIMITS.price} step="1" value={draft.price} onChange={(event) => updateDraft("price", event.target.value)} /></label>
-          <label className="full">面交地點 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
-          <label className="full">{isSecondhand ? "商品說明" : "書況說明"} *<textarea name="description" required maxLength={LISTING_FIELD_LIMITS.description} rows={3} value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} /></label>
+          <label>價格（NT$）*<input name="price" required readOnly={isGiveaway} type="number" min="0" max={LISTING_FIELD_LIMITS.price} step="1" value={isGiveaway ? "0" : draft.price} onChange={(event) => updateDraft("price", event.target.value)} /></label>
+          {isNonBookListing ? (
+            <>
+              <MeetupModePicker
+                value={normalizeMeetupMode(draft.meetupMode)}
+                disabled={saving}
+                onChange={(nextMode) => {
+                  updateDraft("meetupMode", nextMode);
+                  if (nextMode !== DEFAULT_MEETUP_MODE) updateDraft("meetup", "");
+                }}
+              />
+              {normalizeMeetupMode(draft.meetupMode) === DEFAULT_MEETUP_MODE && (
+                <label className="full">指定面交位置 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
+              )}
+            </>
+          ) : (
+            <>
+              <input type="hidden" name="meetupMode" value={DEFAULT_MEETUP_MODE} />
+              <label className="full">面交地點 *<input name="meetup" required maxLength={LISTING_FIELD_LIMITS.meetup} value={draft.meetup} onChange={(event) => updateDraft("meetup", event.target.value)} placeholder="例如：圖書館一樓" /></label>
+            </>
+          )}
+          <label className="full">{isNonBookListing ? "商品說明" : "書況說明"} *<textarea name="description" required maxLength={LISTING_FIELD_LIMITS.description} rows={3} value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} /></label>
           <button className="primary wide full" type="submit" disabled={saving}>{saving ? (book ? "儲存中..." : "刊登中...") : book ? "儲存變更" : "確認刊登"}</button>
           </section>
         </fieldset>
@@ -6693,19 +6782,21 @@ function RequestModal({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const initialMessage = request?.message || REQUEST_PHRASES[0];
+  const giveawayInitialMessage = book.listingType === "giveaway" && !request ? "" : initialMessage;
   const initialPreferredMeetupLocation = request?.preferredMeetupLocation || "";
   const initialPreferredMeetupTime = request?.preferredMeetupTime || "";
-  const [message, setMessage] = useState(initialMessage);
+  const [message, setMessage] = useState(giveawayInitialMessage);
   const [versionConfirmed, setVersionConfirmed] = useState(book.listingType !== "book");
   const [preferredMeetupLocation, setPreferredMeetupLocation] = useState(initialPreferredMeetupLocation);
   const [preferredMeetupTime, setPreferredMeetupTime] = useState(initialPreferredMeetupTime);
 
   useEffect(() => {
-    setMessage(initialMessage);
+    setMessage(giveawayInitialMessage);
     setPreferredMeetupLocation(initialPreferredMeetupLocation);
     setPreferredMeetupTime(initialPreferredMeetupTime);
     setVersionConfirmed(book.listingType !== "book");
-  }, [book.listingType, initialMessage, initialPreferredMeetupLocation, initialPreferredMeetupTime]);
+  }, [book.listingType, giveawayInitialMessage, initialPreferredMeetupLocation, initialPreferredMeetupTime]);
+
   const versionDetails = [
     book.publisher && `出版社：${book.publisher}`,
     book.edition && `版本：${book.edition}`,
@@ -6715,9 +6806,9 @@ function RequestModal({
   ].filter(Boolean);
 
   return (
-    <ModalShell title="確認下訂" subtitle={`想購買《${book.title}》`} onClose={onClose}>
-      <form onSubmit={onSubmit} className="form">
-        <div className="request-summary"><span>{book.condition}</span><b>{money(book.price)}</b><span><MapPin size={14} />{book.meetup}</span></div>
+    <ModalShell title={book.listingType === "giveaway" ? "申請領取" : "確認下訂"} subtitle={`${book.listingType === "giveaway" ? "想領取" : "想購買"}《${book.title}》`} onClose={onClose}>
+      <form onSubmit={onSubmit} className="form" aria-busy={saving}>
+        <div className="request-summary"><span>{book.condition}</span><b>{book.listingType === "giveaway" ? "免費贈送" : money(book.price)}</b><span>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={14} /> : null}{meetupSummary(book)}</span></div>
         {book.listingType === "book" && (
           <label className="version-confirmation">
             <input
@@ -6732,7 +6823,7 @@ function RequestModal({
             </span>
           </label>
         )}
-        <div className="phrase-list">
+        {book.listingType !== "giveaway" && <div className="phrase-list">
           <small>快速選擇常用語</small>
           <div className="phrase-chips">
             {REQUEST_PHRASES.map((phrase) => (
@@ -6746,16 +6837,15 @@ function RequestModal({
               </button>
             ))}
           </div>
-        </div>
+        </div>}
         <label>
-          給賣家的留言
+          {book.listingType === "giveaway" ? "申請訊息（選填）" : "給賣家的留言"}
           <textarea
             name="message"
-            required
             rows={4}
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            placeholder="介紹一下方便面交的時間，或想確認的書況..."
+            placeholder={book.listingType === "giveaway" ? "可以簡短說明想領取的原因（選填）" : "介紹一下方便面交的時間，或想確認的書況..."}
           />
         </label>
         <div className="request-coordination-card">
@@ -6788,14 +6878,14 @@ function RequestModal({
               <MessageCircle size={16} />
               先去訊息確認
             </button>
-            <small>送出後，在賣家按下「已完成面交」前，都能回訊息再修改。</small>
+            <small>{book.listingType === "giveaway" ? "申請後仍可編輯或取消；聊天不代表已獲選。" : "送出後，在賣家按下「已完成面交」前，都能回訊息再修改。"}</small>
           </div>
         </div>
         <button className="primary wide" type="submit" disabled={!versionConfirmed || saving}>
           {request ? <Pencil size={17} /> : <MessageCircle size={17} />}
-          {saving ? "送出中..." : request ? "儲存訂單修改" : "確認下訂"}
+          {request ? "儲存申請修改" : book.listingType === "giveaway" ? "申請領取" : "確認下訂"}
         </button>
-        <p className="form-note">下訂後仍需等待賣家選定，不代表交易完成；若時間地點還沒談好，先用訊息確認最穩妥。</p>
+        <p className="form-note">{book.listingType === "giveaway" ? "送出申請後由贈送者確認受贈者；聊天不代表已獲選。" : "下訂後仍需等待賣家選定，不代表交易完成；若時間地點還沒談好，先用訊息確認最穩妥。"}</p>
       </form>
     </ModalShell>
   );
@@ -6886,7 +6976,7 @@ function ReportModal({
 function OrderTimeline({ request }: { request: PurchaseRequest }) {
   const steps = [
     { label: "已提出請求", done: true },
-    { label: "賣家已選定", done: ["reserved", "awaiting_confirmation", "completed"].includes(request.status) },
+    { label: "已選定受贈者", done: ["awaiting_recipient_confirmation", "reserved", "awaiting_confirmation", "completed"].includes(request.status) },
     { label: "等待面交", done: ["awaiting_confirmation", "completed"].includes(request.status) },
     { label: request.status === "cancelled" ? "已取消" : "已完成", done: ["completed", "cancelled", "expired"].includes(request.status) },
   ];
@@ -6985,6 +7075,7 @@ function TradeChatPanel({
   const isSeller = conversation.sellerId === currentUserId;
   const canRespondToRequest = Boolean(
     isSeller
+    && book?.listingType !== "giveaway"
     && request
     && ["pending", "waitlisted"].includes(request.status)
     && book?.status === "available",
@@ -7344,7 +7435,7 @@ function TradeChatPanel({
   return (
     <div className="trade-chat">
       <div className="trade-chat-head">
-        <button className="chat-mobile-back" type="button" onClick={onBack}><ArrowLeft size={17} />返回訊息</button>
+        <button className="chat-mobile-back" type="button" onClick={onBack}><ArrowLeft size={17} />返回訊息列表</button>
         <div className="trade-chat-person"><b>{senderName(otherUserId)}</b><small>每則最多 5 張圖片、每張 5MB；請勿傳送密碼、驗證碼或其他敏感資料。</small></div>
         <div className="trade-chat-actions chat-safety-actions">
           <button
@@ -7388,13 +7479,14 @@ function TradeChatPanel({
                 <span>
                   <small>正在詢問</small>
                   <b>{book.title}</b>
-                  <em>{[contextLabel, money(book.price)].filter(Boolean).join(" · ")}</em>
+                  <em>{[contextLabel, book.listingType === "giveaway" ? "免費贈送" : money(book.price), `面交：${meetupSummary(book)}`].filter(Boolean).join(" · ")}</em>
                 </span>
               </button>
               {request ? (
                 <div className="chat-order-status">
-                  <span className={`request-status ${request.status}`}>{requestLabels[request.status]}</span>
-                  <p>{isSeller ? `${senderName(request.buyerId)} 已送出購買意願` : "你已送出購買意願"}</p>
+                  <span className={`request-status ${request.status}`}>{book.listingType === "giveaway" ? giveawayRequestLabel(request.status) : requestLabels[request.status]}</span>
+                  {book.listingType === "giveaway" && giveawayChatBanner(request.status) && <p className="giveaway-chat-banner">{giveawayChatBanner(request.status)}</p>}
+                  {book.listingType !== "giveaway" && <p>{isSeller ? `${senderName(request.buyerId)} 已送出購買意願` : "你已送出購買意願"}</p>}
                   <RequestCoordinationPanel request={request} viewer={isSeller ? "seller" : "buyer"} />
                   <button
                     type="button"
@@ -7584,31 +7676,12 @@ function TradeChatPanel({
 }
 /* eslint-enable @next/next/no-img-element */
 
-function ResilientBookCover({ book, variant = "card" }: { book: Book; variant?: "card" | "listing" }) {
-  const source = safeImageSource(book.imageUrl);
-  const [imageFailed, setImageFailed] = useState(!source);
-
+function ResilientBookCover({ book }: { book: Book }) {
+  const [imageFailed, setImageFailed] = useState(!book.imageUrl);
   if (imageFailed) {
-    return (
-      <div className={variant === "listing" ? "listing-image-placeholder" : "card-image-fallback"} role="img" aria-label={`${book.title}封面暫時無法載入`}>
-        <BookOpen size={variant === "listing" ? 24 : 34} aria-hidden="true" />
-        {variant === "card" && <span>封面暫時無法載入</span>}
-      </div>
-    );
+    return <div className="card-image-fallback" role="img" aria-label={`${book.title} 封面`}><BookOpen size={34} aria-hidden="true" /><span>暫無封面</span></div>;
   }
-
-  return (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img
-      src={source}
-      alt={book.title}
-      width={420}
-      height={560}
-      loading="lazy"
-      decoding="async"
-      onError={() => setImageFailed(true)}
-    />
-  );
+  return <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" onError={() => setImageFailed(true)} />;
 }
 
 function EmptyDashboard({ text }: { text: string }) {

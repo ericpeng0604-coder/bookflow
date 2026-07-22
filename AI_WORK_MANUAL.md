@@ -1287,6 +1287,21 @@ probe the intended preview URL before any browser conclusion.
 runs the build, start Next with the bundled Node executable and explicit
 argument tokens, and verify the exact port responds before UI testing.
 
+### LESSON-071: Feature previews must retain latest production layout guards
+
+**Observed problem:** The zero-giveaway preview had the latest form markup, but
+its photo guide used an older grid rule and collapsed the copy into vertical
+text at the medium in-app browser width.
+
+**Cause:** The feature overlay was validated for behavior and build success
+without comparing the touched responsive CSS against the exact production
+base.
+
+**Prevention rule:** When layering a feature onto a clean production worktree,
+diff the related component and responsive CSS against the production SHA, then
+verify the exact user-visible layout at desktop and medium widths before calling
+the preview current.
+
 ## New Lesson Template
 
 ### LESSON-NNN: Short title
