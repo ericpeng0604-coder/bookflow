@@ -4,8 +4,10 @@ import type { Conversation, ListingType, Profile } from "@/lib/types";
 
 export type MarketplaceView = "home" | "book" | "dashboard" | "chat" | "admin";
 export type DashboardTab = "listings" | "chats" | "requests" | "received" | "confirmedOrders" | "favorites" | "studentVerification";
+export type AdminWorkspace = "overview" | "listings" | "reports" | "feedback" | "studentVerification" | "risk" | "hiddenListings" | "permissions";
 
 const dashboardTabs = new Set<DashboardTab>(["listings", "chats", "requests", "received", "confirmedOrders", "favorites", "studentVerification"]);
+const adminWorkspaces = new Set<AdminWorkspace>(["overview", "listings", "reports", "feedback", "studentVerification", "risk", "hiddenListings", "permissions"]);
 
 type RouteHandlers = {
   onListingTypeChange: (listingType: ListingType) => void;
@@ -29,11 +31,16 @@ type BuildMarketplaceUrlOptions = {
   selectedId: string | null;
   currentUser: Profile | null;
   dashboardTab: DashboardTab;
+  adminWorkspace: AdminWorkspace;
   expandedConversationId: string | null;
 };
 
 export function isDashboardTab(value: string | null): value is DashboardTab {
   return dashboardTabs.has(value as DashboardTab);
+}
+
+export function isAdminWorkspace(value: string | null): value is AdminWorkspace {
+  return adminWorkspaces.has(value as AdminWorkspace);
 }
 
 export function buildChatUrl(listingType: ListingType, conversationId?: string | null) {
@@ -51,6 +58,7 @@ export function buildMarketplaceUrl({
   selectedId,
   currentUser,
   dashboardTab,
+  adminWorkspace,
   expandedConversationId,
 }: BuildMarketplaceUrlOptions) {
   const params = new URLSearchParams();
@@ -63,6 +71,9 @@ export function buildMarketplaceUrl({
   } else if (view === "dashboard" && currentUser) {
     params.set("view", "dashboard");
     params.set("tab", dashboardTab);
+  } else if (view === "admin" && currentUser) {
+    params.set("view", "admin");
+    params.set("adminTab", adminWorkspace);
   }
   return `/?${params.toString()}`;
 }
@@ -82,6 +93,7 @@ export function useMarketplaceNavigation({
   const [view, setView] = useState<MarketplaceView>(initialView);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>(initialDashboardTab);
+  const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>("overview");
   const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
   const skipNextUrlWriteRef = useRef(false);
   const handlersRef = useRef<RouteHandlers>({
@@ -145,6 +157,14 @@ export function useMarketplaceNavigation({
       return;
     }
 
+    if (targetView === "admin") {
+      if (!currentUser || !["admin", "moderator"].includes(currentUser.role)) return;
+      setView("admin");
+      const targetWorkspace = params.get("adminTab");
+      if (isAdminWorkspace(targetWorkspace)) setAdminWorkspace(targetWorkspace);
+      return;
+    }
+
     setSelectedId(null);
     handlersRef.current.onBookRouteChange();
     setView("home");
@@ -175,12 +195,13 @@ export function useMarketplaceNavigation({
       selectedId,
       currentUser,
       dashboardTab,
+      adminWorkspace,
       expandedConversationId,
     });
     if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
       window.history.replaceState({}, "", nextUrl);
     }
-  }, [currentUser, dashboardTab, expandedConversationId, listingType, ready, selectedId, view]);
+  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType, ready, selectedId, view]);
 
   useEffect(() => {
     if (view !== "dashboard" || dashboardTab !== "chats" || expandedConversationId || !currentUser) return;
@@ -199,10 +220,11 @@ export function useMarketplaceNavigation({
       selectedId: bookId,
       currentUser,
       dashboardTab,
+      adminWorkspace,
       expandedConversationId,
     }));
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [currentUser, dashboardTab, expandedConversationId]);
+  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId]);
 
   const returnToMarketRoute = useCallback(() => {
     setSelectedId(null);
@@ -214,9 +236,10 @@ export function useMarketplaceNavigation({
       selectedId: null,
       currentUser,
       dashboardTab,
+      adminWorkspace,
       expandedConversationId,
     }));
-  }, [currentUser, dashboardTab, expandedConversationId, listingType]);
+  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType]);
 
   const openDashboard = useCallback(() => {
     setView("dashboard");
@@ -237,6 +260,7 @@ export function useMarketplaceNavigation({
   }, [listingType]);
 
   return {
+    adminWorkspace,
     dashboardTab,
     expandedConversationId,
     openBookRoute,
@@ -245,6 +269,7 @@ export function useMarketplaceNavigation({
     returnToMarketRoute,
     selectedId,
     setDashboardTab,
+    setAdminWorkspace,
     setExpandedConversationId,
     setSelectedId,
     setView,

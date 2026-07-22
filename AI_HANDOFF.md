@@ -8,7 +8,7 @@ BookFlow zero giveaway release 0.1.5
 
 - Task ID: `20260722-zero-giveaway-release`.
 - Task: `BookFlow zero giveaway release 0.1.5`.
-- Branch: `codex/giveaway-release-20260722`.
+- Branch: `codex/repair-admin-workbench`.
 - Base commit: `971347503a257d4baf4736e19d67c99bf1caf415`.
 - History: `.ai/history/20260722-zero-giveaway-release.md`.
 - No database migration is included unless listed here.
