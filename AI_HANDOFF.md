@@ -61,4 +61,4 @@ BookFlow zero-giveaway UI release
 ## 相關 Commit
 
 - Base commit: `adffbaa79902c90e20a73bf0fd803465b319dc1b`.
-- Current implementation commit before final commit: `not committed yet`.
+- Current implementation commit before PR: `789c2cc73297713854fe2af28fbd884ab2114b1d`.
