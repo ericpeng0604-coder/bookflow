@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260723-bookflow-cloudflare-turnstile",
-  "taskTitle": "Implement Supabase Auth Cloudflare Turnstile protection",
-  "baseCommit": "247a4512553557c57110706defe61b29f970e54b",
-  "updatedAt": "2026-07-23T16:30:00.000Z",
+  "owner": "codex",
+  "status": "handoff",
+  "taskId": "20260723-purchase-cta-timeout-8s",
+  "taskTitle": "Deploy purchase CTA 8-second timeout fix",
+  "baseCommit": "1f1542e22932659341389b5e534fcbf286a6911f",
+  "updatedAt": "2026-07-23T18:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260723-cloudflare-turnstile.md"
+  "historyFile": ".ai/history/20260723-purchase-cta-timeout-8s.md"
 }

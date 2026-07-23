@@ -22,7 +22,7 @@ import {
 import type { Book, Conversation, Feedback, Profile, PurchaseOrder, PurchaseRequest, RiskPolicy, RiskProfile, SellerLifecycle, StudentVerification, StudentVerificationSummary, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
-const ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS = 10_000;
+export const ACTIVE_REQUEST_CHECK_TIMEOUT_MS = 8_000;
 
 export type { MarketplaceFilters } from "@/lib/marketplace/filters";
 export type MarketplaceCursor = {
@@ -225,18 +225,24 @@ export async function fetchActiveRequestForBook(
   bookId: string,
   buyerId: string,
 ): Promise<PurchaseRequest | null> {
-  const { data, error } = await client
-    .from("purchase_requests")
-    .select("*")
-    .eq("book_id", bookId)
-    .eq("buyer_id", buyerId)
-    .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"])
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .abortSignal(AbortSignal.timeout(ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS))
-    .maybeSingle();
-  if (error) throw error;
-  return data ? mapRequest(data) : null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ACTIVE_REQUEST_CHECK_TIMEOUT_MS);
+  try {
+    const { data, error } = await client
+      .from("purchase_requests")
+      .select("*")
+      .eq("book_id", bookId)
+      .eq("buyer_id", buyerId)
+      .in("status", ["pending", "waitlisted", "reserved", "awaiting_confirmation", "completed"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .abortSignal(controller.signal)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapRequest(data) : null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function fetchNotifications(client: SupabaseClient) {

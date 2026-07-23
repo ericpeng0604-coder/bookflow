@@ -2,63 +2,49 @@
 
 ## 任務目標
 
-Implement Supabase Auth Cloudflare Turnstile protection
+Deploy purchase CTA 8-second timeout fix
 
 ## 目前狀態與背景
 
-- Task ID: `20260723-bookflow-cloudflare-turnstile`.
-- Task: `Implement Supabase Auth Cloudflare Turnstile protection`.
-- Branch: `codex/cloudflare-turnstile`.
-- Base commit: `247a4512553557c57110706defe61b29f970e54b`.
-- History: `.ai/history/20260723-cloudflare-turnstile.md`.
-- This change has no database migration and does not change Cloudflare DNS, Vercel proxying, R2, Workers, or Supabase Storage.
-- No workflow or protected recovery file is changed.
-- Do not add `Rollback-Workflow-Approved: true`; this is not a rollback/recovery change.
+- Task ID: `20260723-purchase-cta-timeout-8s`.
+- Task: `Deploy purchase CTA 8-second timeout fix`.
+- Branch: `agent/fix-purchase-cta-timeout-8s-20260723`.
+- Base commit: `1f1542e22932659341389b5e534fcbf286a6911f`.
+- History: `.ai/history/20260723-purchase-cta-timeout-8s.md`.
+- No database migration is included unless listed here.
+- No GitHub workflow or protected recovery file is changed unless explicitly listed here.
+- Do not add `Rollback-Workflow-Approved: true` unless this is an authorized rollback/recovery change.
 
 ## 已完成
 
-- Added an explicit Cloudflare Turnstile widget with token expiry/error handling and no client-side secret.
-- Passed one-time CAPTCHA tokens to Supabase password sign-in, email signup, signup-code resend, password reset, and admin OTP delivery.
-- Kept Google OAuth unchanged at the provider call; admin OAuth sessions still open the protected OTP flow.
-- Added Turnstile CSP allowances, `.env.example` guidance, README setup steps, and a dedicated static integration check.
-- Preserved the existing database-backed rate limits and made the feature backward-compatible when the public site key is unset.
+- Implemented the 8-second AbortController timeout, explicit idle/loading CTA disablement, and focused regression assertions.
 
 ## 下一步
 
-1. Configure a Cloudflare Turnstile widget and the matching Supabase CAPTCHA Secret Key per README.
-2. Run browser verification for desktop, mobile, accessibility, token expiry/replay, and wrong-hostname failures.
-3. After review, commit and push the isolated implementation branch; no production deployment has been requested or performed.
+1. Implement the scoped change.
+2. Run the required local checks.
+3. Commit, run `node scripts/release-preflight.mjs`, then open a PR.
+4. After merge, verify production with `/api/health/release` and `release:smoke`.
 
 ## 變更檔案
 
-- `.env.example`, `README.md`, `app/globals.css`, `next.config.ts`
-- `components/marketplace-app.tsx`, `components/turnstile-widget.tsx`
-- `package.json`, `scripts/check-turnstile.mjs`, `scripts/check-google-auth.mjs`, `scripts/run-project-checks.mjs`
-- `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/20260723-cloudflare-turnstile.md`
+- .ai/history/20260723-purchase-cta-timeout-8s.md
 
 ## 驗證結果
 
-- `node scripts/check-turnstile.mjs` passed.
-- `node scripts/check-google-auth.mjs` passed.
-- Targeted ESLint passed for all changed TypeScript/JavaScript files.
-- `tsc --noEmit` passed.
-- `next build` passed; Next emitted only cache snapshot warnings.
-- Browser Turnstile, real Supabase CAPTCHA, token replay/expiry, wrong-hostname behavior, and production deployment remain `NOT VERIFIED`.
+- Focused check passed 29/29; typecheck, lint, tests 22/22, project checks 35/35, and production build passed. Staging migration is NOT APPLICABLE because no SQL changed; PR, merge, production approval, deployment health, smoke, and authenticated browser CTA verification remain NOT VERIFIED.
 
 ## 風險與注意事項
 
-- Supabase Dashboard must hold the Turnstile Secret Key; it must never be copied to client code or `NEXT_PUBLIC_` variables.
-- The public site key must be configured in every deployed hostname before Supabase CAPTCHA enforcement is enabled.
-- Do not put Cloudflare Proxy, R2, Workers, or DNS changes in this P0 implementation.
+- Do not deploy from the original dirty checkout or use PR #105. Preserve protected recovery files and keep all unavailable release evidence marked NOT VERIFIED.
 
 ## 下一位 AI 工作指引
 
-1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching `.ai/history/*.md` in sync.
-2. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
-3. Preserve `.github/workflows/rollback-production.yml`, `.github/workflows/protect-rollback-workflow.yml`, and `.github/CODEOWNERS`.
-4. Separate local, staging, deployment, release health, and smoke evidence; report `NOT VERIFIED` when any exact-SHA proof is missing.
+1. Replace every placeholder in this handoff with confirmed facts.
+2. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching `.ai/history/*.md` in sync.
+3. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
 
 ## 相關 Commit
 
-- Base commit: `247a4512553557c57110706defe61b29f970e54b`.
-- Current implementation commit: `b7abad245efa89cfd4605c5eacd78daee3815a85`.
+- Base commit: `1f1542e22932659341389b5e534fcbf286a6911f`.
+- Current implementation commit before final commit: `not committed yet`.
