@@ -8,7 +8,7 @@ Implement Supabase Auth Cloudflare Turnstile protection
 
 - Task ID: `20260723-bookflow-cloudflare-turnstile`.
 - Task: `Implement Supabase Auth Cloudflare Turnstile protection`.
-- Branch: `codex/cloudflare-turnstile` (isolated clean clone; no commit or deploy yet).
+- Branch: `codex/cloudflare-turnstile`.
 - Base commit: `247a4512553557c57110706defe61b29f970e54b`.
 - History: `.ai/history/20260723-cloudflare-turnstile.md`.
 - This change has no database migration and does not change Cloudflare DNS, Vercel proxying, R2, Workers, or Supabase Storage.
@@ -61,4 +61,4 @@ Implement Supabase Auth Cloudflare Turnstile protection
 ## 相關 Commit
 
 - Base commit: `247a4512553557c57110706defe61b29f970e54b`.
-- Current implementation is uncommitted in the isolated clone.
+- Current implementation commit: `b7abad245efa89cfd4605c5eacd78daee3815a85`.
