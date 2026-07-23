@@ -135,6 +135,8 @@ a clean worktree before continuing. Then run `npm run check:release-scope`.
 Before opening or merging the PR, run `npm run release:preflight` so stale
 branch, mixed-scope, and handoff problems are caught locally instead of after
 GitHub checks.
+The preflight is strict: it stops when tracked or untracked changes remain.
+Use the --allow-dirty option only for diagnostics; that override is not release evidence and must not be used before a PR or production release.
 If `npm` is not available in the current shell, run the same helper directly
 with the active Node runtime:
 
@@ -239,3 +241,13 @@ Rollback-Workflow-Approved: true
 The rollback workflow selects only unreverted commits from the first-parent
 history of `main`. It validates the reverted tree, confirms `main` has not
 moved, pushes an auditable revert commit, and waits for Vercel.
+
+## Post-release workspace cleanup
+
+After a successful production release, run the repository cleanup helper from the clean release worktree:
+
+    npm run release:cleanup -- --release-sha=<merged-sha>
+
+The default mode is plan-only. Review the exact clean, already-merged agent/codex worktrees it reports, then re-run with --apply to remove only those worktrees and their local branches. The helper refuses dirty current worktrees, skips dirty candidates, protects main/master and the current branch, and never runs git clean or reset --hard.
+
+Keep AI handoff history and release evidence. Do not delete .ai/history, release reports, the original dirty checkout, or any worktree that is not clean and already merged. In Codex desktop, use npm run release:cleanup:codex with the same arguments.
