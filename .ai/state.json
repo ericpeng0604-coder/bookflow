@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260722-bookflow-ui-release",
-  "taskTitle": "Deploy cumulative BookFlow listing and meetup UI fixes",
-  "baseCommit": "adffbaa79902c90e20a73bf0fd803465b319dc1b",
-  "updatedAt": "2026-07-22T15:30:00.000Z",
+  "taskId": "20260723-bookflow-marketplace-complete-release",
+  "taskTitle": "Deploy complete marketplace cart and multi-item order changes",
+  "baseCommit": "cb56051ddf3a64bd4c92683485258f570919f111",
+  "updatedAt": "2026-07-23T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260722-bookflow-ui-release.md"
+  "historyFile": ".ai/history/20260723-marketplace-complete-release.md"
 }

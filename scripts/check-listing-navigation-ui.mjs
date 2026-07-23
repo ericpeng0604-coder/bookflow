@@ -115,4 +115,13 @@ assert.doesNotMatch(
   "native dialog focus management must not rerun on every input render",
 );
 
+assert.ok(
+  listingForm.includes("scrollContainer.scrollTo")
+    && listingForm.includes("navHeight")
+    && listingForm.includes("targetTop - containerTop")
+    && css.includes("scroll-margin-top: 76px")
+    && css.includes("scroll-margin-top: 66px"),
+  "listing step navigation must offset the sticky nav before scrolling to a section",
+);
+
 console.log("Listing navigation and upload UI checks passed.");
