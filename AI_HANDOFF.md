@@ -48,3 +48,5 @@ Deploy purchase CTA 8-second timeout fix
 
 - Base commit: `1f1542e22932659341389b5e534fcbf286a6911f`.
 - Current implementation commit before final commit: `not committed yet`.
+
+Follow-up: production browser proof found the CTA loading effect cancelled its own request; fixed by removing state/key dependencies and added a 30/30 regression check.

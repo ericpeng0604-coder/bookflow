@@ -886,7 +886,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [sellerLifecycle, setSellerLifecycle] = useState<SellerLifecycle | null>(null);
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
   const [activeRequestCheckState, setActiveRequestCheckState] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [activeRequestCheckKey, setActiveRequestCheckKey] = useState<string | null>(null);
   const [chatListCollapsed, setChatListCollapsed] = useState(false);
   const [lifecycleSaving, setLifecycleSaving] = useState(false);
   const [pushState, setPushState] = useState<BrowserPushState>("disabled");
@@ -1829,21 +1828,14 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }, [selectedBook, view, store.profiles]);
 
   useEffect(() => {
-    const requestCheckKey = currentUser && selectedBook && selectedBook.sellerId !== currentUser.id && view === "book"
-      ? `${selectedBook.id}:${currentUser.id}`
-      : null;
     if (!supabase || !currentUser || !selectedBook || view !== "book" || selectedBook.sellerId === currentUser.id) {
-      setActiveRequestCheckKey(null);
       setActiveRequestCheckState("idle");
       return;
     }
     if (selectedBookActiveRequest) {
-      setActiveRequestCheckKey(requestCheckKey);
       setActiveRequestCheckState("ready");
       return;
     }
-    if (activeRequestCheckKey === requestCheckKey && activeRequestCheckState !== "idle") return;
-    setActiveRequestCheckKey(requestCheckKey);
     setActiveRequestCheckState("loading");
     let active = true;
     void fetchActiveRequestForBook(supabase, selectedBook.id, currentUser.id)
@@ -1866,7 +1858,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     return () => {
       active = false;
     };
-  }, [activeRequestCheckKey, activeRequestCheckState, currentUser, selectedBook, selectedBookActiveRequest, view]);
+  }, [currentUser, selectedBook, selectedBookActiveRequest, view]);
 
   function clearBookDetailRouteState() {
     setDetailBook(null);
