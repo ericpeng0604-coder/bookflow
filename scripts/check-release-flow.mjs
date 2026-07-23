@@ -59,6 +59,8 @@ assert.match(preflight, /check-ci/);
 assert.match(preflight, /release scope is mixed/);
 assert.match(preflight, /AI_HANDOFF\.md, \.ai\/state\.json, and a new \.ai\/history entry/);
 assert.match(preflight, /origin\/main/);
+assert.match(preflight, /--allow-dirty/);
+assert.match(preflight, /working tree must be clean/);
 const releaseScope = read("scripts/lib/release-scope.mjs");
 assert.match(releaseScope, /isReleaseInfrastructure/);
 assert.match(releaseScope, /replace\(\/\\r\?\\n\+\$\//);

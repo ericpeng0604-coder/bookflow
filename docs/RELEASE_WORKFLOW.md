@@ -135,6 +135,8 @@ a clean worktree before continuing. Then run `npm run check:release-scope`.
 Before opening or merging the PR, run `npm run release:preflight` so stale
 branch, mixed-scope, and handoff problems are caught locally instead of after
 GitHub checks.
+The preflight is strict: it stops when tracked or untracked changes remain.
+Use the --allow-dirty option only for diagnostics; that override is not release evidence and must not be used before a PR or production release.
 If `npm` is not available in the current shell, run the same helper directly
 with the active Node runtime:
 

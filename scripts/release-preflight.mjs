@@ -5,6 +5,7 @@ import process from "node:process";
 import { analyzeReleaseScope, formatReleaseScopeStop } from "./lib/release-scope.mjs";
 
 const baseRef = process.env.RELEASE_BASE_REF || "origin/main";
+const allowDirty = process.argv.includes("--allow-dirty") || process.env.RELEASE_PREFLIGHT_ALLOW_DIRTY === "1";
 
 function git(args, options = {}) {
   return execFileSync("git", args, {
@@ -68,6 +69,7 @@ console.log(`Working tree: ${status.length ? `${status.length} uncommitted/untra
 console.log(`PR files vs ${baseRef}: ${changedInPr.length}`);
 console.log(`Unapplied commits: ${unapplied.length}`);
 console.log(`Already-applied commits: ${alreadyApplied.length}`);
+console.log("Dirty-tree override: "+(allowDirty ? "enabled (diagnostic only)" : "disabled"));
 
 if (scope.riskyMixedScope) {
   fail("release scope is mixed. Move the intended change into a clean worktree or fresh branch before opening or merging a PR.");
@@ -89,6 +91,9 @@ if (status.length) {
   console.log("\nUncommitted or untracked entries are present:");
   for (const entry of status) console.log(`  ${entry.trim()}`);
   console.log("Keep unrelated files unstaged before committing or opening a PR.");
+  if (!allowDirty) {
+    fail("working tree must be clean for release preflight. Move the release into a clean worktree, or use --allow-dirty only for diagnostics.");
+  }
 }
 
 if (!changedInPr.length) {
