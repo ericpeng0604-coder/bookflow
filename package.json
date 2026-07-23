@@ -102,6 +102,8 @@
     "release:watch-pr": "node scripts/release-pr-status.mjs --wait",
     "release:watch-pr:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-pr-status.mjs --wait",
     "release:smoke": "node scripts/release-smoke.mjs",
+    "release:cleanup": "node scripts/release-cleanup.mjs",
+    "release:cleanup:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-cleanup.mjs",
     "release:smoke:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-smoke.mjs",
     "staging:check": "node scripts/check-staging.mjs",
     "staging:check:strict": "node scripts/check-staging.mjs --require-role-probes"

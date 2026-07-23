@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "project": "bookflow",
   "owner": "codex",
-  "status": "handoff",
-  "taskId": "20260723-optimize-strict-release-preflight",
-  "taskTitle": "Optimize strict release preflight",
+  "status": "in_progress",
+  "taskId": "20260723-post-release-workspace-cleanup",
+  "taskTitle": "Add safe post-release workspace cleanup flow",
   "baseCommit": "0a65850fb04cb9afae751e8e6f8a616096eb3e6f",
-  "updatedAt": "2026-07-23T19:35:00.000Z",
+  "updatedAt": "2026-07-23T20:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260723-optimize-strict-release-preflight.md"
+  "historyFile": ".ai/history/20260723-post-release-workspace-cleanup.md"
 }
