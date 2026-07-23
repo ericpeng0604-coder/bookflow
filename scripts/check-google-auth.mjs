@@ -18,7 +18,7 @@ const checks = [
   ["OAuth returns to the current site", app.includes("redirectTo: window.location.origin")],
   ["Google login is exposed in the login modal", app.includes("使用 Google 帳號繼續")],
   ["Google button has focus styling", css.includes(".google-login-button:focus-visible")],
-  ["admin OAuth sessions still require verification", app.includes("await ensureAdminOtp(user.email)")],
+  ["admin OAuth sessions still require verification", app.includes('setToast("請完成安全驗證後寄送管理員驗證碼")') && app.includes('setModal("adminOtp")')],
   ["admin OTP backend accepts Google OAuth sessions", adminOtpRoute.includes('"oauth"')],
   ["admin OTP backend still accepts password sessions", adminOtpRoute.includes('"password"')],
   [

@@ -184,9 +184,19 @@ supabase/admin-login-verification.sql
 
 部署環境必須設定 `SUPABASE_SERVICE_ROLE_KEY`。此金鑰只可放在 Vercel Environment Variables，絕對不能加入 `NEXT_PUBLIC_` 前綴或寫入前端程式。
 
+### 2. 啟用 Cloudflare Turnstile
+
+Turnstile 是本專案目前唯一立即導入的 Cloudflare 功能；不需要搬移 DNS、Vercel、Supabase Storage，也不會代理網站流量。
+
+1. 在 Cloudflare Dashboard → Turnstile 建立 widget，將本機、測試站與正式站 hostname 加入允許清單。
+2. 將 Site Key 設定為 `NEXT_PUBLIC_TURNSTILE_SITE_KEY`。Site Key 可出現在前端；不要把 Secret Key 寫入 Git、`.env.example` 或任何 `NEXT_PUBLIC_` 變數。
+3. 在 Supabase Dashboard → Authentication → Bot and Abuse Protection → CAPTCHA 選擇 Cloudflare Turnstile，貼上 Secret Key。Secret 只保存在 Supabase Dashboard。
+4. 本專案會把一次性 token 傳給 Email 註冊、密碼登入、註冊驗證碼重送、密碼重設與管理員 OTP 寄送；token 過期、重播或 hostname 不符時會拒絕。
+5. 未設定 Site Key 時，本機仍可使用既有流程；但正式啟用 Supabase CAPTCHA 前，必須先把相同環境的 Site Key 部署完成。Turnstile 只負責機器人防護，不取代 Supabase Auth 授權與既有 API 限流。
+
 請在 Supabase Dashboard → Authentication → Email Templates → Magic Link 將範本改為顯示 `{{ .Token }}`，不要使用 `{{ .ConfirmationURL }}`。驗證碼長度與有效期限沿用 Authentication 的 OTP 設定。
 
-### 2. 啟用 Email 註冊驗證
+### 3. 啟用 Email 註冊驗證
 
 1. 開啟 Supabase Dashboard → Authentication → Providers → Email。
 2. 確認 Email Provider 與 Confirm email 已啟用。
@@ -195,7 +205,7 @@ supabase/admin-login-verification.sql
 
 註冊信必須使用 `{{ .Token }}`；若範本使用 `{{ .ConfirmationURL }}`，Supabase 會寄確認連結而不是網站內可輸入的驗證碼。
 
-### 3. 設定忘記密碼回站網址
+### 4. 設定忘記密碼回站網址
 
 1. 開啟 Authentication → URL Configuration。
 2. 將本機網址 `http://localhost:3000` 加入 Redirect URLs。
@@ -204,7 +214,7 @@ supabase/admin-login-verification.sql
 
 網站會以目前所在網域作為密碼重設回站網址，因此本機與正式部署網址都需要列入 Supabase 允許清單。
 
-### 4. 啟用 Google 快速登入
+### 5. 啟用 Google 快速登入
 
 1. 在 Google Cloud Console 建立或選擇專案，設定 OAuth consent screen。
 2. 建立 OAuth Client ID，Application type 選擇 Web application。
@@ -272,6 +282,7 @@ npm run load-test:marketplace
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY`（Cloudflare Turnstile Site Key；Secret Key 只放 Supabase CAPTCHA 設定）
 - `APP_URL`（正式網站的 `https://` 網址，供通知郵件與推播連結）
 - `SUPABASE_SERVICE_ROLE_KEY`（僅伺服器端，不可加 `NEXT_PUBLIC_`）
 - `RESEND_API_KEY`

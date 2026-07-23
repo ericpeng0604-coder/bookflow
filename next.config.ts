@@ -6,6 +6,7 @@ const packageMetadata = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 ) as { version?: string };
 const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || packageMetadata.version || "0.0.0";
+const turnstileOrigin = "https://challenges.cloudflare.com";
 
 function supabaseStorageHostnames() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -45,8 +46,9 @@ const contentSecurityPolicy = [
   "frame-ancestors 'none'",
   "form-action 'self'",
   process.env.NODE_ENV === "production"
-    ? "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'"
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
+    ? `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${turnstileOrigin}`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' ${turnstileOrigin}`,
+  `frame-src 'self' ${turnstileOrigin}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
@@ -56,6 +58,7 @@ const contentSecurityPolicy = [
     ...supabaseOrigins(),
     ...sentryBrowserOrigin(),
     "https://tessdata.projectnaptha.com",
+    turnstileOrigin,
   ].join(" ")}`,
   "manifest-src 'self'",
   "upgrade-insecure-requests",

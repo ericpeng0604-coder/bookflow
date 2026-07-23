@@ -36,6 +36,7 @@ const checks = [
   { file: "check-site-quality-hardening.mjs", stripTypes: true },
   { file: "check-push-subscription-api.mjs" },
   { file: "check-google-auth.mjs" },
+  { file: "check-turnstile.mjs" },
   { file: "check-release-source.mjs" },
   { file: "check-release-dashboard.mjs" },
   { file: "check-release-flow.mjs" },

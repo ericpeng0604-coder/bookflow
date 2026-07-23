@@ -78,6 +78,7 @@
     "check:site-hardening": "node --experimental-strip-types scripts/check-site-quality-hardening.mjs",
     "check:push-subscription-api": "node scripts/check-push-subscription-api.mjs",
     "check:google-auth": "node scripts/check-google-auth.mjs",
+    "check:turnstile": "node scripts/check-turnstile.mjs",
     "check:react-doctor": "node scripts/check-react-doctor.mjs",
     "check:release-scope": "node scripts/check-release-scope.mjs",
     "check:workflows": "node scripts/check-workflows.mjs",
