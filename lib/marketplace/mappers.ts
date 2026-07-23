@@ -4,6 +4,7 @@ import type {
   Notification,
   NotificationType,
   Profile,
+  PurchaseOrder,
   PurchaseRequest,
   Report,
   ReportReason,
@@ -92,6 +93,7 @@ export function mapBook(row: Record<string, unknown>): Book {
 export function mapRequest(row: Record<string, unknown>): PurchaseRequest {
   return {
     id: String(row.id),
+    orderId: row.purchase_order_id ? String(row.purchase_order_id) : null,
     bookId: String(row.book_id),
     buyerId: String(row.buyer_id),
     message: String(row.message),
@@ -113,10 +115,28 @@ export function mapRequest(row: Record<string, unknown>): PurchaseRequest {
   };
 }
 
+export function mapPurchaseOrder(row: Record<string, unknown>): PurchaseOrder {
+  return {
+    id: String(row.id),
+    buyerId: String(row.buyer_id),
+    sellerId: String(row.seller_id),
+    status: String(row.status || "pending") as PurchaseOrder["status"],
+    message: String(row.message || ""),
+    preferredMeetupLocation: String(row.preferred_meetup_location || ""),
+    preferredMeetupTime: String(row.preferred_meetup_time || ""),
+    totalPrice: Number(row.total_price || 0),
+    itemCount: Number(row.item_count || 0),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at || row.created_at),
+  };
+}
+
 export function mapConversation(row: Record<string, unknown>): Conversation {
   return {
     id: String(row.id),
     bookId: String(row.book_id),
+    orderId: row.purchase_order_id ? String(row.purchase_order_id) : null,
+    itemCount: Number(row.item_count || 1),
     buyerId: String(row.buyer_id),
     sellerId: String(row.seller_id),
     status: String(row.status || "active") as Conversation["status"],

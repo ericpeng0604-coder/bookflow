@@ -56,7 +56,7 @@ import {
   legacyFavoritesNeedSync,
   readFavoriteIds,
 } from "@/lib/marketplace/favorites";
-import { ALL_ITEM_CATEGORIES, isAllDepartments, MIN_PRICE_500, NO_MAX_PRICE, NO_MIN_PRICE, buildMarketplaceFilters } from "@/lib/marketplace/filters";
+import { ALL_ITEM_CATEGORIES, isAllDepartments, MIN_PRICE_500, NO_MAX_PRICE, NO_MIN_PRICE, buildMarketplaceFilters, type MarketplaceFilters } from "@/lib/marketplace/filters";
 import {
   type BrowserPushState,
   browserPushState,
@@ -105,6 +105,12 @@ import { giveawayChatBanner, giveawayRequestLabel, sortGiveawayRequests } from "
 import { DEFAULT_MEETUP_MODE, MEETUP_MODE_OPTIONS, meetupModeLabel, normalizeMeetupMode } from "@/lib/marketplace/meetup";
 import { isAbortError, runGuarded } from "@/lib/marketplace/refresh-guard";
 import {
+  invalidateMarketplaceCache,
+  readMarketplaceCache,
+  writeMarketplaceCache,
+  type MarketplaceCacheEntry,
+} from "@/lib/marketplace/marketplace-cache";
+import {
   LISTING_FIELD_LIMITS,
   normalizeAndValidateListingFields,
 } from "@/lib/marketplace/listing-validation";
@@ -115,14 +121,26 @@ import {
   rankTaiwanTextbookCandidates,
 } from "@/lib/marketplace/taiwan-textbook";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import {
+  addCartItem,
+  canCheckoutGroup,
+  cartItemFromBook,
+  groupCartItems,
+  readCart,
+  reconcileCart,
+  removeCartItem,
+  writeCart,
+} from "@/lib/marketplace/cart";
 import type {
   Book,
   BookStatus,
   Conversation,
+  CartItem,
   Feedback,
   Notification,
   Profile,
   PurchaseRequest,
+  PurchaseOrder,
   Report,
   ReportReason,
   ReportTargetType,
@@ -150,6 +168,16 @@ const IMAGE_SEARCH_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/we
 const MESSAGE_RECALL_WINDOW_MS = 10 * 60_000;
 const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
 const lastChatStorageKey = (userId: string) => `${LAST_CHAT_KEY}:${userId}`;
+function marketplaceFiltersKey(filters: MarketplaceFilters) {
+  return JSON.stringify([
+    filters.listingType,
+    filters.itemCategory,
+    filters.department,
+    filters.minPrice,
+    filters.maxPrice,
+    filters.query,
+  ]);
+}
 const listingDepartmentStorageKey = (userId: string) => `bookflow-last-book-department-v1:${userId}`;
 const listingDraftStorageKey = (
   userId: string,
@@ -176,6 +204,7 @@ type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "
 type Store = {
   books: Book[];
   requests: PurchaseRequest[];
+  orders: PurchaseOrder[];
   profiles: Profile[];
   currentUser: Profile | null;
 };
@@ -786,7 +815,7 @@ type MarketplaceAppProps = {
 };
 
 export function MarketplaceApp({ initialView = "home", initialDashboardTab = "listings" }: MarketplaceAppProps) {
-  const [store, setStore] = useState<Store>({ books: demoBooks, requests: demoRequests, profiles: demoProfiles, currentUser: null });
+  const [store, setStore] = useState<Store>({ books: demoBooks, requests: demoRequests, orders: [], profiles: demoProfiles, currentUser: null });
   const [ready, setReady] = useState(false);
   const [online, setOnline] = useState(true);
   const actionDialog = useActionDialog();
@@ -864,6 +893,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const imageSearchInputRef = useRef<HTMLInputElement>(null);
   const imageSearchRequestRef = useRef(0);
   const marketplaceCursorRef = useRef<{ sellerVerified: boolean; createdAt: string; id: string } | null>(null);
+  const marketplaceQueryKeyRef = useRef("");
+  const marketplaceCacheRef = useRef<Map<string, MarketplaceCacheEntry<Book>>>(new Map());
   const badgeLookupRef = useRef<Set<string>>(new Set());
   const conversationSummaryLoadingRef = useRef(false);
   const conversationSummaryUserRef = useRef<string | null>(null);
@@ -875,9 +906,58 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const detailTouchStartXRef = useRef<number | null>(null);
   const [bookSaving, setBookSaving] = useState(false);
   const [requestSaving, setRequestSaving] = useState(false);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cartSaving, setCartSaving] = useState(false);
+  const cartSyncUserRef = useRef<string | null>(null);
   const lastNotificationRefreshRef = useRef(0);
   const debouncedQuery = useDebouncedValue(query, 300);
   const currentUser = store.currentUser;
+  const cartGroups = useMemo(() => groupCartItems(cartItems), [cartItems]);
+
+  useEffect(() => {
+    setCartItems(readCart(window.localStorage));
+  }, []);
+
+  useEffect(() => {
+    writeCart(cartItems, window.localStorage);
+  }, [cartItems]);
+
+  useEffect(() => {
+    const knownBooks = [...marketplaceBooks, ...myBooks, ...requestBooks, ...store.books];
+    if (knownBooks.length === 0) return;
+    setCartItems((previous) => {
+      const next = reconcileCart(previous, knownBooks);
+      return next.length === previous.length && next.every((item, index) => item.bookId === previous[index]?.bookId) ? previous : next;
+    });
+  }, [marketplaceBooks, myBooks, requestBooks, store.books]);
+  useEffect(() => {
+    if (!supabase || !currentUser?.id || cartSyncUserRef.current === currentUser.id) return;
+    cartSyncUserRef.current = currentUser.id;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("purchase_cart_items")
+        .select("book_id")
+        .eq("user_id", currentUser.id);
+      if (cancelled || (error && !["PGRST205", "42P01"].includes(error.code || ""))) return;
+      const knownBooks = [...marketplaceBooks, ...myBooks, ...requestBooks, ...store.books];
+      const remoteItems = (data || [])
+        .map((row) => knownBooks.find((book) => book.id === row.book_id))
+        .filter((book): book is Book => Boolean(book))
+        .map(cartItemFromBook);
+      setCartItems((previous) => reconcileCart([...previous, ...remoteItems], knownBooks));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, marketplaceBooks, myBooks, requestBooks, store.books]);
+  useEffect(() => {
+    if (!supabase || !currentUser?.id || cartItems.length === 0) return;
+    void supabase
+      .from("purchase_cart_items")
+      .upsert(cartItems.map((item) => ({ user_id: currentUser.id, book_id: item.bookId })), { onConflict: "user_id,book_id" });
+  }, [cartItems, currentUser?.id]);
   useEffect(() => {
     if (!notificationOpen) return;
     const handlePointerDown = (event: PointerEvent) => {
@@ -990,6 +1070,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     const client = supabase;
     const append = options?.append ?? false;
     if (imageSearchActive && !append) return;
+    const requestKey = marketplaceFiltersKey(marketplaceFilters);
     await runGuarded("marketplace", async (signal) => {
       setMarketplaceLoading(true);
       try {
@@ -998,10 +1079,18 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           marketplaceFilters,
           append ? marketplaceCursorRef.current : null,
         );
-        if (signal.aborted) return;
-        setMarketplaceBooks((previous) => (append ? [...previous, ...page.books] : page.books));
+        if (signal.aborted || marketplaceQueryKeyRef.current !== requestKey) return;
+        const cached = readMarketplaceCache(marketplaceCacheRef.current, requestKey);
+        const nextBooks = append ? [...(cached?.books ?? []), ...page.books] : page.books;
+        setMarketplaceBooks(nextBooks);
         setMarketplaceHasMore(page.hasMore);
         marketplaceCursorRef.current = page.nextCursor;
+        writeMarketplaceCache(marketplaceCacheRef.current, requestKey, {
+          books: nextBooks,
+          count: cached?.count ?? 0,
+          hasMore: page.hasMore,
+          nextCursor: page.nextCursor,
+        });
       } catch (error) {
         if (!isAbortError(error)) {
           setToast(`讀取刊登失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
@@ -1014,26 +1103,41 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
   const loadMarketplaceCount = useCallback(async () => {
     if (imageSearchActive) return;
-    try {
-      const response = await fetch("/api/marketplace/count", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          listingType: marketplaceFilters.listingType,
-          itemCategory: marketplaceFilters.itemCategory,
-          department: marketplaceFilters.department,
-          minPrice: marketplaceFilters.minPrice,
-          maxPrice: marketplaceFilters.maxPrice,
-          query: marketplaceFilters.query,
-        }),
-      });
-      if (!response.ok) throw new Error("count unavailable");
-      const result = await response.json() as { count: number | null };
-      if (result.count !== null) setMarketplaceCount(result.count);
-    } catch {
-      setMarketplaceCount((previous) => Math.max(previous, marketplaceBooks.length));
-    }
-  }, [imageSearchActive, marketplaceBooks.length, marketplaceFilters]);
+    const clientFilters = marketplaceFilters;
+    const requestKey = marketplaceFiltersKey(clientFilters);
+    await runGuarded("marketplace-count", async (signal) => {
+      try {
+        const response = await fetch("/api/marketplace/count", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            listingType: clientFilters.listingType,
+            itemCategory: clientFilters.itemCategory,
+            department: clientFilters.department,
+            minPrice: clientFilters.minPrice,
+            maxPrice: clientFilters.maxPrice,
+            query: clientFilters.query,
+          }),
+          signal,
+        });
+        if (!response.ok) throw new Error("count unavailable");
+        const result = await response.json() as { count: number | null };
+        if (!signal.aborted && marketplaceQueryKeyRef.current === requestKey && result.count !== null) {
+          setMarketplaceCount(result.count);
+          const cached = readMarketplaceCache(marketplaceCacheRef.current, requestKey);
+          writeMarketplaceCache(marketplaceCacheRef.current, requestKey, {
+            books: cached?.books ?? marketplaceBooks,
+            count: result.count,
+            hasMore: cached?.hasMore ?? marketplaceHasMore,
+            nextCursor: cached?.nextCursor ?? marketplaceCursorRef.current,
+          });
+        }
+      } catch (error) {
+        if (isAbortError(error) || signal.aborted || marketplaceQueryKeyRef.current !== requestKey) return;
+        setMarketplaceCount((previous) => Math.max(previous, marketplaceBooks.length));
+      }
+    });
+  }, [imageSearchActive, marketplaceBooks, marketplaceFilters, marketplaceHasMore]);
 
   const loadUserWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
     if (!supabase) return;
@@ -1051,6 +1155,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         }
         if (workspace.requests) {
           setStore((previous) => ({ ...previous, requests: workspace.requests!, currentUser: user }));
+        }
+        if (workspace.orders) {
+          setStore((previous) => ({ ...previous, orders: workspace.orders!, currentUser: user }));
         }
         if (workspace.partyProfiles) {
           setStore((previous) => ({
@@ -1246,19 +1353,23 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
   const reloadAfterUserMutation = useCallback(async () => {
     if (!supabase || !store.currentUser) return;
+    invalidateMarketplaceCache(marketplaceCacheRef.current, marketplaceFiltersKey(marketplaceFilters));
     await Promise.all([
       loadDashboardWorkspace(store.currentUser, dashboardTab),
       loadMarketplaceBooks(),
+      loadMarketplaceCount(),
     ]);
-  }, [dashboardTab, loadDashboardWorkspace, loadMarketplaceBooks, store.currentUser]);
+  }, [dashboardTab, loadDashboardWorkspace, loadMarketplaceBooks, loadMarketplaceCount, marketplaceFilters, store.currentUser]);
 
   const reloadAfterModerationMutation = useCallback(async () => {
     if (!supabase || !store.currentUser) return;
+    invalidateMarketplaceCache(marketplaceCacheRef.current, marketplaceFiltersKey(marketplaceFilters));
     await Promise.all([
       loadModerationPanel(store.currentUser),
       loadMarketplaceBooks(),
+      loadMarketplaceCount(),
     ]);
-  }, [loadMarketplaceBooks, loadModerationPanel, store.currentUser]);
+  }, [loadMarketplaceBooks, loadMarketplaceCount, loadModerationPanel, marketplaceFilters, store.currentUser]);
 
   const openDashboard = useCallback(() => {
     showDashboard();
@@ -1311,8 +1422,15 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
   useEffect(() => {
     if (!ready || !supabase || imageSearchActive) return;
+    const requestKey = marketplaceFiltersKey(marketplaceFilters);
+    marketplaceQueryKeyRef.current = requestKey;
     marketplaceCursorRef.current = null;
-    setMarketplaceCount(0);
+    const cached = readMarketplaceCache(marketplaceCacheRef.current, requestKey);
+    setMarketplaceBooks(cached?.books ?? []);
+    setMarketplaceCount(cached?.count ?? 0);
+    setMarketplaceHasMore(cached?.hasMore ?? false);
+    marketplaceCursorRef.current = cached?.nextCursor ?? null;
+    setMarketplaceLoading(true);
     void Promise.all([loadMarketplaceBooks(), loadMarketplaceCount()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -1775,7 +1893,17 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     returnToMarketRoute();
   }
 
+  function resetMarketplaceResults() {
+    marketplaceQueryKeyRef.current = "";
+    marketplaceCursorRef.current = null;
+    setMarketplaceBooks([]);
+    setMarketplaceCount(0);
+    setMarketplaceHasMore(false);
+    setMarketplaceLoading(true);
+  }
+
   function switchListingType(nextType: ListingType) {
+    resetMarketplaceResults();
     setListingType(nextType);
     setSelectedId(null);
     clearBookDetailRouteState();
@@ -1821,6 +1949,117 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       }
       action();
     });
+  }
+
+  function addBookToCart(book: Book) {
+    if (currentUser?.id === book.sellerId) {
+      setToast("不能把自己的刊登加入購物車");
+      return;
+    }
+    if (book.status !== "available" || book.lifecycleState !== "active" || book.reviewStatus !== "approved") {
+      setToast("這項商品目前無法加入購物車");
+      return;
+    }
+    setCartItems((previous) => addCartItem(previous, cartItemFromBook(book)));
+    setToast("已加入購物車");
+  }
+
+  function removeBookFromCart(bookId: string) {
+    setCartItems((previous) => removeCartItem(previous, bookId));
+    if (supabase && currentUser?.id) {
+      void supabase.from("purchase_cart_items").delete().eq("user_id", currentUser.id).eq("book_id", bookId);
+    }
+  }
+
+  async function checkoutCart(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (cartSaving || cartGroups.length === 0) return;
+    const form = new FormData(event.currentTarget);
+    const message = String(form.get("cartMessage") || "").trim().slice(0, 2000);
+    const location = String(form.get("cartLocation") || "").trim().slice(0, REQUEST_COORDINATION_MAX_LENGTH);
+    const time = String(form.get("cartTime") || "").trim().slice(0, REQUEST_COORDINATION_MAX_LENGTH);
+    const blocked = cartGroups.filter((group) => !canCheckoutGroup(group));
+    if (blocked.length > 0) {
+      setToast("同一賣家的指定面交地點不同，請先拆單");
+      return;
+    }
+    if (!currentUser) {
+      setCartOpen(false);
+      setModal("login");
+      return;
+    }
+    setCartSaving(true);
+    try {
+      if (supabase) {
+        const { error } = await supabase.rpc("create_purchase_order", {
+          p_book_ids: cartItems.map((item) => item.bookId),
+          p_message: message,
+          p_preferred_meetup_location: location,
+          p_preferred_meetup_time: time,
+        });
+        if (error && !["PGRST202", "42883"].includes(error.code || "")) throw error;
+        if (error) {
+          for (const item of cartItems) {
+            const rpc = item.listingType === "giveaway" ? "create_giveaway_request" : "create_purchase_request";
+            const args = item.listingType === "giveaway"
+              ? { target_book_id: item.bookId, request_message: message, preferred_location: location, preferred_time: time }
+              : { target_book_id: item.bookId, request_message: message, preferred_meetup_location: location, preferred_meetup_time: time };
+            const fallback = await supabase.rpc(rpc, args);
+            if (fallback.error) throw fallback.error;
+          }
+        }
+        await supabase
+          .from("purchase_cart_items")
+          .delete()
+          .eq("user_id", currentUser.id)
+          .in("book_id", cartItems.map((item) => item.bookId));
+        await reloadAfterUserMutation();
+        void dispatchNotificationDeliveries();
+      } else {
+        const now = new Date().toISOString();
+        const createdOrders: PurchaseOrder[] = [];
+        const createdRequests: PurchaseRequest[] = [];
+        for (const group of cartGroups) {
+          const orderId = crypto.randomUUID();
+          createdOrders.push({
+            id: orderId,
+            buyerId: currentUser.id,
+            sellerId: group.sellerId,
+            status: "pending",
+            message,
+            preferredMeetupLocation: location,
+            preferredMeetupTime: time,
+            totalPrice: group.totalPrice,
+            itemCount: group.items.length,
+            createdAt: now,
+            updatedAt: now,
+          });
+          for (const item of group.items) {
+            const book = store.books.find((candidate) => candidate.id === item.bookId);
+            createdRequests.push({
+              id: crypto.randomUUID(), orderId, bookId: item.bookId, buyerId: currentUser.id,
+              message, preferredMeetupLocation: location, preferredMeetupTime: time, status: "pending",
+              titleSnapshot: item.title, priceSnapshot: item.price, editionSnapshot: book?.edition || "",
+              imageSnapshot: item.imageUrl, meetupSnapshot: item.meetup, reservationExpiresAt: null,
+              sellerHandoffAt: null, buyerConfirmedAt: null, cancelledAt: null, cancellationReason: "",
+              createdAt: now, updatedAt: now,
+            });
+          }
+        }
+        setStore((previous) => ({
+          ...previous,
+          orders: [...createdOrders, ...previous.orders],
+          requests: [...createdRequests, ...previous.requests],
+        }));
+      }
+      setCartItems([]);
+      setCartOpen(false);
+      setToast(`已建立 ${cartGroups.length} 筆賣家大單，共 ${cartItems.length} 項商品`);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "建立訂單失敗，請稍後再試");
+    } finally {
+      setCartSaving(false);
+    }
   }
 
   async function loginWithPassword(email: string, password: string) {
@@ -2342,7 +2581,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             setStore((previous) => ({
               ...previous,
               requests: [...previous.requests, {
-                id: crypto.randomUUID(), bookId: selectedBook.id, buyerId: currentUser.id,
+                id: crypto.randomUUID(), orderId: null, bookId: selectedBook.id, buyerId: currentUser.id,
                 message, preferredMeetupLocation, preferredMeetupTime, status: "pending",
                 titleSnapshot: selectedBook.title, priceSnapshot: 0, editionSnapshot: selectedBook.edition,
                 imageSnapshot: selectedBook.imageUrl, meetupSnapshot: selectedBook.meetup,
@@ -2449,6 +2688,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           ...previous.requests,
           {
             id: crypto.randomUUID(),
+            orderId: null,
             bookId: selectedBook.id,
             buyerId: currentUser.id,
             message,
@@ -2524,10 +2764,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     const target = store.requests.find((request) => request.id === requestId);
     if (!target) return;
     if (supabase && currentUser) {
-      const { error } = await supabase.rpc("respond_to_purchase_request", {
-        request_id: requestId,
-        response: status,
-      });
+      const { error } = status === "rejected" && target.orderId
+        ? await supabase.rpc("reject_purchase_order_item", { target_request_id: requestId, reason: "seller_rejected_item" })
+        : await supabase.rpc("respond_to_purchase_request", { request_id: requestId, response: status });
       if (error) {
         setToast(`回覆失敗：${error.message}`);
         return;
@@ -2654,9 +2893,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
   async function openOrderConversation(requestId: string) {
     if (!supabase || !currentUser) return;
-    const { data, error } = await supabase.rpc("open_order_conversation", {
-      target_request_id: requestId,
-    });
+    const targetRequest = store.requests.find((request) => request.id === requestId);
+    const { data, error } = targetRequest?.orderId
+      ? await supabase.rpc("open_purchase_order_conversation", { p_order_id: targetRequest.orderId })
+      : await supabase.rpc("open_order_conversation", { target_request_id: requestId });
     if (error) {
       setToast(`無法開啟訊息：${error.message}`);
       return;
@@ -3313,6 +3553,13 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       )
     : [];
   const displayedReceivedRequests = sortGiveawayRequests(receivedRequests, verifiedPartyIds);
+  const orderItemCountById = useMemo(() => {
+    const counts = new Map<string, number>();
+    store.requests.forEach((request) => {
+      if (request.orderId) counts.set(request.orderId, (counts.get(request.orderId) || 0) + 1);
+    });
+    return counts;
+  }, [store.requests]);
   const activeReceivedRequestCount = receivedRequests.filter((request) => request.status !== "expired").length;
   const isModerator = currentUser?.accountStatus === "active"
     && (currentUser.role === "admin" || currentUser.role === "moderator");
@@ -3570,6 +3817,16 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           >
             <MessageCircle size={18} />
             {unreadMessages > 0 && <span className="notification-count message-count">{unreadMessages > 9 ? "9+" : unreadMessages}</span>}
+          </button>
+          <button
+            type="button"
+            className="icon-button cart-button"
+            title="購物車"
+            aria-label={`購物車，${cartItems.length} 項商品`}
+            onClick={() => setCartOpen(true)}
+          >
+            <span aria-hidden="true">🛒</span>
+            {cartItems.length > 0 && <span className="notification-count message-count">{cartItems.length > 9 ? "9+" : cartItems.length}</span>}
           </button>
           {currentUser ? (
             <>
@@ -4269,6 +4526,14 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                             ? "暫時無法確認"
                             : selectedBook.status === "available" ? "確認下訂" : "已保留，暫停新訂單"}
                     </button>
+                    <button
+                      type="button"
+                      className="secondary-action wide"
+                      disabled={selectedBook.status !== "available" || currentUser?.id === selectedBook.sellerId}
+                      onClick={() => addBookToCart(selectedBook)}
+                    >
+                      🛒 加入購物車
+                    </button>
                   </div>
                 )}
                 {currentUser?.id !== selectedBook.sellerId && (
@@ -4481,7 +4746,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       <span className="avatar">{profile(otherId)?.name.slice(0, 1) || "使"}</span>
                       <span className="conversation-item-copy">
                         <b>{profile(otherId)?.name || "交易對象"}</b>
-                        <small className="conversation-item-book">{book?.title || "已移除的課本"} · {conversation.status === "active" ? "訊息進行中" : "訊息已結束"}</small>
+                        <small className="conversation-item-book">{conversation.itemCount > 1 ? `${conversation.itemCount} 項商品` : (book?.title || "已移除的商品")} · {conversation.status === "active" ? "訊息進行中" : "訊息已結束"}</small>
                         <p className="conversation-item-preview">
                           {conversation.lastMessageSenderId === currentUser.id ? "你：" : ""}
                           {conversation.lastMessagePreview || "尚未開始訊息"}
@@ -4513,7 +4778,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     const conversation = conversations.find((item) => item.id === expandedConversationId)!;
                     const book = knownBooks.find((item) => item.id === conversation.bookId) || null;
                     const conversationRequest = store.requests.find((request) =>
-                      request.bookId === conversation.bookId
+                      (conversation.orderId ? request.orderId === conversation.orderId : request.bookId === conversation.bookId)
                       && request.buyerId === conversation.buyerId
                       && ["pending", "waitlisted", "awaiting_recipient_confirmation", "reserved", "awaiting_confirmation", "completed"].includes(request.status)
                     ) || null;
@@ -4568,6 +4833,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   <div className="request-row" key={request.id}>
                     <div className="request-icon"><MessageCircle /></div>
                     <div className="request-main">
+                      {request.orderId && <span className="request-order-badge">大單子單 · {orderItemCountById.get(request.orderId) || 1} 項商品</span>}
                       <span className={`request-status ${request.status}`}>{book.listingType === "giveaway" ? giveawayRequestLabel(request.status) : requestLabels[request.status]}</span>
                       <h3>{book.listingType === "giveaway" ? `申請領取《${book.title}》` : book.title}</h3>
                       {request.message && !HIDDEN_REQUEST_MESSAGES.has(request.message) && <p>「{request.message}」</p>}
@@ -4628,6 +4894,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   <div className="request-row" key={request.id}>
                     <span className="avatar">{buyer?.name.slice(0, 1)}</span>
                     <div className="request-main">
+                      {request.orderId && <span className="request-order-badge">大單子單 · {orderItemCountById.get(request.orderId) || 1} 項商品</span>}
                       <span className={`request-status ${request.status}`}>{book.listingType === "giveaway" ? giveawayRequestLabel(request.status) : requestLabels[request.status]}</span>
                       {book.listingType === "giveaway" && verifiedPartyIds.has(request.buyerId) && <span className="trust-badge inline"><ShieldCheck size={13} />已驗證學生</span>}
                       {book.listingType !== "giveaway" && badgeFor(request.buyerId, "buyer") && <span className="trust-badge inline"><ShieldCheck size={13} />推薦買家</span>}
@@ -4646,7 +4913,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       {["pending", "waitlisted"].includes(request.status) && book.status === "available" && (
                         <button type="button" className="accept" onClick={() => void (book.listingType === "giveaway" ? selectGiveawayRecipient(request.id) : respondToRequest(request.id, "accepted"))}><Check size={16} />{book.listingType === "giveaway" ? "選為受贈者" : "選定買家"}</button>
                       )}
-                      {["pending", "waitlisted"].includes(request.status) && book.listingType !== "giveaway" && (
+                      {["pending", "waitlisted"].includes(request.status) && (book.listingType !== "giveaway" || Boolean(request.orderId)) && (
                         <button type="button" onClick={() => void respondToRequest(request.id, "rejected")}><X size={16} />婉拒</button>
                       )}
                       {request.status === "awaiting_recipient_confirmation" && book.listingType === "giveaway" && (
@@ -5040,6 +5307,16 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           saving={bookSaving}
           onClose={() => { if (bookSaving) return; setModal(null); setEditingBook(null); }}
           onSubmit={saveBook}
+        />
+      )}
+      {cartOpen && (
+        <CartModal
+          groups={cartGroups}
+          profiles={store.profiles}
+          saving={cartSaving}
+          onClose={() => setCartOpen(false)}
+          onRemove={removeBookFromCart}
+          onSubmit={checkoutCart}
         />
       )}
       {modal === "contactSettings" && editingBook && (
@@ -6529,7 +6806,15 @@ function BookFormModal({
 
   function scrollToListingSection(section: React.RefObject<HTMLElement | null>, sectionName: ListingFormSection) {
     setActiveListingSection(sectionName);
-    section.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target = section.current;
+    const scrollContainer = target?.closest<HTMLElement>(".modal");
+    const stickyNav = target?.closest<HTMLElement>(".book-form")?.querySelector<HTMLElement>(".listing-section-nav");
+    if (!target || !scrollContainer) return;
+    const navHeight = stickyNav?.getBoundingClientRect().height || 0;
+    const containerTop = scrollContainer.getBoundingClientRect().top;
+    const targetTop = target.getBoundingClientRect().top;
+    const nextTop = scrollContainer.scrollTop + (targetTop - containerTop) - navHeight - 14;
+    scrollContainer.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
   }
 
   return (
@@ -6838,6 +7123,65 @@ function ContactSettingsModal({
           <span>只有你接受購買要求後，買家才會看到這項資料。買家的 Email 不會自動顯示給你。</span>
         </div>
         <button className="primary wide" type="submit">儲存聯絡方式設定</button>
+      </form>
+    </ModalShell>
+  );
+}
+
+function CartModal({
+  groups,
+  profiles,
+  saving,
+  onClose,
+  onRemove,
+  onSubmit,
+}: {
+  groups: ReturnType<typeof groupCartItems>;
+  profiles: Profile[];
+  saving: boolean;
+  onClose: () => void;
+  onRemove: (bookId: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+}) {
+  const sellerName = (sellerId: string) => profiles.find((profile) => profile.id === sellerId)?.name || "賣家";
+  const total = groups.reduce((sum, group) => sum + group.totalPrice, 0);
+  return (
+    <ModalShell title="購物車" subtitle="同一賣家的商品會合併成一筆大單，賣家之後可逐項接受或拒絕子單" onClose={onClose}>
+      <form className="form cart-form" onSubmit={onSubmit} aria-busy={saving}>
+        <div className="cart-groups">
+          {groups.map((group) => (
+            <section className={`cart-group ${group.hasMeetupConflict ? "has-conflict" : ""}`} key={group.sellerId}>
+              <div className="cart-group-heading">
+                <div><span className="section-kicker">SELLER ORDER</span><h3>{sellerName(group.sellerId)}</h3></div>
+                <strong>{group.items.length} 項 · {money(group.totalPrice)}</strong>
+              </div>
+              <ul className="cart-item-list">
+                {group.items.map((item) => (
+                  <li key={item.bookId}>
+                    <span><b>{item.title}</b><small>{item.listingType === "giveaway" ? "免費贈送" : money(item.price)}{item.meetup ? ` · ${item.meetup}` : ""}</small></span>
+                    <button type="button" aria-label={`移除 ${item.title}`} onClick={() => onRemove(item.bookId)}><X size={15} /></button>
+                  </li>
+                ))}
+              </ul>
+              {group.hasMeetupConflict && <p className="cart-conflict" role="alert">這位賣家的指定面交地點不同，請移除其中一項後再結帳。</p>}
+            </section>
+          ))}
+        </div>
+        {groups.length === 0 ? (
+          <div className="cart-empty"><span aria-hidden="true">🛒</span><p>購物車目前是空的，先到商品頁加入幾項商品吧。</p></div>
+        ) : (
+          <>
+            <label>給賣家的訊息<textarea name="cartMessage" rows={3} maxLength={2000} placeholder="可以一次說明這筆大單的需求" /></label>
+            <div className="cart-coordination-grid">
+              <label>共同面交地點<input name="cartLocation" maxLength={REQUEST_COORDINATION_MAX_LENGTH} placeholder="可留白，之後在聊天中確認" /></label>
+              <label>共同面交時間<input name="cartTime" maxLength={REQUEST_COORDINATION_MAX_LENGTH} placeholder="可留白，之後在聊天中確認" /></label>
+            </div>
+            <div className="cart-total"><span>總計</span><strong>{money(total)}</strong></div>
+            <button className="primary wide" type="submit" disabled={saving || groups.some((group) => !canCheckoutGroup(group))}>
+              {saving ? "建立訂單中…" : `一次送出 ${groups.length} 筆賣家大單`}
+            </button>
+          </>
+        )}
       </form>
     </ModalShell>
   );

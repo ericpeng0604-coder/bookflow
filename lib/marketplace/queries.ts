@@ -6,6 +6,7 @@ import {
   mapBook,
   mapNotification,
   mapPartyProfile,
+  mapPurchaseOrder,
   mapPublicProfile,
   mapReport,
   mapRequest,
@@ -18,7 +19,7 @@ import {
   mapRiskProfile,
   mapTrustBadge,
 } from "@/lib/marketplace/mappers";
-import type { Book, Conversation, Feedback, Profile, PurchaseRequest, RiskPolicy, RiskProfile, SellerLifecycle, StudentVerification, StudentVerificationSummary, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
+import type { Book, Conversation, Feedback, Profile, PurchaseOrder, PurchaseRequest, RiskPolicy, RiskProfile, SellerLifecycle, StudentVerification, StudentVerificationSummary, TradeContact, TradeReviewTag, TrustBadge } from "@/lib/types";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
 const ACTIVE_REQUEST_LOOKUP_TIMEOUT_MS = 10_000;
@@ -204,6 +205,19 @@ export async function fetchUserRequests(client: SupabaseClient, limit = 50) {
     .limit(limit);
   if (error) throw error;
   return (data ?? []).map((row) => mapRequest(row));
+}
+
+export async function fetchPurchaseOrders(client: SupabaseClient, limit = 50): Promise<PurchaseOrder[]> {
+  const { data, error } = await client
+    .from("purchase_orders")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    if (["PGRST205", "42P01"].includes(error.code || "")) return [];
+    throw error;
+  }
+  return (data ?? []).map((row) => mapPurchaseOrder(row));
 }
 
 export async function fetchActiveRequestForBook(
@@ -468,6 +482,7 @@ export async function fetchTradeContactsBatch(client: SupabaseClient, requestIds
 export type WorkspaceTabData = {
   myBooks?: Book[];
   requests?: ReturnType<typeof mapRequest>[];
+  orders?: PurchaseOrder[];
   requestBooks?: Book[];
   partyProfiles?: Profile[];
   contacts?: Record<string, TradeContact>;
@@ -496,9 +511,10 @@ export async function loadWorkspaceTabData(
   }
 
   if (tab === "chats") {
-    const [conversationPage, requests] = await Promise.all([
+    const [conversationPage, requests, orders] = await Promise.all([
       fetchConversationsPage(client),
       fetchUserRequests(client),
+      fetchPurchaseOrders(client),
     ]);
     const conversations = conversationPage.conversations;
     const profileIds = conversations.flatMap((item) => [item.buyerId, item.sellerId]);
@@ -508,7 +524,7 @@ export async function loadWorkspaceTabData(
       fetchBooksByIds(client, bookIds),
     ]);
     const trustBadges = await fetchPublicTrustBadges(client, [...new Set(profileIds)]);
-    return { conversations, conversationPage, requests, partyProfiles, requestBooks, trustBadges };
+    return { conversations, conversationPage, requests, partyProfiles, requestBooks, trustBadges, orders };
   }
 
   if (tab === "favorites") {
@@ -517,7 +533,7 @@ export async function loadWorkspaceTabData(
     return { favoriteIds, requestBooks };
   }
 
-  const requests = await fetchUserRequests(client);
+  const [requests, orders] = await Promise.all([fetchUserRequests(client), fetchPurchaseOrders(client)]);
   const selectedIds = requests
     .filter((request) => ["reserved", "awaiting_confirmation", "completed"].includes(request.status))
     .map((request) => request.id);
@@ -534,7 +550,7 @@ export async function loadWorkspaceTabData(
     ...requestBooks.map((book) => book.sellerId),
   ])];
   const trustBadges = await fetchPublicTrustBadges(client, badgeIds);
-  return { requests, partyProfiles, contacts, requestBooks, trustBadges, verifiedPartyIds: [...verifiedPartyIds] as string[] };
+  return { requests, orders, partyProfiles, contacts, requestBooks, trustBadges, verifiedPartyIds: [...verifiedPartyIds] as string[] };
 }
 
 export async function loadModerationData(client: SupabaseClient, user: Profile) {

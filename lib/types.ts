@@ -9,6 +9,15 @@ export type RequestStatus =
   | "rejected"
   | "cancelled"
   | "expired";
+export type PurchaseOrderStatus =
+  | "pending"
+  | "partially_accepted"
+  | "reserved"
+  | "awaiting_confirmation"
+  | "completed"
+  | "partially_rejected"
+  | "cancelled"
+  | "expired";
 export type ReviewStatus = "pending" | "approved" | "rejected";
 export type UserRole = "user" | "moderator" | "admin";
 export type AccountStatus = "active" | "suspended";
@@ -105,6 +114,7 @@ export type SellerLifecycle = {
 
 export type PurchaseRequest = {
   id: string;
+  orderId: string | null;
   bookId: string;
   buyerId: string;
   message: string;
@@ -123,6 +133,32 @@ export type PurchaseRequest = {
   cancellationReason: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type PurchaseOrder = {
+  id: string;
+  buyerId: string;
+  sellerId: string;
+  status: PurchaseOrderStatus;
+  message: string;
+  preferredMeetupLocation: string;
+  preferredMeetupTime: string;
+  totalPrice: number;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CartItem = {
+  bookId: string;
+  sellerId: string;
+  listingType: ListingType;
+  title: string;
+  price: number;
+  meetupMode: MeetupMode;
+  meetup: string;
+  imageUrl: string;
+  addedAt: string;
 };
 
 export type TradeContact = {
@@ -148,6 +184,8 @@ export type ConversationStatus = "active" | "closed";
 export type Conversation = {
   id: string;
   bookId: string;
+  orderId: string | null;
+  itemCount: number;
   buyerId: string;
   sellerId: string;
   status: ConversationStatus;
