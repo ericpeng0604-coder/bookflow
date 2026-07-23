@@ -57,4 +57,4 @@ Add safe post-release workspace cleanup flow
 ## 相關 Commit
 
 - Base commit: 0a65850fb04cb9afae751e8e6f8a616096eb3e6f.
-- Current implementation commit before final commit: not committed yet.
+- Current implementation commit: 06b6d99.
