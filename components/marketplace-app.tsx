@@ -121,6 +121,7 @@ import {
   rankTaiwanTextbookCandidates,
 } from "@/lib/marketplace/taiwan-textbook";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { TurnstileWidget } from "@/components/turnstile-widget";
 import {
   addCartItem,
   canCheckoutGroup,
@@ -670,6 +671,9 @@ function maskEmail(email: string) {
 
 function authErrorMessage(message: string, fallback: string) {
   const normalized = message.toLowerCase();
+  if (normalized.includes("captcha") || normalized.includes("turnstile") || normalized.includes("verification failed")) {
+    return "請完成安全驗證後再試";
+  }
   if (normalized.includes("invalid login credentials")) return "Email 或密碼錯誤，請重新確認";
   if (normalized.includes("email not confirmed")) return "這個 Email 尚未完成驗證，請先完成註冊驗證";
   if (normalized.includes("user already registered") || normalized.includes("already been registered")) return "這個 Email 已經註冊，請直接登入";
@@ -681,6 +685,8 @@ function authErrorMessage(message: string, fallback: string) {
   }
   return fallback;
 }
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 
 function unreadNotificationIds(items: Notification[]) {
   const ids: string[] = [];
@@ -1006,14 +1012,17 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const isStandaloneChatRoute = view === "chat"
     || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "chat");
 
-  const ensureAdminOtp = useCallback(async (email: string, force = false) => {
+  const ensureAdminOtp = useCallback(async (email: string, force = false, captchaToken?: string) => {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
     if (!force && adminOtpRequestedRef.current === email) return null;
 
     adminOtpRequestedRef.current = email;
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: false },
+      options: {
+        shouldCreateUser: false,
+        ...(captchaToken ? { captchaToken } : {}),
+      },
     });
     if (error) {
       adminOtpRequestedRef.current = null;
@@ -1039,13 +1048,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setAdminOtpEmail(user.email);
     setStore((previous) => ({ ...previous, currentUser: null }));
     setModal("adminOtp");
-    const { error } = await supabase.auth.signInWithOtp({
-      email: user.email,
-      options: { shouldCreateUser: false },
-    });
-    setToast(error
-      ? "管理員驗證已失效，請按「重新寄送驗證碼」後再試"
-      : "管理員驗證已失效，新的 8 位驗證碼已寄出");
+    adminOtpRequestedRef.current = null;
+    setToast("管理員驗證已失效，請完成安全驗證後重新寄送驗證碼");
     return true;
   }
 
@@ -1530,8 +1534,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           lastConversationRefreshRef.current = 0;
           setConversations([]);
           setStore((previous) => ({ ...previous, currentUser: null }));
-          const otpError = await ensureAdminOtp(user.email);
-          setToast(otpError || "管理員驗證碼已寄出");
+          setToast("請完成安全驗證後寄送管理員驗證碼");
           return;
         }
       }
@@ -2062,9 +2065,13 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     }
   }
 
-  async function loginWithPassword(email: string, password: string) {
+  async function loginWithPassword(email: string, password: string, captchaToken?: string) {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: captchaToken ? { captchaToken } : undefined,
+    });
     if (error) return authErrorMessage(error.message, "登入失敗，請稍後再試");
 
     const { data: profile } = await supabase
@@ -2073,14 +2080,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       .eq("id", data.user.id)
       .maybeSingle();
     if (profile?.role === "admin") {
-      const otpError = await ensureAdminOtp(email);
-      if (otpError) {
-        await supabase.auth.signOut();
-        return otpError;
-      }
       setAdminOtpEmail(email);
+      adminOtpRequestedRef.current = null;
       setModal("adminOtp");
-      setToast("管理員驗證碼已寄出");
+      setToast("請完成安全驗證後寄送管理員驗證碼");
       return null;
     }
     setModal(null);
@@ -2110,21 +2113,24 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     return null;
   }
 
-  async function resendAdminOtp() {
+  async function resendAdminOtp(captchaToken?: string) {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
-    const error = await ensureAdminOtp(adminOtpEmail, true);
+    const error = await ensureAdminOtp(adminOtpEmail, true, captchaToken);
     if (error) return error;
     setToast("新的管理員驗證碼已寄出");
     return null;
   }
 
-  async function signUpWithPassword(name: string, department: string, email: string, password: string) {
+  async function signUpWithPassword(name: string, department: string, email: string, password: string, captchaToken?: string) {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
     if (!departments.slice(1).includes(department)) return "請從選單選擇正確的系所";
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name, department } },
+      options: {
+        data: { name, department },
+        ...(captchaToken ? { captchaToken } : {}),
+      },
     });
     if (error) return authErrorMessage(error.message, "註冊失敗，請稍後再試");
     if (data.user?.identities?.length === 0) return "這個 Email 已經註冊，請直接登入";
@@ -2141,18 +2147,23 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     return null;
   }
 
-  async function resendSignupCode(email: string) {
+  async function resendSignupCode(email: string, captchaToken?: string) {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
-    const { error } = await supabase.auth.resend({ type: "signup", email });
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: captchaToken ? { captchaToken } : undefined,
+    });
     if (error) return authErrorMessage(error.message, "重新寄送失敗，請稍後再試");
     setToast("新的驗證碼已寄出");
     return null;
   }
 
-  async function requestPasswordReset(email: string) {
+  async function requestPasswordReset(email: string, captchaToken?: string) {
     if (!supabase) return "請先完成 Supabase Email 驗證設定";
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin,
+      ...(captchaToken ? { captchaToken } : {}),
     });
     if (error) return authErrorMessage(error.message, "無法寄送重設信，請稍後再試");
     setToast("密碼重設信已寄出，請檢查 Email 收件匣");
@@ -3782,6 +3793,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     void runImageSearch(file);
   }
 
+  const requestAdminOtp = useCallback(
+    (captchaToken?: string) => ensureAdminOtp(adminOtpEmail, false, captchaToken),
+    [adminOtpEmail, ensureAdminOtp],
+  );
+
   return (
     <main className={isGiveawayMode ? "theme-giveaway" : isSecondhandMode ? "theme-secondhand" : undefined}>
       <input
@@ -5267,6 +5283,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       {modal === "login" && (
         <LoginModal
           configured={isSupabaseConfigured}
+          turnstileSiteKey={TURNSTILE_SITE_KEY}
           onClose={() => setModal(null)}
           onGoogleLogin={loginWithGoogle}
           onLogin={loginWithPassword}
@@ -5279,8 +5296,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       {modal === "adminOtp" && (
         <AdminOtpModal
           email={adminOtpEmail}
+          siteKey={TURNSTILE_SITE_KEY}
           onClose={() => void logout()}
           onVerify={verifyAdminOtp}
+          onRequestCode={requestAdminOtp}
           onResend={resendAdminOtp}
         />
       )}
@@ -5593,18 +5612,42 @@ function ActionDialog({
 
 function AdminOtpModal({
   email,
+  siteKey,
   onClose,
   onVerify,
+  onRequestCode,
   onResend,
 }: {
   email: string;
+  siteKey: string;
   onClose: () => void;
   onVerify: (code: string) => Promise<string | null>;
-  onResend: () => Promise<string | null>;
+  onRequestCode: (captchaToken?: string) => Promise<string | null>;
+  onResend: (captchaToken?: string) => Promise<string | null>;
 }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+  const requestInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (siteKey && !captchaToken) return;
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
+    setLoading(true);
+    setError("");
+    void onRequestCode(captchaToken || undefined).then((message) => {
+      if (message) setError(message);
+      else setCode("");
+    }).finally(() => {
+      requestInFlightRef.current = false;
+      setLoading(false);
+      setCaptchaToken("");
+      if (siteKey) setCaptchaResetKey((previous) => previous + 1);
+    });
+  }, [captchaToken, onRequestCode, siteKey]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5616,10 +5659,16 @@ function AdminOtpModal({
   }
 
   async function resend() {
+    if (siteKey && !captchaToken) {
+      setError("請先完成安全驗證");
+      return;
+    }
     setLoading(true);
     setError("");
-    const message = await onResend();
+    const message = await onResend(captchaToken || undefined);
     setLoading(false);
+    setCaptchaToken("");
+    if (siteKey) setCaptchaResetKey((previous) => previous + 1);
     if (message) setError(message);
     else setCode("");
   }
@@ -5628,6 +5677,18 @@ function AdminOtpModal({
     <ModalShell title="管理員安全驗證" subtitle="高權限帳號需要完成第二階段驗證" onClose={onClose}>
       <div className="email-login">
         <div className="auth-shield"><ShieldCheck size={24} /></div>
+        {siteKey && (
+          <>
+            <TurnstileWidget
+              siteKey={siteKey}
+              action="admin_otp"
+              resetKey={captchaResetKey}
+              onToken={setCaptchaToken}
+              onError={() => setError("安全驗證載入失敗，請重新整理後再試")}
+            />
+            <p className="auth-hint">完成安全驗證後會寄送管理員驗證碼。</p>
+          </>
+        )}
         <h3>輸入 8 位數驗證碼</h3>
         <p>驗證碼已寄到 <b>{maskEmail(email)}</b>，請在有效期限內完成驗證。</p>
         <form className="otp-form" onSubmit={submit}>
@@ -6051,6 +6112,7 @@ function FeedbackModal({
 
 function LoginModal({
   configured,
+  turnstileSiteKey,
   onClose,
   onGoogleLogin,
   onLogin,
@@ -6060,13 +6122,14 @@ function LoginModal({
   onRequestReset,
 }: {
   configured: boolean;
+  turnstileSiteKey: string;
   onClose: () => void;
   onGoogleLogin: () => Promise<string | null>;
-  onLogin: (email: string, password: string) => Promise<string | null>;
-  onSignUp: (name: string, department: string, email: string, password: string) => Promise<string | null>;
+  onLogin: (email: string, password: string, captchaToken?: string) => Promise<string | null>;
+  onSignUp: (name: string, department: string, email: string, password: string, captchaToken?: string) => Promise<string | null>;
   onVerifySignup: (email: string, token: string) => Promise<string | null>;
-  onResendSignup: (email: string) => Promise<string | null>;
-  onRequestReset: (email: string) => Promise<string | null>;
+  onResendSignup: (email: string, captchaToken?: string) => Promise<string | null>;
+  onRequestReset: (email: string, captchaToken?: string) => Promise<string | null>;
 }) {
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("signup");
   const [signupStep, setSignupStep] = useState<"form" | "code">("form");
@@ -6080,6 +6143,21 @@ function LoginModal({
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+
+  function resetCaptcha() {
+    setCaptchaToken("");
+    if (turnstileSiteKey) setCaptchaResetKey((previous) => previous + 1);
+  }
+
+  function readCaptchaToken() {
+    if (turnstileSiteKey && !captchaToken) {
+      setError("請先完成安全驗證");
+      return null;
+    }
+    return captchaToken || undefined;
+  }
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -6094,6 +6172,7 @@ function LoginModal({
     setSignupStep("form");
     setCode("");
     setError("");
+    resetCaptcha();
   }
 
   async function startGoogleLogin() {
@@ -6108,10 +6187,13 @@ function LoginModal({
 
   async function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const token = readCaptchaToken();
+    if (token === null) return;
     setLoading(true);
     setError("");
-    const message = await onLogin(email.trim(), password);
+    const message = await onLogin(email.trim(), password, token);
     setLoading(false);
+    resetCaptcha();
     if (message) setError(message);
   }
 
@@ -6134,9 +6216,12 @@ function LoginModal({
       setError("兩次輸入的密碼不一致");
       return;
     }
+    const token = readCaptchaToken();
+    if (token === null) return;
     setLoading(true);
-    const message = await onSignUp(name.trim(), department, email.trim(), password);
+    const message = await onSignUp(name.trim(), department, email.trim(), password, token);
     setLoading(false);
+    resetCaptcha();
     if (message) setError(message);
     else {
       setSignupStep("code");
@@ -6155,20 +6240,26 @@ function LoginModal({
 
   async function resendCode() {
     if (resendCooldown > 0) return;
+    const token = readCaptchaToken();
+    if (token === null) return;
     setLoading(true);
     setError("");
-    const message = await onResendSignup(email.trim());
+    const message = await onResendSignup(email.trim(), token);
     setLoading(false);
+    resetCaptcha();
     if (message) setError(message);
     else setResendCooldown(60);
   }
 
   async function submitForgotPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const token = readCaptchaToken();
+    if (token === null) return;
     setLoading(true);
     setError("");
-    const message = await onRequestReset(email.trim());
+    const message = await onRequestReset(email.trim(), token);
     setLoading(false);
+    resetCaptcha();
     if (message) setError(message);
   }
 
@@ -6176,6 +6267,18 @@ function LoginModal({
     <ModalShell title="虎科書流會員" subtitle="登入既有帳號，或免費註冊新帳號" onClose={onClose}>
       <div className="email-login">
         <div className="auth-shield"><ShieldCheck size={24} /></div>
+        {turnstileSiteKey && (
+          <>
+            <TurnstileWidget
+              siteKey={turnstileSiteKey}
+              action={mode === "forgot" ? "auth_password_reset" : mode === "login" ? "auth_login" : "auth_signup"}
+              resetKey={captchaResetKey}
+              onToken={setCaptchaToken}
+              onError={() => setError("安全驗證載入失敗，請重新整理後再試")}
+            />
+            <p className="auth-hint">為防止自動化濫用，請完成安全驗證。</p>
+          </>
+        )}
         {mode !== "forgot" && signupStep === "form" && (
           <>
             <button
@@ -6226,7 +6329,7 @@ function LoginModal({
               <button className="primary wide" type="submit" disabled={loading || !configured}>
                 {loading ? "登入中..." : "登入"}
               </button>
-              <button className="text-button" type="button" onClick={() => { setMode("forgot"); setError(""); }}>
+              <button className="text-button" type="button" onClick={() => { setMode("forgot"); setError(""); resetCaptcha(); }}>
                 忘記密碼？
               </button>
             </form>
@@ -6351,7 +6454,7 @@ function LoginModal({
               <button className="primary wide" type="submit" disabled={loading || !configured}>
                 {loading ? "寄送中..." : "寄送密碼重設信"}
               </button>
-              <button className="text-button" type="button" onClick={() => { setMode("login"); setError(""); }}>
+                <button className="text-button" type="button" onClick={() => { setMode("login"); setError(""); resetCaptcha(); }}>
                 返回登入
               </button>
             </form>

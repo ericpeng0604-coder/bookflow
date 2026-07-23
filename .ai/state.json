@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260723-bookflow-marketplace-complete-release",
-  "taskTitle": "Deploy complete marketplace cart and multi-item order changes",
-  "baseCommit": "cb56051ddf3a64bd4c92683485258f570919f111",
-  "updatedAt": "2026-07-23T00:00:00.000Z",
+  "owner": "codex",
+  "status": "in_progress",
+  "taskId": "20260723-bookflow-cloudflare-turnstile",
+  "taskTitle": "Implement Supabase Auth Cloudflare Turnstile protection",
+  "baseCommit": "247a4512553557c57110706defe61b29f970e54b",
+  "updatedAt": "2026-07-23T16:30:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260723-marketplace-complete-release.md"
+  "historyFile": ".ai/history/20260723-cloudflare-turnstile.md"
 }

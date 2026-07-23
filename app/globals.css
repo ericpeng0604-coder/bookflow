@@ -299,7 +299,9 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .order-timeline { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
 .order-timeline span { color: #8d9893; background: #f0f2f1; border-radius: 999px; padding: 5px 8px; font-size: 10px; }
 .order-timeline span.done { color: var(--green); background: var(--mint); }
-.auth-hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: -4px; }
+  .auth-hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: -4px; }
+  .turnstile-widget { width: 100%; min-height: 65px; display: flex; justify-content: center; }
+  .turnstile-widget:empty { display: none; min-height: 0; }
 .card-body { padding: 17px; }
 .course-tag { color: var(--green); font-size: 11px; font-weight: 700; background: #edf6f2; padding: 4px 8px; border-radius: 4px; }
 .textbook-meta { display: block; margin-top: -3px; color: var(--muted); font-size: 11px; line-height: 1.45; }
