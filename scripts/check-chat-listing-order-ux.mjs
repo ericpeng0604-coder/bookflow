@@ -32,6 +32,7 @@ const checks = [
   ["desktop my transactions shows active state", app.includes('className={view === "dashboard" ? "active" : ""} onClick={() => requireLogin(openDashboard)}>我的交易</button>')],
   ["mobile chat rail remains usable for switching", !app.includes("onClickCapture") && css.includes("minmax(118px, 34vw)") && css.includes("-webkit-line-clamp: 2")],
   ["active purchase check is time-bounded", /ACTIVE_REQUEST_CHECK_TIMEOUT_MS/.test(queries) && /abortSignal\(controller\.signal\)/.test(queries) && /clearTimeout\(timeout\)/.test(queries)],
+  ["active request check effect does not cancel its own loading state", app.includes("[currentUser, selectedBook, selectedBookActiveRequest, view]") && !app.includes("activeRequestCheckKey")],
   ["purchase CTA is blocked only while checking", /disabled=\{Boolean\(selectedBookActiveRequest\)[\s\S]*?activeRequestCheckState === "idle" \|\| activeRequestCheckState === "loading"/.test(app) && !/activeRequestCheckState !== "ready"/.test(app)],
   ["book detail reload keeps existing order state", queries.includes("fetchActiveRequestForBook") && app.includes("fetchActiveRequestForBook") && app.includes("已下訂：")],
   ["handoff preference migration checks the existing books table", handoffPreferencesMigration.includes("from public.books") && !handoffPreferencesMigration.includes("marketplace_listings")],
