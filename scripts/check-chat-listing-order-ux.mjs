@@ -31,6 +31,8 @@ const checks = [
   ["my transactions opens listings in one click", navigation.includes('setDashboardTab("listings")') && navigation.includes('setExpandedConversationId(null)') && app.includes("requireLogin(openDashboard)")],
   ["desktop my transactions shows active state", app.includes('className={view === "dashboard" ? "active" : ""} onClick={() => requireLogin(openDashboard)}>我的交易</button>')],
   ["mobile chat rail remains usable for switching", !app.includes("onClickCapture") && css.includes("minmax(118px, 34vw)") && css.includes("-webkit-line-clamp: 2")],
+  ["active purchase check is time-bounded", /ACTIVE_REQUEST_CHECK_TIMEOUT_MS/.test(queries) && /abortSignal\(controller\.signal\)/.test(queries) && /clearTimeout\(timeout\)/.test(queries)],
+  ["purchase CTA is blocked only while checking", /disabled=\{Boolean\(selectedBookActiveRequest\)[\s\S]*?activeRequestCheckState === "idle" \|\| activeRequestCheckState === "loading"/.test(app) && !/activeRequestCheckState !== "ready"/.test(app)],
   ["book detail reload keeps existing order state", queries.includes("fetchActiveRequestForBook") && app.includes("fetchActiveRequestForBook") && app.includes("已下訂：")],
   ["handoff preference migration checks the existing books table", handoffPreferencesMigration.includes("from public.books") && !handoffPreferencesMigration.includes("marketplace_listings")],
   ["live purchase request fix migration replaces the broken function", livePurchaseRequestFixMigration.includes("create or replace function public.create_purchase_request") && livePurchaseRequestFixMigration.includes("from public.books") && !livePurchaseRequestFixMigration.includes("marketplace_listings")],

@@ -4524,7 +4524,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     <button type="button"
                       className="primary wide"
                       disabled={Boolean(selectedBookActiveRequest)
-                        || (currentUser && currentUser.id !== selectedBook.sellerId && activeRequestCheckState !== "ready")
+                        || (currentUser && currentUser.id !== selectedBook.sellerId && (activeRequestCheckState === "idle" || activeRequestCheckState === "loading"))
                         || selectedBook.status !== "available"
                         || currentUser?.accountStatus === "suspended"}
                       onClick={() => {
