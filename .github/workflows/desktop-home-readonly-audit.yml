@@ -1,0 +1,25 @@
+name: Desktop homepage readonly audit
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Run desktop audit
+        shell: bash
+        run: |
+          set -e
+          mkdir -p /tmp/desktop-home-audit && cd /tmp/desktop-home-audit
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.54.1 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+          curl -fsSL 'https://api.github.com/repos/ericpeng0604-coder/bookflow/contents/scripts/desktop-home-readonly-audit.mjs?ref=agent%2Fdesktop-home-readonly-audit-20260726' \
+            | jq -r .content | base64 -d > audit.mjs
+          node audit.mjs
