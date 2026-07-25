@@ -1,0 +1,54 @@
+name: Staging marketplace load baseline
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  load-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run safe staging read-only baseline
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          LOAD_TEST_CONFIRM: "yes"
+          LOAD_TEST_CONCURRENCY: "5"
+          LOAD_TEST_DURATION_SECONDS: "30"
+          LOAD_TEST_RAMP_STEPS: "3"
+        run: |
+          set -euo pipefail
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          export LOAD_TEST_ALLOWED_HOSTS="$(node -e 'console.log(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname)')"
+          npm run load-test:marketplace 2>&1 | tee load-test-output.txt
+      - name: Record baseline evidence
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Staging marketplace load baseline"
+            echo ""
+            echo "- Read-only RPC: \`list_books_page\`"
+            echo "- Max concurrency: \`5\`"
+            echo "- Duration: \`30 seconds\`"
+            echo "- Ramp steps: \`3\`"
+            echo "- Commit: \`${{ github.event.pull_request.head.sha }}\`"
+            echo "- Workflow run ID: \`${{ github.run_id }}\`"
+            echo ""
+            echo '```text'
+            if [[ -f load-test-output.txt ]]; then cat load-test-output.txt; else echo "No load-test output was produced."; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
