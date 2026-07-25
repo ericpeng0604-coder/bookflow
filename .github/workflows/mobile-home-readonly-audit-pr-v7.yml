@@ -1,0 +1,24 @@
+name: Mobile homepage readonly audit PR v7
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Run concise audit
+        shell: bash
+        run: |
+          set -e
+          mkdir -p /tmp/mobile-audit && cd /tmp/mobile-audit
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.54.1 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+          curl -fsSL 'https://api.github.com/repos/ericpeng0604-coder/bookflow/contents/scripts/mobile-home-readonly-audit.mjs?ref=agent%2Fmobile-home-readonly-audit-20260725' | jq -r .content | base64 -d > audit.mjs
+          node audit.mjs
