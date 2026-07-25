@@ -1,0 +1,70 @@
+name: Mobile homepage readonly audit PR
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.54.1
+          npx playwright install --with-deps chromium
+      - name: Audit production homepage on mobile
+        run: |
+          mkdir -p audit-output
+          cat > /tmp/audit.mjs <<'EOF'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+          const target='https://bookflow-green.vercel.app/';
+          const result={target,viewport:{width:390,height:844},checks:[],console:[],pageErrors:[],failedRequests:[],badResponses:[]};
+          const add=(name,status,detail='')=>result.checks.push({name,status,detail});
+          const browser=await chromium.launch({headless:true});
+          const context=await browser.newContext({viewport:result.viewport,isMobile:true,hasTouch:true,deviceScaleFactor:1,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'});
+          const page=await context.newPage();
+          page.on('console',m=>result.console.push({type:m.type(),text:m.text()}));
+          page.on('pageerror',e=>result.pageErrors.push(String(e?.stack||e)));
+          page.on('requestfailed',r=>result.failedRequests.push({url:r.url(),method:r.method(),error:r.failure()?.errorText||''}));
+          page.on('response',r=>{if(r.status()>=400)result.badResponses.push({url:r.url(),status:r.status(),method:r.request().method()})});
+          const reset=async()=>{await page.goto(target,{waitUntil:'networkidle',timeout:60000});await page.waitForTimeout(800)};
+          const check=async(name,fn)=>{try{await fn();add(name,'PASS')}catch(e){add(name,'FAIL',String(e?.message||e))}};
+          await reset(); add('首頁載入',page.url().startsWith(target)?'PASS':'FAIL',page.url());
+          await page.screenshot({path:'audit-output/mobile-home-initial.png',fullPage:true});
+          await check('無水平溢位',async()=>{const s=await page.evaluate(()=>({sw:document.documentElement.scrollWidth,iw:innerWidth}));if(s.sw>s.iw+2)throw Error(JSON.stringify(s))});
+          await check('手機選單',async()=>{const b=page.getByRole('button',{name:/開啟選單|關閉選單/}).first();await b.click();if(await b.getAttribute('aria-expanded')!=='true')throw Error('未展開');await b.click()});
+          for(const label of ['二手書籍','二手物品','零元贈送'])await check('市場切換：'+label,async()=>{await reset();const m=page.getByRole('button',{name:/開啟選單/}).first();if(await m.count())await m.click();await page.getByRole('button',{name:label,exact:true}).last().click();await page.waitForTimeout(400);if(!(await page.locator('body').innerText()).includes(label))throw Error('切換結果不符')});
+          for(const label of ['我要刊登','我的交易','登入／註冊','訊息','購物車'])await check('未登入入口：'+label,async()=>{await reset();let b=page.getByRole('button',{name:new RegExp(label)}).first();if(!(await b.count())){const m=page.getByRole('button',{name:/開啟選單/}).first();if(await m.count())await m.click();b=page.getByRole('button',{name:new RegExp(label)}).first()}await b.click();await page.waitForTimeout(400);if(!/登入|註冊|信箱|Google/.test(await page.locator('body').innerText()))throw Error('未出現登入介面')});
+          await check('Hero 搜尋',async()=>{await reset();const i=page.getByPlaceholder(/搜尋二手書名、課程或老師/);await i.fill('微積分');await page.getByRole('button',{name:/依目前輸入開始找二手書籍|開始找二手書/}).first().click();await page.waitForTimeout(500);if(!(await page.locator('input').evaluateAll(xs=>xs.map(x=>x.value))).some(v=>v.includes('微積分')))throw Error('搜尋值未同步')});
+          await check('列表搜尋',async()=>{await reset();const i=page.getByPlaceholder('搜尋課本...');await i.fill('英文');if(await i.inputValue()!=='英文')throw Error('輸入失敗')});
+          await check('科系篩選',async()=>{await reset();const s=page.getByLabel('科系');await s.selectOption({label:'資訊工程系'});if(await s.inputValue()!=='資訊工程系')throw Error('選取失敗')});
+          await check('價格篩選',async()=>{await reset();const s=page.getByLabel('最高價格');await s.selectOption('300');if(await s.inputValue()!=='300')throw Error('選取失敗')});
+          await check('圖片搜尋檔案選擇器',async()=>{await reset();const p=page.waitForEvent('filechooser',{timeout:5000});await page.getByRole('button',{name:/用照片找二手書|照片搜二手書/}).first().click();await p});
+          for(const [n,p] of [['隱私權','/privacy'],['使用條款','/terms'],['交易安全','/safety']])await check('Footer：'+n,async()=>{await reset();await page.getByRole('link',{name:n,exact:true}).click();await page.waitForLoadState('domcontentloaded');if(!new URL(page.url()).pathname.startsWith(p))throw Error(page.url())});
+          await check('問題回報入口',async()=>{await reset();await page.getByRole('button',{name:'問題回報',exact:true}).click();await page.waitForTimeout(300);if(!/問題回報|回報|意見/.test(await page.locator('body').innerText()))throw Error('未開啟')});
+          await page.screenshot({path:'audit-output/mobile-home-final.png',fullPage:true});
+          result.summary={pass:result.checks.filter(x=>x.status==='PASS').length,fail:result.checks.filter(x=>x.status==='FAIL').length,consoleErrors:result.console.filter(x=>x.type==='error').length,pageErrors:result.pageErrors.length,failedRequests:result.failedRequests.length,badResponses:result.badResponses.length};
+          fs.writeFileSync('audit-output/report.json',JSON.stringify(result,null,2));
+          fs.writeFileSync('audit-output/report.md',['# Mobile homepage readonly audit','',...result.checks.map(x=>`- ${x.status}: ${x.name}${x.detail?' — '+x.detail:''}`),'',`Console errors: ${result.summary.consoleErrors}`,`Page errors: ${result.summary.pageErrors}`,`Failed requests: ${result.summary.failedRequests}`,`HTTP >=400: ${result.summary.badResponses}`].join('\n'));
+          console.log(JSON.stringify(result.summary));
+          await browser.close();
+          if(result.summary.fail||result.summary.consoleErrors||result.summary.pageErrors)process.exitCode=1;
+          EOF
+          node /tmp/audit.mjs
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-home-readonly-audit
+          path: audit-output/
+          if-no-files-found: error
+          retention-days: 7
