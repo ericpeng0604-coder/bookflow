@@ -1,0 +1,59 @@
+name: Mobile homepage readonly audit PR v3
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright quietly
+        run: |
+          npm install --no-save --silent playwright@1.54.1 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+      - name: Run mobile audit and print report
+        run: |
+          cat > /tmp/audit.mjs <<'EOF'
+          import { chromium } from 'playwright';
+          const target='https://bookflow-green.vercel.app/';
+          const r={checks:[],console:[],pageErrors:[],failedRequests:[],badResponses:[],fatal:null};
+          const add=(name,status,detail='')=>r.checks.push({name,status,detail});
+          let browser;
+          try{
+            browser=await chromium.launch({headless:true});
+            const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'});
+            const p=await context.newPage();
+            p.on('console',m=>r.console.push({type:m.type(),text:m.text()}));
+            p.on('pageerror',e=>r.pageErrors.push(String(e)));
+            p.on('requestfailed',q=>r.failedRequests.push({url:q.url(),method:q.method(),error:q.failure()?.errorText||''}));
+            p.on('response',x=>{if(x.status()>=400)r.badResponses.push({url:x.url(),status:x.status(),method:x.request().method()})});
+            const reset=async()=>{await p.goto(target,{waitUntil:'domcontentloaded',timeout:45000});await p.waitForTimeout(1200)};
+            const check=async(name,fn)=>{try{await fn();add(name,'PASS')}catch(e){add(name,'FAIL',String(e?.message||e))}};
+            await reset();add('首頁載入',p.url().startsWith(target)?'PASS':'FAIL',p.url());
+            await check('無水平溢位',async()=>{const s=await p.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,innerWidth}));if(s.scrollWidth>s.innerWidth+2)throw Error(JSON.stringify(s))});
+            await check('手機選單',async()=>{const b=p.getByRole('button',{name:/開啟選單|關閉選單/}).first();await b.click();await p.waitForTimeout(200);if((await b.getAttribute('aria-expanded'))!=='true')throw Error('aria-expanded 未變成 true');await b.click()});
+            for(const label of ['二手書籍','二手物品','零元贈送'])await check('市場切換：'+label,async()=>{await reset();const m=p.getByRole('button',{name:/開啟選單/}).first();if(await m.count())await m.click();await p.getByRole('button',{name:label,exact:true}).last().click();await p.waitForTimeout(400);if(!(await p.locator('body').innerText()).includes(label))throw Error('切換結果不符')});
+            for(const label of ['我要刊登','我的交易','登入／註冊','訊息','購物車'])await check('未登入入口：'+label,async()=>{await reset();let b=p.getByRole('button',{name:new RegExp(label)}).first();if(!(await b.count())){const m=p.getByRole('button',{name:/開啟選單/}).first();if(await m.count())await m.click();b=p.getByRole('button',{name:new RegExp(label)}).first()}await b.click();await p.waitForTimeout(400);if(!/登入|註冊|信箱|Google/.test(await p.locator('body').innerText()))throw Error('未出現登入介面')});
+            await check('Hero 搜尋',async()=>{await reset();const i=p.getByPlaceholder(/搜尋二手書名、課程或老師/);await i.fill('微積分');await p.getByRole('button',{name:/依目前輸入開始找二手書籍|開始找二手書/}).first().click();await p.waitForTimeout(400);if(!(await p.locator('input').evaluateAll(xs=>xs.map(x=>x.value))).some(v=>v.includes('微積分')))throw Error('搜尋值未同步')});
+            await check('列表搜尋',async()=>{await reset();const i=p.getByPlaceholder('搜尋課本...');await i.fill('英文');if((await i.inputValue())!=='英文')throw Error('輸入失敗')});
+            await check('科系篩選',async()=>{await reset();const s=p.getByLabel('科系');await s.selectOption({label:'資訊工程系'});if((await s.inputValue())!=='資訊工程系')throw Error('選取失敗')});
+            await check('價格篩選',async()=>{await reset();const s=p.getByLabel('最高價格');await s.selectOption('300');if((await s.inputValue())!=='300')throw Error('選取失敗')});
+            await check('圖片搜尋檔案選擇器',async()=>{await reset();const c=p.waitForEvent('filechooser',{timeout:5000});await p.getByRole('button',{name:/用照片找二手書|照片搜二手書/}).first().click();await c});
+            for(const [n,path] of [['隱私權','/privacy'],['使用條款','/terms'],['交易安全','/safety']])await check('Footer：'+n,async()=>{await reset();await p.getByRole('link',{name:n,exact:true}).click();await p.waitForLoadState('domcontentloaded');if(!new URL(p.url()).pathname.startsWith(path))throw Error(p.url())});
+            await check('問題回報入口',async()=>{await reset();await p.getByRole('button',{name:'問題回報',exact:true}).click();await p.waitForTimeout(300);if(!/問題回報|回報|意見/.test(await p.locator('body').innerText()))throw Error('未開啟')});
+          }catch(e){r.fatal=String(e?.stack||e)}finally{if(browser)await browser.close()}
+          r.summary={pass:r.checks.filter(x=>x.status==='PASS').length,fail:r.checks.filter(x=>x.status==='FAIL').length,consoleErrors:r.console.filter(x=>x.type==='error').length,pageErrors:r.pageErrors.length,failedRequests:r.failedRequests.length,badResponses:r.badResponses.length};
+          console.log('===AUDIT_REPORT_START===');
+          console.log(JSON.stringify(r));
+          console.log('===AUDIT_REPORT_END===');
+          EOF
+          node /tmp/audit.mjs
