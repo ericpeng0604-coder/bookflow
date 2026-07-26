@@ -1,0 +1,76 @@
+name: Staging auth readonly probe
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  auth-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: staging
+    env:
+      STAGING_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+    steps:
+      - name: Verify staging password authentication and basic role
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STAGING_SUPABASE_URL"
+          test -n "$STAGING_SUPABASE_ANON_KEY"
+          test -n "$E2E_TEST_EMAIL"
+          test -n "$E2E_TEST_PASSWORD"
+          echo "::add-mask::$E2E_TEST_EMAIL"
+          echo "::add-mask::$E2E_TEST_PASSWORD"
+          node <<'NODE'
+          const base = process.env.STAGING_SUPABASE_URL.replace(/\/+$/, "");
+          const anonKey = process.env.STAGING_SUPABASE_ANON_KEY;
+          const email = process.env.E2E_TEST_EMAIL;
+          const password = process.env.E2E_TEST_PASSWORD;
+
+          const login = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: {
+              apikey: anonKey,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ email, password }),
+          });
+          if (!login.ok) throw new Error(`Password authentication failed with HTTP ${login.status}.`);
+          const session = await login.json();
+          if (!session?.access_token || !session?.user?.id) throw new Error("Authentication response did not contain a usable session.");
+          console.log("PASS: staging test credentials are present");
+          console.log("PASS: password authentication succeeded");
+
+          const userResponse = await fetch(`${base}/auth/v1/user`, {
+            headers: {
+              apikey: anonKey,
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          });
+          if (!userResponse.ok) throw new Error(`Authenticated user lookup failed with HTTP ${userResponse.status}.`);
+          const user = await userResponse.json();
+          if (user?.id !== session.user.id) throw new Error("Authenticated user identity did not remain consistent.");
+          console.log("PASS: authenticated session lookup succeeded");
+
+          const adminResponse = await fetch(`${base}/rest/v1/rpc/is_verified_admin`, {
+            method: "POST",
+            headers: {
+              apikey: anonKey,
+              Authorization: `Bearer ${session.access_token}`,
+              "content-type": "application/json",
+            },
+            body: "{}",
+          });
+          if (!adminResponse.ok) throw new Error(`Admin-role probe failed with HTTP ${adminResponse.status}.`);
+          const isAdmin = await adminResponse.json();
+          if (isAdmin !== false) throw new Error("The staging E2E account unexpectedly has verified-admin access.");
+          console.log("PASS: staging test account is not a verified administrator");
+          console.log("NOT VERIFIED: browser UI login and logout");
+          NODE
