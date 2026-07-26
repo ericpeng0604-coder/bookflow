@@ -19,11 +19,11 @@ jobs:
       E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
       - name: Verify staging password authentication and basic role
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$E2E_TEST_EMAIL"
           echo "::add-mask::$E2E_TEST_PASSWORD"
-          node scripts/staging-auth-readonly-probe.mjs
+          curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.pull_request.head.sha }}/scripts/staging-auth-readonly-probe.mjs" -o staging-auth-readonly-probe.mjs
+          node staging-auth-readonly-probe.mjs
