@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "handoff",
-  "taskId": "20260726-marketplace-conversation-chat",
-  "taskTitle": "Extract conversation navigation and trade chat session modules",
-  "baseCommit": "05b4beb9915f21be770bd1dbe5adb20133ccd219",
-  "updatedAt": "2026-07-26T00:00:00.000Z",
+  "owner": "none",
+  "status": "idle",
+  "taskId": "20260726-enable-dependabot",
+  "taskTitle": "Enable scheduled Dependabot checks",
+  "baseCommit": "34d359b59729cbbecf737c5c73b072b727a65733",
+  "updatedAt": "2026-07-26T07:22:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260726-marketplace-conversation-chat.md"
+  "historyFile": ".ai/history/20260726-enable-dependabot.md"
 }
