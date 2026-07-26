@@ -2887,8 +2887,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }
 
   async function startConversation(bookId: string) {
-    if (!supabase || !currentUser) return;
-    const { data, error } = await supabase.rpc("start_conversation", { target_book_id: bookId });
+    const client = supabase;
+    if (!client || !currentUser) return;
+    const { data, error } = await client.rpc("start_conversation", { target_book_id: bookId });
     if (error) {
       setToast(`無法開啟訊息：${error.message}`);
       return;
@@ -2899,11 +2900,12 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }
 
   async function openOrderConversation(requestId: string) {
-    if (!supabase || !currentUser) return;
+    const client = supabase;
+    if (!client || !currentUser) return;
     const targetRequest = store.requests.find((request) => request.id === requestId);
     const { data, error } = targetRequest?.orderId
-      ? await supabase.rpc("open_purchase_order_conversation", { p_order_id: targetRequest.orderId })
-      : await supabase.rpc("open_order_conversation", { target_request_id: requestId });
+      ? await client.rpc("open_purchase_order_conversation", { p_order_id: targetRequest.orderId })
+      : await client.rpc("open_order_conversation", { target_request_id: requestId });
     if (error) {
       setToast(`無法開啟訊息：${error.message}`);
       return;
@@ -2933,10 +2935,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       window.localStorage.setItem(lastChatStorageKey(currentUser.id), conversationId);
     }
     setConversations((previous) => markConversationReadLocally(previous, conversationId));
-    if (!supabase || !currentUser) return;
+    const client = supabase;
+    if (!client || !currentUser) return;
     try {
       await markConversationReadWithRecovery(conversationId, {
-        markRead: (id) => markConversationRead(supabase, id),
+        markRead: (id) => markConversationRead(client, id),
         refresh: () => loadUserWorkspace(currentUser, "chats"),
       });
     } catch (error) {
@@ -2946,10 +2949,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
   const keepConversationRead = useCallback(async (conversationId: string) => {
     setConversations((previous) => markConversationReadLocally(previous, conversationId));
-    if (!supabase || !currentUser) return;
+    const client = supabase;
+    if (!client || !currentUser) return;
     try {
       await markConversationReadWithRecovery(conversationId, {
-        markRead: (id) => markConversationRead(supabase, id),
+        markRead: (id) => markConversationRead(client, id),
         refresh: () => loadUserWorkspace(currentUser, "chats"),
       });
     } catch (error) {
