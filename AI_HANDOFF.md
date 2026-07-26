@@ -7,10 +7,11 @@
 
 ## 目前狀態與背景
 
-- Task ID: `20260726-marketplace-conversation-recovery`。
-- Branch: `agent/marketplace-architecture-20260726`。
-- Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`。
-- History: `.ai/history/20260726-marketplace-conversation-recovery.md`。
+- Task ID: `20260726-marketplace-conversation-recovery`.
+- Task: Centralize conversation read recovery behind navigation.
+- Branch: `agent/marketplace-architecture-20260726`.
+- Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`.
+- History: `.ai/history/20260726-marketplace-conversation-recovery.md`.
 - PR #140 已建立為 draft；尚未 merge 或部署。
 - 無 database migration；staging migration 為 NOT APPLICABLE。
 - 未修改 GitHub workflow 或 protected recovery file。
