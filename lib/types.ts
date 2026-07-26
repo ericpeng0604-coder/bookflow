@@ -51,7 +51,13 @@ export type NotificationType =
   | "reservation_cancelled"
   | "handoff_confirmation"
   | "book_sold"
-  | "listing_lifecycle";
+  | "listing_lifecycle"
+  | "bundle_request_created"
+  | "bundle_request_accepted"
+  | "bundle_request_rejected"
+  | "bundle_request_cancelled"
+  | "bundle_request_expired"
+  | "bundle_trade_completed";
 
 export type Profile = {
   id: string;
@@ -161,6 +167,37 @@ export type CartItem = {
   addedAt: string;
 };
 
+export type BundlePurchaseRequest = {
+  id: string;
+  buyerId: string;
+  sellerId: string;
+  status: "draft" | "pending" | "reserved" | "rejected" | "cancelled" | "expired" | "completed";
+  message: string;
+  preferredMeetupLocation: string;
+  preferredMeetupTime: string;
+  totalPriceSnapshot: number;
+  expiresAt: string | null;
+  acceptedAt: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string;
+  buyerConfirmedAt: string | null;
+  sellerConfirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BundlePurchaseRequestItem = {
+  bundleId: string;
+  bookId: string;
+  position: number;
+  itemStatus: "active" | "unavailable" | "removed";
+  titleSnapshot: string;
+  priceSnapshot: number;
+  editionSnapshot: string;
+  imageSnapshot: string;
+  meetupSnapshot: string;
+};
+
 export type TradeContact = {
   id: string;
   name: string;
@@ -195,6 +232,7 @@ export type Conversation = {
   lastMessagePreview: string;
   unreadCount: number;
   createdAt: string;
+  bundleId: string | null;
 };
 
 export type OrderEvent = {
@@ -216,6 +254,7 @@ export type Notification = {
   message: string;
   readAt: string | null;
   createdAt: string;
+  bundleId: string | null;
 };
 
 export type Report = {

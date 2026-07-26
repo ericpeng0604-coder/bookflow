@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260726-enable-dependabot",
-  "taskTitle": "Enable scheduled Dependabot checks",
-  "baseCommit": "34d359b59729cbbecf737c5c73b072b727a65733",
-  "updatedAt": "2026-07-26T07:22:00.000Z",
+  "owner": "codex",
+  "status": "handoff",
+  "taskId": "20260726-seller-storefront-bundle",
+  "taskTitle": "seller storefront and multi-listing purchase-intent bundle",
+  "baseCommit": "7808f7a6a0d7e0e88807e7b7086db660c73d03f8",
+  "updatedAt": "2026-07-26T00:00:00Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260726-enable-dependabot.md"
+  "historyFile": ".ai/history/20260726-seller-storefront-bundle.md"
 }

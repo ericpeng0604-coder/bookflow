@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ListingType, Profile } from "@/lib/types";
 
-export type MarketplaceView = "home" | "book" | "dashboard" | "chat" | "admin";
+export type MarketplaceView = "home" | "book" | "seller" | "dashboard" | "chat" | "admin";
 export type DashboardTab = "listings" | "chats" | "requests" | "received" | "confirmedOrders" | "favorites" | "studentVerification";
 export type AdminWorkspace = "overview" | "listings" | "reports" | "feedback" | "studentVerification" | "risk" | "hiddenListings" | "permissions";
 
@@ -12,6 +12,7 @@ const adminWorkspaces = new Set<AdminWorkspace>(["overview", "listings", "report
 type RouteHandlers = {
   onListingTypeChange: (listingType: ListingType) => void;
   onBookRouteChange: () => void;
+  onSellerRouteChange: (sellerId: string | null) => void;
   onConversationRoute: (conversationId: string) => void | Promise<void>;
 };
 
@@ -30,6 +31,7 @@ type BuildMarketplaceUrlOptions = {
   listingType: ListingType;
   view: MarketplaceView;
   selectedId: string | null;
+  sellerId: string | null;
   currentUser: Profile | null;
   dashboardTab: DashboardTab;
   adminWorkspace: AdminWorkspace;
@@ -50,13 +52,14 @@ export function buildChatUrl(listingType: ListingType, conversationId?: string |
   params.set("view", "chat");
   params.set("tab", "chats");
   if (conversationId) params.set("conversation", conversationId);
-  return `/?${params.toString()}`;
+  return "/?" + params.toString();
 }
 
 export function buildMarketplaceUrl({
   listingType,
   view,
   selectedId,
+  sellerId,
   currentUser,
   dashboardTab,
   adminWorkspace,
@@ -64,7 +67,10 @@ export function buildMarketplaceUrl({
 }: BuildMarketplaceUrlOptions) {
   const params = new URLSearchParams();
   params.set("market", listingType);
-  if (view === "book" && selectedId) {
+  if (view === "seller" && sellerId) {
+    params.set("view", "seller");
+    params.set("seller", sellerId);
+  } else if (view === "book" && selectedId) {
     params.set("view", "book");
     params.set("book", selectedId);
   } else if (view === "chat" && currentUser) {
@@ -76,7 +82,7 @@ export function buildMarketplaceUrl({
     params.set("view", "admin");
     params.set("adminTab", adminWorkspace);
   }
-  return `/?${params.toString()}`;
+  return "/?" + params.toString();
 }
 
 export function useMarketplaceNavigation({
@@ -90,16 +96,19 @@ export function useMarketplaceNavigation({
   initialDashboardTab = "listings",
   onListingTypeChange,
   onBookRouteChange,
+  onSellerRouteChange,
   onConversationRoute,
 }: UseMarketplaceNavigationOptions) {
   const [view, setView] = useState<MarketplaceView>(initialView);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sellerId, setSellerId] = useState<string | null>(null);
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>(initialDashboardTab);
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspace>("overview");
   const skipNextUrlWriteRef = useRef(false);
   const handlersRef = useRef<RouteHandlers>({
     onListingTypeChange,
     onBookRouteChange,
+    onSellerRouteChange,
     onConversationRoute,
   });
 
@@ -107,9 +116,15 @@ export function useMarketplaceNavigation({
     handlersRef.current = {
       onListingTypeChange,
       onBookRouteChange,
+      onSellerRouteChange,
       onConversationRoute,
     };
-  }, [onBookRouteChange, onConversationRoute, onListingTypeChange]);
+  }, [onBookRouteChange, onConversationRoute, onListingTypeChange, onSellerRouteChange]);
+
+  const clearSellerRoute = useCallback(() => {
+    setSellerId(null);
+    handlersRef.current.onSellerRouteChange(null);
+  }, []);
 
   const applyCurrentRoute = useCallback((options?: { openConversation?: boolean }) => {
     const params = new URLSearchParams(window.location.search);
@@ -119,8 +134,20 @@ export function useMarketplaceNavigation({
     }
 
     const targetView = params.get("view");
+    const targetSeller = params.get("seller");
+    if (targetView === "seller" && targetSeller) {
+      setSelectedId(null);
+      setSellerId(targetSeller);
+      handlersRef.current.onBookRouteChange();
+      handlersRef.current.onSellerRouteChange(targetSeller);
+      setView("seller");
+      window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+      return;
+    }
+
     const targetBook = params.get("book");
     if (targetView === "book" && targetBook) {
+      clearSellerRoute();
       setSelectedId(targetBook);
       handlersRef.current.onBookRouteChange();
       setView("book");
@@ -128,6 +155,7 @@ export function useMarketplaceNavigation({
     }
 
     if (targetView === "chat") {
+      clearSellerRoute();
       if (!currentUser) return;
       setDashboardTab("chats");
       onExpandedConversationChange(params.get("conversation"));
@@ -140,6 +168,7 @@ export function useMarketplaceNavigation({
     }
 
     if (targetView === "dashboard") {
+      clearSellerRoute();
       if (!currentUser) return;
       const targetTab = params.get("tab");
       if (targetTab === "chats") {
@@ -159,6 +188,7 @@ export function useMarketplaceNavigation({
     }
 
     if (targetView === "admin") {
+      clearSellerRoute();
       if (!currentUser || !["admin", "moderator"].includes(currentUser.role)) return;
       setView("admin");
       const targetWorkspace = params.get("adminTab");
@@ -166,11 +196,12 @@ export function useMarketplaceNavigation({
       return;
     }
 
-      setSelectedId(null);
-      onExpandedConversationChange(null);
+    clearSellerRoute();
+    setSelectedId(null);
+    onExpandedConversationChange(null);
     handlersRef.current.onBookRouteChange();
     setView("home");
-  }, [currentUser, onExpandedConversationChange]);
+  }, [clearSellerRoute, currentUser, onExpandedConversationChange]);
 
   useEffect(() => {
     if (!ready) return;
@@ -195,15 +226,16 @@ export function useMarketplaceNavigation({
       listingType,
       view,
       selectedId,
+      sellerId,
       currentUser,
       dashboardTab,
       adminWorkspace,
       expandedConversationId,
     });
-    if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+    if (window.location.pathname + window.location.search !== nextUrl) {
       window.history.replaceState({}, "", nextUrl);
     }
-  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType, ready, selectedId, view]);
+  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType, ready, selectedId, sellerId, view]);
 
   useEffect(() => {
     if (view !== "dashboard" || dashboardTab !== "chats" || expandedConversationId || !lastConversationId) return;
@@ -211,6 +243,7 @@ export function useMarketplaceNavigation({
   }, [dashboardTab, expandedConversationId, lastConversationId, onExpandedConversationChange, view]);
 
   const openBookRoute = useCallback((bookId: string, market: ListingType) => {
+    clearSellerRoute();
     setSelectedId(bookId);
     handlersRef.current.onBookRouteChange();
     setView("book");
@@ -218,15 +251,41 @@ export function useMarketplaceNavigation({
       listingType: market,
       view: "book",
       selectedId: bookId,
+      sellerId: null,
       currentUser,
       dashboardTab,
       adminWorkspace,
       expandedConversationId,
     }));
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId]);
+  }, [adminWorkspace, clearSellerRoute, currentUser, dashboardTab, expandedConversationId]);
+
+  const openSellerRoute = useCallback((nextSellerId: string) => {
+    const marketScrollY = window.scrollY;
+    setSelectedId(null);
+    setSellerId(nextSellerId);
+    handlersRef.current.onBookRouteChange();
+    handlersRef.current.onSellerRouteChange(nextSellerId);
+    setView("seller");
+    window.history.pushState(
+      { marketScrollY },
+      "",
+      buildMarketplaceUrl({
+        listingType,
+        view: "seller",
+        selectedId: null,
+        sellerId: nextSellerId,
+        currentUser,
+        dashboardTab,
+        adminWorkspace,
+        expandedConversationId,
+      }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType]);
 
   const returnToMarketRoute = useCallback(() => {
+    clearSellerRoute();
     setSelectedId(null);
     handlersRef.current.onBookRouteChange();
     setView("home");
@@ -234,20 +293,23 @@ export function useMarketplaceNavigation({
       listingType,
       view: "home",
       selectedId: null,
+      sellerId: null,
       currentUser,
       dashboardTab,
       adminWorkspace,
       expandedConversationId,
     }));
-  }, [adminWorkspace, currentUser, dashboardTab, expandedConversationId, listingType]);
+  }, [adminWorkspace, clearSellerRoute, currentUser, dashboardTab, expandedConversationId, listingType]);
 
   const openDashboard = useCallback(() => {
+    clearSellerRoute();
     setView("dashboard");
     setDashboardTab("listings");
     onExpandedConversationChange(null);
-  }, [onExpandedConversationChange]);
+  }, [clearSellerRoute, onExpandedConversationChange]);
 
   const returnToChatListRoute = useCallback(() => {
+    clearSellerRoute();
     setDashboardTab("chats");
     onExpandedConversationChange(null);
     setView("chat");
@@ -256,8 +318,8 @@ export function useMarketplaceNavigation({
     params.set("view", "chat");
     params.set("tab", "chats");
     params.delete("conversation");
-    window.history.replaceState({}, "", `/?${params.toString()}`);
-  }, [listingType, onExpandedConversationChange]);
+    window.history.replaceState({}, "", "/?" + params.toString());
+  }, [clearSellerRoute, listingType, onExpandedConversationChange]);
 
   return {
     adminWorkspace,
@@ -265,9 +327,11 @@ export function useMarketplaceNavigation({
     expandedConversationId,
     openBookRoute,
     openDashboard,
+    openSellerRoute,
     returnToChatListRoute,
     returnToMarketRoute,
     selectedId,
+    sellerId,
     setDashboardTab,
     setAdminWorkspace,
     setExpandedConversationId: onExpandedConversationChange,
