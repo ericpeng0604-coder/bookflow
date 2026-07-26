@@ -2,75 +2,73 @@
 
 ## 任務目標
 
-集中 conversation read recovery 到 navigation seam，移除
-`TradeChatPanel` 直接呼叫資料層的 seam leak，並完成可追溯發布準備。
+將 notification feed 的資料載入、已讀更新、定時刷新與 reset 行為從
+`MarketplaceApp` 集中到 headless module，保留通知路由在 caller。
 
 ## 目前狀態與背景
 
-- Task ID: `20260726-marketplace-conversation-recovery`.
-- Task: Centralize conversation read recovery behind navigation.
-- Branch: `agent/marketplace-architecture-20260726`.
-- Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`.
-- History: `.ai/history/20260726-marketplace-conversation-recovery.md`.
-- Current commit: `a63a612`.
-- PR #140 已建立為 draft；尚未 merge 或部署。
-- 無 database migration；staging migration 為 NOT APPLICABLE。
-- 未修改 GitHub workflow 或 protected recovery file。
+- Task ID: `20260726-marketplace-notification-feed`.
+- Task: Extract the notification feed module from MarketplaceApp.
+- Branch: `agent/marketplace-wave1-20260726`.
+- Base commit: `1bdf349d1937fdad79340f97bb923fa71e92c30a`.
+- History: `.ai/history/20260726-marketplace-notification-feed.md`.
+- PR: not opened yet.
+- No database migration is included; staging migration is NOT APPLICABLE.
+- No GitHub workflow or protected recovery file is changed.
 
 ## 已完成
 
-- 新增 conversation navigation policy，涵蓋 local read、recovery、restore、remove。
-- 將 app-level mark-read 導向 policy 與 refresh-on-failure seam。
-- 移除 `TradeChatPanel` 直接 data-layer mark-read 呼叫。
-- 新增 reset、restore、hide、recovery focused behavior checks。
-- 已建立 commit `e6d1e734ed58651e1c34523e42454355e1892ba1` 與
-  handoff metadata commit `b22aadc46e95beb80098a7ccb0d5c3454689569b`。
+- Added `useNotificationFeed` for feed loading, unread count, mark-read,
+  mark-all-read, visibility refresh, and user reset.
+- Removed duplicate notification data-layer functions from `MarketplaceApp`.
+- Kept notification destination routing in `MarketplaceApp`.
+- Added focused static module checks and updated the existing refresh contract.
 
 ## 下一步
 
-1. 通過 PR #140 required checks 與 review。
-2. Merge 後記錄 exact full main SHA。
-3. 以該 SHA 執行 protected production release workflow。
-4. 驗證 `/api/health/release` 與 production smoke 使用同一 SHA。
+1. Pass full local release gates and release preflight.
+2. Commit only the notification feed scope and open a draft PR.
+3. Wait for required checks, then merge after review.
+4. Deploy the exact merged main SHA and verify production health and smoke.
 
 ## 變更檔案
 
 - `components/marketplace-app.tsx`
-- `components/marketplace/conversation-navigation-policy.ts`
-- `scripts/check-conversation-navigation-behavior.mjs`
+- `components/marketplace/use-notification-feed.ts`
+- `scripts/check-notification-feed.mjs`
+- `scripts/check-notification-refresh.mjs`
 - `package.json`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260726-marketplace-conversation-recovery.md`
-- `AI_WORK_MANUAL.md`
+- `.ai/history/20260726-marketplace-notification-feed.md`
 
 ## 驗證結果
 
-- Conversation navigation behavior: 4/4 passed。
-- Trade chat checks: 9/9 passed。
-- Chat switching checks: 5/5 passed。
-- Changed-file ESLint、TypeScript、production build passed。
-- Release plan：clean。
-- Release preflight：passed。
-- Full release:local：passed（35/35 project checks、typecheck、lint、production build）。
+- Notification feed module checks: passed.
+- Notification and transaction refresh checks: 6/6 passed.
+- TypeScript typecheck: passed.
+- Changed-file ESLint: passed.
+- Full `release:local`: pending.
+- Production deployment and smoke: NOT VERIFIED.
 
 ## 風險與注意事項
 
-- 原始 dirty checkout 的 seller、bundle 與其他 unrelated edits 已排除。
-- Protected recovery files 保持未修改。
-- Merge SHA、production deployment、release health、production smoke 尚未驗證。
-- 未取得上述證據前，不可宣稱 production 已部署。
+- Workspace, conversation navigation, and trade chat module work is excluded
+  from this release wave.
+- Original dirty checkout changes remain excluded.
+- Protected recovery files remain unchanged.
+- Do not claim production deployment until merged full SHA, release health,
+  and production smoke are verified.
 
 ## 下一位 AI 工作指引
 
-1. 先重跑 `release:preflight`，確認 handoff/state/history 同步。
-2. 使用 compact PR gate wait，避免展開大量 CI log。
-3. 只以 exact merged full SHA 執行 production workflow。
-4. 持續同步 `AI_HANDOFF.md`、`.ai/state.json` 與 `.ai/history/*.md`。
+1. Run `release:local` and `release:preflight` before staging.
+2. Stage only the eight listed release files.
+3. Use compact PR gate waiting and preserve required checks.
+4. Use the exact merged full SHA for production deployment and smoke.
+5. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry in sync.
 
 ## 相關 Commit
 
-- Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`。
-- Implementation commit: `e6d1e734ed58651e1c34523e42454355e1892ba1`。
-- Current metadata commit: `b22aadc46e95beb80098a7ccb0d5c3454689569b`。
-- CI typecheck fix: `a63a612`。
+- Base commit: `1bdf349d1937fdad79340f97bb923fa71e92c30a`.
+- Current implementation commit: not committed yet.
