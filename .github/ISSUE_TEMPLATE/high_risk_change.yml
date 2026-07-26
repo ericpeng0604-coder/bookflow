@@ -1,7 +1,7 @@
 name: 高風險變更
- description: Supabase、RLS、交易、角色、停權、通知或 migration 的變更申請
- title: "[HIGH-RISK] "
- body:
+description: Supabase、RLS、交易、角色、停權、通知或 migration 的變更申請
+title: "[HIGH-RISK] "
+body:
   - type: markdown
     attributes:
       value: |
