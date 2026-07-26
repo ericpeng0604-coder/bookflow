@@ -1339,6 +1339,25 @@ before opening or merging the PR; it must report no missing handoff metadata.
 `.ai/history` entry before opening every substantive PR, then run preflight and
 only proceed when it passes.
 
+### LESSON-074: Release installs need a committed lockfile and declared lint peers
+
+**Observed problem:** A clean release worktree had no `pnpm-lock.yaml`, so the
+frozen install gate could not run. A non-frozen install then depended on
+registry access and the build exposed an undeclared `eslint-plugin-react-hooks`
+peer dependency.
+
+**Cause:** Dependency reproducibility and direct configuration dependencies were
+not treated as part of the release source contract.
+
+**Detection:** Run the frozen install and the production build from a fresh
+worktree before opening the PR; fail early when the lockfile is missing or lint
+cannot resolve a declared plugin.
+
+**Prevention rule:** Commit the lockfile used by the release package manager,
+declare every plugin imported by the lint configuration or required by its
+framework preset, and keep clean-install verification separate from any shared
+`node_modules` junction.
+
 ### LESSON-NNN: Short title
 
 **Observed problem:** What verifiably went wrong.

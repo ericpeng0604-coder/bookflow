@@ -115,6 +115,8 @@ import {
 } from "@/lib/marketplace/taiwan-textbook";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { TurnstileWidget } from "@/components/turnstile-widget";
+import { SellerStorefront } from "@/components/marketplace/seller-storefront";
+import { BundleRequestPanel } from "@/components/marketplace/bundle-request-panel";
 import { useNotificationFeed } from "@/components/marketplace/use-notification-feed";
 import { useMarketplaceWorkspace } from "@/components/marketplace/use-marketplace-workspace";
 import { useConversationNavigation } from "@/components/marketplace/use-conversation-navigation";
@@ -948,10 +950,12 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     adminWorkspace,
     dashboardTab,
     openBookRoute,
+    openSellerRoute,
     openDashboard: showDashboard,
     returnToChatListRoute,
     returnToMarketRoute,
     selectedId,
+    sellerId,
     setDashboardTab,
     setAdminWorkspace,
     setSelectedId,
@@ -968,6 +972,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     initialDashboardTab,
     onListingTypeChange: setListingType,
     onBookRouteChange: clearBookDetailRouteState,
+    onSellerRouteChange: () => undefined,
     onConversationRoute: conversationNavigation.openConversation,
   });
   const isStandaloneChatRoute = view === "chat"
@@ -1918,6 +1923,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       listingType: nextType,
       view: "home",
       selectedId: null,
+      sellerId: null,
       currentUser,
       dashboardTab,
       adminWorkspace,
@@ -4364,6 +4370,18 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         </div>
       )}
 
+      {view === "seller" && sellerId && (
+        <SellerStorefront
+          sellerId={sellerId}
+          client={supabase}
+          currentUser={currentUser}
+          onBack={returnToMarket}
+          onOpenBook={(bookId) => openBookRoute(bookId, listingType)}
+          onRequireLogin={() => setModal("login")}
+          onToast={setToast}
+        />
+      )}
+
       {view === "book" && selectedBook && (
         <section className="detail-page">
           <button type="button" className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
@@ -4461,13 +4479,13 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 <div><small>{normalizeMeetupMode(selectedBook.meetupMode) === DEFAULT_MEETUP_MODE ? "面交地點" : "面交方式"}</small><b>{meetupSummary(selectedBook)}</b></div>
               </div>
               <div className="description"><h3>賣家說明</h3><p>{selectedBook.description}</p></div>
-              <div className="seller-row">
+              <button type="button" className="seller-row seller-storefront-trigger" onClick={() => openSellerRoute(selectedBook.sellerId)} aria-label="View seller storefront">
                 <span className="avatar">{profile(selectedBook.sellerId)?.name.slice(0, 1) || "賣"}</span>
                 <div><small>賣家</small><b>{profile(selectedBook.sellerId)?.name || "賣家"}</b><span>{profile(selectedBook.sellerId)?.department || ""}</span>
                   {selectedBook.sellerVerified && <em className="trust-badge"><ShieldCheck size={13} />已驗證學生賣家</em>}
                   {badgeFor(selectedBook.sellerId, "seller") && <em className="trust-badge"><ShieldCheck size={13} />優良賣家</em>}
                 </div>
-              </div>
+              </button>
               <div className="detail-action-row">
                 {currentUser?.id === selectedBook.sellerId ? (
                   <button type="button" className="primary wide" disabled={currentUser.accountStatus === "suspended"} onClick={() => { setEditingBook(selectedBook); setModal("bookForm"); }}><Pencil size={18} />編輯我的刊登</button>
@@ -4608,6 +4626,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             <button type="button" className={dashboardTab === "received" ? "active" : ""} onClick={() => setDashboardTab("received")}>收到的意願 {activeReceivedRequestCount > 0 && <span>{activeReceivedRequestCount}</span>}</button>
             <button type="button" className={dashboardTab === "favorites" ? "active" : ""} onClick={() => setDashboardTab("favorites")}>我的收藏 <span>{favoriteBooks.length}</span></button>
           </div>
+
+          <BundleRequestPanel client={supabase} currentUser={currentUser} profiles={store.profiles} onToast={setToast} />
 
           {dashboardTab === "studentVerification" && (
             <StudentVerificationPanel

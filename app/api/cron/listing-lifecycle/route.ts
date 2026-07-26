@@ -51,6 +51,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: giveawayDeadlineError.message }, { status: 500 });
   }
 
+  const { data: bundleLifecycle, error: bundleLifecycleError } = await admin.rpc("process_bundle_deadlines", {
+    reference_time: now.toISOString(),
+  });
+  if (bundleLifecycleError) {
+    console.error("Bundle lifecycle RPC failed", { code: bundleLifecycleError.code });
+    return NextResponse.json({ error: "Bundle lifecycle failed" }, { status: 500 });
+  }
+
   const cleanupBefore = new Date(now.getTime() - 365 * 86400000).toISOString();
   const { data: dueBooks, error: dueError } = await admin
     .from("books")
@@ -153,6 +161,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     lifecycle,
+    bundleLifecycle,
     giveawayDeadlines,
     cleanup: { deleted, sanitized, failed: cleanupFailed },
     email,

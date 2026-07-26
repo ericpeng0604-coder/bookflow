@@ -146,6 +146,7 @@ export function mapConversation(row: Record<string, unknown>): Conversation {
     lastMessagePreview: String(row.last_message_preview || ""),
     unreadCount: Number(row.unread_count || 0),
     createdAt: String(row.created_at),
+    bundleId: row.bundle_id ? String(row.bundle_id) : null,
   };
 }
 
@@ -160,6 +161,7 @@ export function mapNotification(row: Record<string, unknown>): Notification {
     message: String(row.message || ""),
     readAt: row.read_at ? String(row.read_at) : null,
     createdAt: String(row.created_at),
+    bundleId: row.bundle_id ? String(row.bundle_id) : null,
   };
 }
 
