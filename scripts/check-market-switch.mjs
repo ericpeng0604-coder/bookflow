@@ -15,8 +15,8 @@ assert.match(
 );
 assert.match(
   app,
-  /function switchListingType\(nextType: ListingType\) \{\s*resetMarketplaceResults\(\)/,
-  "market switching must clear before changing the listing type",
+  /function switchListingType\(nextType: ListingType\) \{\s*setMarketplaceReloadKey\(\(previous\) => previous \+ 1\);\s*resetMarketplaceResults\(\)/,
+  "market switching must request a fresh load before clearing the result set",
 );
 assert.match(
   app,
