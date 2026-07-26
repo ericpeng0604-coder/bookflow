@@ -1,0 +1,123 @@
+name: 高風險變更
+ description: Supabase、RLS、交易、角色、停權、通知或 migration 的變更申請
+ title: "[HIGH-RISK] "
+ body:
+  - type: markdown
+    attributes:
+      value: |
+        此表單用於 Supabase、RLS、RPC、migration、交易狀態、角色／停權與通知一致性等高風險工作。
+        請先搜尋目前 repo 與最新 handoff；不得把舊 schema、README 或 baseline migration 當成 production 現況。
+        請勿貼出資料庫密碼、service role key、access token、完整個資或 production secrets。
+
+  - type: dropdown
+    id: risk_area
+    attributes:
+      label: 變更類型
+      multiple: true
+      options:
+        - Supabase schema／migration
+        - RLS policy
+        - RPC／database function
+        - 購買申請／訂單／交易狀態
+        - 角色／管理員／停權
+        - 通知／推播／Email
+        - Auth／學生驗證
+        - GitHub Actions／deployment／secrets
+        - 其他高風險資料流程
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_state
+    attributes:
+      label: 已驗證的目前狀態
+      description: 請附目前 repo 檔案、最新 handoff、staging 或 production 證據；推測必須另外標示。
+      placeholder: |
+        已驗證事實：
+        - …
+        Repo 內待搜尋：
+        - …
+        推測：
+        - …
+    validations:
+      required: true
+
+  - type: textarea
+    id: change
+    attributes:
+      label: 預計變更內容
+      description: 說明資料表、欄位、RPC、狀態或通知流程如何改變。
+    validations:
+      required: true
+
+  - type: textarea
+    id: state_transitions
+    attributes:
+      label: 狀態轉移與不變量
+      description: 列出允許與禁止的狀態轉移，以及任何必須一直成立的條件。
+      placeholder: |
+        允許：pending → accepted
+        禁止：completed → pending
+        不變量：同一商品不可同時有兩個有效成交者
+    validations:
+      required: true
+
+  - type: textarea
+    id: concurrency
+    attributes:
+      label: Race condition 與原子性
+      description: 說明並發請求、鎖定、unique constraint、transaction 或 idempotency 如何處理。
+    validations:
+      required: true
+
+  - type: textarea
+    id: rls
+    attributes:
+      label: RLS 與權限影響
+      description: 列出 buyer、seller、admin、suspended user、anonymous 等角色可讀寫範圍。
+    validations:
+      required: true
+
+  - type: textarea
+    id: notifications
+    attributes:
+      label: 通知一致性
+      description: 說明資料寫入成功／失敗／重試時，通知是否會漏送、重複或指向錯誤狀態。
+    validations:
+      required: true
+
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration、相容性與回滾
+      description: 說明 staging 套用順序、舊資料相容性、回滾方式與不可逆風險。沒有 migration 也要寫明 NOT APPLICABLE。
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: 驗證計畫
+      description: 必須包含 staging、RLS、RPC、並發、狀態轉移、通知與 production smoke；未執行項目標示 NOT VERIFIED。
+      placeholder: |
+        - migration revision：
+        - staging RLS probe：
+        - concurrency test：
+        - notification consistency：
+        - production smoke：NOT VERIFIED
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: gates
+    attributes:
+      label: 高風險門檻確認
+      options:
+        - label: 我已搜尋目前 repo 與最新 handoff，而不是依賴舊 README 或 baseline migration。
+          required: true
+        - label: 我已檢查 race condition、原子性、狀態轉移、RLS 與通知一致性。
+          required: true
+        - label: 我會將未執行的測試明確標示為 `NOT VERIFIED`。
+          required: true
+        - label: 我沒有在 Issue 中貼出 secrets、token、完整個資或 production credentials。
+          required: true
