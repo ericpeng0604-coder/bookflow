@@ -806,6 +806,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [marketplaceCount, setMarketplaceCount] = useState(0);
   const [marketplaceHasMore, setMarketplaceHasMore] = useState(false);
   const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [marketplaceReloadKey, setMarketplaceReloadKey] = useState(0);
   const [imageSearchBusy, setImageSearchBusy] = useState(false);
   const [imageSearchProgress, setImageSearchProgress] = useState(0);
   const [imageSearchMessage, setImageSearchMessage] = useState("");
@@ -851,6 +852,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartSaving, setCartSaving] = useState(false);
+  const [cartConfirmationOpen, setCartConfirmationOpen] = useState(false);
+  const cartFormRef = useRef<HTMLFormElement>(null);
+  const cartConfirmingRef = useRef(false);
   const cartSyncUserRef = useRef<string | null>(null);
   const debouncedQuery = useDebouncedValue(query, 300);
   const currentUser = store.currentUser;
@@ -1048,6 +1052,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           client,
           marketplaceFilters,
           append ? marketplaceCursorRef.current : null,
+          signal,
         );
         if (signal.aborted || marketplaceQueryKeyRef.current !== requestKey) return;
         const cached = readMarketplaceCache(marketplaceCacheRef.current, requestKey);
@@ -1487,6 +1492,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     marketplaceFilters.maxPrice,
     marketplaceFilters.query,
     imageSearchActive,
+    marketplaceReloadKey,
   ]);
 
   useEffect(() => {
@@ -1893,6 +1899,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }
 
   function returnToMarket() {
+    setMarketplaceReloadKey((previous) => previous + 1);
     returnToMarketRoute();
   }
 
@@ -1906,6 +1913,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }
 
   function switchListingType(nextType: ListingType) {
+    setMarketplaceReloadKey((previous) => previous + 1);
     resetMarketplaceResults();
     setListingType(nextType);
     setSelectedId(null);
@@ -1992,6 +2000,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       setModal("login");
       return;
     }
+    if (!cartConfirmingRef.current) {
+      setCartConfirmationOpen(true);
+      return;
+    }
+    cartConfirmingRef.current = false;
     setCartSaving(true);
     try {
       if (supabase) {
@@ -2058,6 +2071,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       }
       setCartItems([]);
       setCartOpen(false);
+      setCartConfirmationOpen(false);
       setToast(`已建立 ${cartGroups.length} 筆賣家大單，共 ${cartItems.length} 項商品`);
     } catch (error) {
       setToast(error instanceof Error ? error.message : "建立訂單失敗，請稍後再試");
@@ -5312,9 +5326,23 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           groups={cartGroups}
           profiles={store.profiles}
           saving={cartSaving}
-          onClose={() => setCartOpen(false)}
+          formRef={cartFormRef}
+          onClose={() => { if (cartSaving) return; cartConfirmingRef.current = false; setCartConfirmationOpen(false); setCartOpen(false); }}
           onRemove={removeBookFromCart}
           onSubmit={checkoutCart}
+        />
+      )}
+      {cartConfirmationOpen && (
+        <CartOrderConfirmationModal
+          groupCount={cartGroups.length}
+          total={cartGroups.reduce((sum, group) => sum + group.totalPrice, 0)}
+          saving={cartSaving}
+          onClose={() => { if (cartSaving) return; cartConfirmingRef.current = false; setCartConfirmationOpen(false); }}
+          onConfirm={() => {
+            cartConfirmingRef.current = true;
+            setCartConfirmationOpen(false);
+            window.setTimeout(() => cartFormRef.current?.requestSubmit(), 0);
+          }}
         />
       )}
       {modal === "contactSettings" && editingBook && (
@@ -7214,6 +7242,7 @@ function CartModal({
   groups,
   profiles,
   saving,
+  formRef,
   onClose,
   onRemove,
   onSubmit,
@@ -7221,6 +7250,7 @@ function CartModal({
   groups: ReturnType<typeof groupCartItems>;
   profiles: Profile[];
   saving: boolean;
+  formRef: React.RefObject<HTMLFormElement | null>;
   onClose: () => void;
   onRemove: (bookId: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
@@ -7229,7 +7259,7 @@ function CartModal({
   const total = groups.reduce((sum, group) => sum + group.totalPrice, 0);
   return (
     <ModalShell title="購物車" subtitle="同一賣家的商品會合併成一筆大單，賣家之後可逐項接受或拒絕子單" onClose={onClose}>
-      <form className="form cart-form" onSubmit={onSubmit} aria-busy={saving}>
+      <form ref={formRef} className="form cart-form" onSubmit={onSubmit} aria-busy={saving}>
         <div className="cart-groups">
           {groups.map((group) => (
             <section className={`cart-group ${group.hasMeetupConflict ? "has-conflict" : ""}`} key={group.sellerId}>
@@ -7255,16 +7285,49 @@ function CartModal({
           <>
             <label>給賣家的訊息<textarea name="cartMessage" rows={3} maxLength={2000} placeholder="可以一次說明這筆大單的需求" /></label>
             <div className="cart-coordination-grid">
-              <label>共同面交地點<input name="cartLocation" maxLength={REQUEST_COORDINATION_MAX_LENGTH} placeholder="可留白，之後在聊天中確認" /></label>
-              <label>共同面交時間<input name="cartTime" maxLength={REQUEST_COORDINATION_MAX_LENGTH} placeholder="可留白，之後在聊天中確認" /></label>
+              <label>希望面交地點<input name="cartLocation" maxLength={REQUEST_COORDINATION_MAX_LENGTH} placeholder="可留白，之後在聊天中確認" /></label>
+              <label>希望面交時間<input name="cartTime" maxLength={REQUEST_COORDINATION_MAX_LENGTH} placeholder="可留白，之後在聊天中確認" /></label>
             </div>
             <div className="cart-total"><span>總計</span><strong>{money(total)}</strong></div>
             <button className="primary wide" type="submit" disabled={saving || groups.some((group) => !canCheckoutGroup(group))}>
-              {saving ? "建立訂單中…" : `一次送出 ${groups.length} 筆賣家大單`}
+              {saving ? "建立訂單中…" : `送出 ${groups.length} 筆賣家訂單`}
             </button>
           </>
         )}
       </form>
+    </ModalShell>
+  );
+}
+
+function CartOrderConfirmationModal({
+  groupCount,
+  total,
+  saving,
+  onClose,
+  onConfirm,
+}: {
+  groupCount: number;
+  total: number;
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ModalShell
+      title="確認送出訂單"
+      subtitle="送出後會通知賣家，請確認訂單內容無誤。"
+      onClose={onClose}
+      closeOnBackdrop={!saving}
+    >
+      <div className="order-confirmation-summary">
+        <span>賣家訂單</span>
+        <strong>{groupCount} 筆 · {money(total)}</strong>
+      </div>
+      <p className="order-confirmation-copy">確定要送出這些訂單嗎？送出後仍需等待賣家確認。</p>
+      <div className="modal-actions">
+        <button type="button" className="secondary-action" onClick={onClose} disabled={saving}>返回</button>
+        <button type="button" className="primary" onClick={onConfirm} disabled={saving}>{saving ? "送出中…" : "確認送出"}</button>
+      </div>
     </ModalShell>
   );
 }
@@ -7292,6 +7355,9 @@ function RequestModal({
   const [versionConfirmed, setVersionConfirmed] = useState(book.listingType !== "book");
   const [preferredMeetupLocation, setPreferredMeetupLocation] = useState(initialPreferredMeetupLocation);
   const [preferredMeetupTime, setPreferredMeetupTime] = useState(initialPreferredMeetupTime);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const requestFormRef = useRef<HTMLFormElement>(null);
+  const confirmingRef = useRef(false);
 
   useEffect(() => {
     setMessage(giveawayInitialMessage);
@@ -7299,6 +7365,16 @@ function RequestModal({
     setPreferredMeetupTime(initialPreferredMeetupTime);
     setVersionConfirmed(book.listingType !== "book");
   }, [book.listingType, giveawayInitialMessage, initialPreferredMeetupLocation, initialPreferredMeetupTime]);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    if (!request && !confirmingRef.current) {
+      event.preventDefault();
+      setConfirmationOpen(true);
+      return;
+    }
+    confirmingRef.current = false;
+    onSubmit(event);
+  }
 
   const versionDetails = [
     book.publisher && `出版社：${book.publisher}`,
@@ -7310,7 +7386,7 @@ function RequestModal({
 
   return (
     <ModalShell title={book.listingType === "giveaway" ? "申請領取" : "確認下訂"} subtitle={`${book.listingType === "giveaway" ? "想領取" : "想購買"}《${book.title}》`} onClose={onClose}>
-      <form onSubmit={onSubmit} className="form" aria-busy={saving}>
+      <form ref={requestFormRef} onSubmit={handleSubmit} className="form" aria-busy={saving}>
         <div className="request-summary"><span>{book.condition}</span><b>{book.listingType === "giveaway" ? "免費贈送" : money(book.price)}</b><span>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={14} /> : null}{meetupSummary(book)}</span></div>
         {book.listingType === "book" && (
           <label className="version-confirmation">
@@ -7377,7 +7453,7 @@ function RequestModal({
             />
           </label>
           <div className="request-coordination-actions">
-            <button type="button" className="ghost" onClick={onOpenChat}>
+            <button type="button" className="chat-context-link" onClick={onOpenChat}>
               <MessageCircle size={16} />
               先去訊息確認
             </button>
@@ -7390,6 +7466,53 @@ function RequestModal({
         </button>
         <p className="form-note">{book.listingType === "giveaway" ? "送出申請後由贈送者確認受贈者；聊天不代表已獲選。" : "下訂後仍需等待賣家選定，不代表交易完成；若時間地點還沒談好，先用訊息確認最穩妥。"}</p>
       </form>
+      {!request && confirmationOpen && (
+        <RequestOrderConfirmationModal
+          book={book}
+          saving={saving}
+          onClose={() => {
+            if (saving) return;
+            confirmingRef.current = false;
+            setConfirmationOpen(false);
+          }}
+          onConfirm={() => {
+            confirmingRef.current = true;
+            setConfirmationOpen(false);
+            window.setTimeout(() => requestFormRef.current?.requestSubmit(), 0);
+          }}
+        />
+      )}
+    </ModalShell>
+  );
+}
+
+function RequestOrderConfirmationModal({
+  book,
+  saving,
+  onClose,
+  onConfirm,
+}: {
+  book: Book;
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ModalShell
+      title="確認送出訂單"
+      subtitle="送出後會通知賣家，請確認訂單內容無誤。"
+      onClose={onClose}
+      closeOnBackdrop={!saving}
+    >
+      <div className="order-confirmation-summary">
+        <span>{book.title}</span>
+        <strong>{book.listingType === "giveaway" ? "免費贈送" : money(book.price)}</strong>
+      </div>
+      <p className="order-confirmation-copy">確定要送出這筆訂單嗎？送出後仍需等待賣家確認。</p>
+      <div className="modal-actions">
+        <button type="button" className="secondary-action" onClick={onClose} disabled={saving}>返回</button>
+        <button type="button" className="primary" onClick={onConfirm} disabled={saving}>{saving ? "送出中…" : "確認送出"}</button>
+      </div>
     </ModalShell>
   );
 }
