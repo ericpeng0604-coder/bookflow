@@ -1,47 +1,37 @@
 # BookFlow AI Handoff
 
-## Current release
+## 任務目標
 
-- Task ID: `20260726-marketplace-conversation-recovery`.
-- Task: Centralize conversation read recovery behind the navigation seam.
-- Branch: `agent/marketplace-architecture-20260726`.
-- Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`.
-- Current commit: `e6d1e734ed58651e1c34523e42454355e1892ba1`.
-- No database migration is included; staging migration is NOT APPLICABLE.
-- No GitHub workflow or protected recovery file is changed.
+集中 conversation read recovery 到 navigation seam，移除
+`TradeChatPanel` 直接呼叫資料層的 seam leak，並完成可追溯發布準備。
 
-## Root cause
+## 目前狀態與背景
 
-`TradeChatPanel` called `markConversationRead` directly, bypassing the
-conversation navigation recovery path. A failed mark-read could therefore
-leave navigation state stale instead of refreshing chats.
+- Task ID: `20260726-marketplace-conversation-recovery`。
+- Branch: `agent/marketplace-architecture-20260726`。
+- Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`。
+- History: `.ai/history/20260726-marketplace-conversation-recovery.md`。
+- PR #140 已建立為 draft；尚未 merge 或部署。
+- 無 database migration；staging migration 為 NOT APPLICABLE。
+- 未修改 GitHub workflow 或 protected recovery file。
 
-## Changes
+## 已完成
 
-- Added a pure conversation navigation policy for local read state, recovery,
-  restoration, and removal.
-- Routed app-level mark-read through the policy and refresh-on-failure seam.
-- Removed direct data-layer mark-read calls from `TradeChatPanel`.
-- Added focused behavior checks for reset, restore, hide, and recovery paths.
+- 新增 conversation navigation policy，涵蓋 local read、recovery、restore、remove。
+- 將 app-level mark-read 導向 policy 與 refresh-on-failure seam。
+- 移除 `TradeChatPanel` 直接 data-layer mark-read 呼叫。
+- 新增 reset、restore、hide、recovery focused behavior checks。
+- 已建立 commit `e6d1e734ed58651e1c34523e42454355e1892ba1` 與
+  handoff metadata commit `b22aadc46e95beb80098a7ccb0d5c3454689569b`。
 
-## Evidence
+## 下一步
 
-- Conversation navigation behavior: 4/4.
-- Trade chat checks: 9/9.
-- Chat switching checks: 5/5.
-- Changed-file ESLint, TypeScript, and production build passed.
-- Release plan: clean at current commit.
-- PR #140 is draft; merge, deployment, release health, and production smoke
-  remain NOT VERIFIED.
+1. 通過 PR #140 required checks 與 review。
+2. Merge 後記錄 exact full main SHA。
+3. 以該 SHA 執行 protected production release workflow。
+4. 驗證 `/api/health/release` 與 production smoke 使用同一 SHA。
 
-## Next steps
-
-1. Pass PR #140 required checks and review.
-2. Merge and record the exact full main SHA.
-3. Run the protected production release workflow with that SHA.
-4. Verify `/api/health/release` and production smoke for the same SHA.
-
-## Files
+## 變更檔案
 
 - `components/marketplace-app.tsx`
 - `components/marketplace/conversation-navigation-policy.ts`
@@ -52,9 +42,31 @@ leave navigation state stale instead of refreshing chats.
 - `.ai/history/20260726-marketplace-conversation-recovery.md`
 - `AI_WORK_MANUAL.md`
 
-## Safety
+## 驗證結果
 
-- Unrelated edits in the original dirty checkout were excluded.
-- Protected recovery files remain unchanged.
-- Do not claim production deployment until the merged full SHA, release
-  health, and production smoke are verified.
+- Conversation navigation behavior: 4/4 passed。
+- Trade chat checks: 9/9 passed。
+- Chat switching checks: 5/5 passed。
+- Changed-file ESLint、TypeScript、production build passed。
+- Release plan：clean。
+- Release preflight：待 handoff 章節格式修正後重跑。
+
+## 風險與注意事項
+
+- 原始 dirty checkout 的 seller、bundle 與其他 unrelated edits 已排除。
+- Protected recovery files 保持未修改。
+- Merge SHA、production deployment、release health、production smoke 尚未驗證。
+- 未取得上述證據前，不可宣稱 production 已部署。
+
+## 下一位 AI 工作指引
+
+1. 先重跑 `release:preflight`，確認 handoff/state/history 同步。
+2. 使用 compact PR gate wait，避免展開大量 CI log。
+3. 只以 exact merged full SHA 執行 production workflow。
+4. 持續同步 `AI_HANDOFF.md`、`.ai/state.json` 與 `.ai/history/*.md`。
+
+## 相關 Commit
+
+- Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`。
+- Implementation commit: `e6d1e734ed58651e1c34523e42454355e1892ba1`。
+- Current metadata commit: `b22aadc46e95beb80098a7ccb0d5c3454689569b`。
