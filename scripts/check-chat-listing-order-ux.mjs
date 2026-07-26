@@ -28,7 +28,7 @@ const checks = [
   ["chat compose uses multiline input and dedicated phrase scroller", app.includes("<textarea") && app.includes('className="trade-chat-phrases-scroll"') && css.includes(".trade-chat-compose textarea")],
   ["seller can keep tracking completed orders", app.includes("sellerRequestNextStep") && app.includes('"completed"].includes(request.status)') && app.includes('className="order-next-step"')],
   ["standalone message route owns chat scrolling", !app.includes("chat-page-toolbar") && !app.includes("chat-page-exit") && app.includes('chat-route-page') && /\.chat-route-page\s*\{\s*position:\s*fixed/.test(css) && css.includes(".chat-route-page .trade-chat-log")],
-  ["my transactions opens listings in one click", navigation.includes('setDashboardTab("listings")') && navigation.includes('setExpandedConversationId(null)') && app.includes("requireLogin(openDashboard)")],
+  ["my transactions opens listings in one click", navigation.includes('setDashboardTab("listings")') && navigation.includes('onExpandedConversationChange(null)') && app.includes("requireLogin(openDashboard)")],
   ["desktop my transactions shows active state", app.includes('className={view === "dashboard" ? "active" : ""} onClick={() => requireLogin(openDashboard)}>我的交易</button>')],
   ["mobile chat rail remains usable for switching", !app.includes("onClickCapture") && css.includes("minmax(118px, 34vw)") && css.includes("-webkit-line-clamp: 2")],
   ["active purchase check is time-bounded", /ACTIVE_REQUEST_CHECK_TIMEOUT_MS/.test(queries) && /abortSignal\(controller\.signal\)/.test(queries) && /clearTimeout\(timeout\)/.test(queries)],

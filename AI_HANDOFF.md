@@ -2,72 +2,72 @@
 
 ## 任務目標
 
-將 notification feed 的資料載入、已讀更新、定時刷新與 reset 行為從
-`MarketplaceApp` 集中到 headless module，保留通知路由在 caller。
+Extract conversation navigation and trade chat session modules.
 
 ## 目前狀態與背景
 
-- Task ID: `20260726-marketplace-workspace`.
-- Task: Extract the marketplace workspace data orchestration from MarketplaceApp.
-- Branch: `agent/marketplace-workspace-20260726`.
-- Base commit: `a152f7a4734e1d2686fa607e4c07e6b593f2fedc`.
-- History: `.ai/history/20260726-marketplace-workspace.md`.
-- PR: not opened yet.
+- Task ID: `20260726-marketplace-conversation-chat`.
+- Task: `Extract conversation navigation and trade chat session modules`.
+- Branch: `agent/marketplace-conversation-chat-20260726`.
+- Base commit: `05b4beb9915f21be770bd1dbe5adb20133ccd219`.
+- History: `.ai/history/20260726-marketplace-conversation-chat.md`.
 - No database migration is included; staging migration is NOT APPLICABLE.
 - No GitHub workflow or protected recovery file is changed.
+- Do not add `Rollback-Workflow-Approved: true`; this is not a rollback change.
 
 ## 已完成
 
-- Added `useMarketplaceWorkspace` for workspace tabs, moderation data,
-  favorites, trust badges, verification state, and workspace reset.
-- Preserved requests/orders, student verification, conversation page recovery,
-  and admin permission-expiry handling through explicit callbacks.
-- Added a focused static workspace module check.
+- Completed the conversation navigation and TradeChat session extraction.
+- The original dirty checkout and unrelated seller, bundle, migration, and API edits remain excluded.
+- Production is pending the merged SHA release workflow and independent smoke.
 
 ## 下一步
 
-1. Pass full local release gates and release preflight.
-2. Commit only the notification feed scope and open a draft PR.
-3. Wait for required checks, then merge after review.
-4. Deploy the exact merged main SHA and verify production health and smoke.
+1. Push this commit and open the PR.
+2. Wait for required checks and merge the PR.
+3. Deploy the exact merged main SHA through `release-production.yml`.
+4. Verify `/api/health/release` and independent production smoke.
 
 ## 變更檔案
 
+- `.ai/history/20260726-marketplace-conversation-chat.md`
 - `components/marketplace-app.tsx`
-- `components/marketplace/use-marketplace-workspace.ts`
-- `scripts/check-marketplace-workspace.mjs`
+- `components/marketplace/conversation-navigation-policy.ts`
+- `components/marketplace/navigation-state.ts`
+- `components/marketplace/trade-chat-session-policy.ts`
+- `components/marketplace/use-conversation-navigation.ts`
+- `components/marketplace/use-trade-chat-session.ts`
 - `package.json`
-- `AI_HANDOFF.md`
-- `.ai/state.json`
-- `.ai/history/20260726-marketplace-workspace.md`
+- `scripts/check-chat-listing-order-ux.mjs`
+- `scripts/check-chat-switching.mjs`
+- `scripts/check-conversation-navigation.mjs`
+- `scripts/check-trade-chat-session-behavior.mjs`
+- `scripts/run-project-checks.mjs`
 
 ## 驗證結果
 
-- Notification feed module checks: passed.
-- Notification and transaction refresh checks: 6/6 passed.
+- Focused conversation navigation behavior: passed 4/4.
+- Trade chat session behavior: passed 4/4.
+- Full project checks: passed 38/38.
 - TypeScript typecheck: passed.
 - Changed-file ESLint: passed.
-- Full `release:local`: pending.
-- Production deployment and smoke: NOT VERIFIED.
+- Production build: passed.
+- Production deployment: NOT VERIFIED yet.
 
 ## 風險與注意事項
 
-- Conversation navigation and trade chat module work is excluded from this
-  release wave.
-- Original dirty checkout changes remain excluded.
-- Protected recovery files remain unchanged.
-- Do not claim production deployment until merged full SHA, release health,
-  and production smoke are verified.
+- No database migration, workflow, or protected recovery file changed.
+- Node emitted existing module-type warnings during strip-types checks; they did not fail any gate.
+- Production remains unverified until the exact merged SHA is deployed and smoked.
 
 ## 下一位 AI 工作指引
 
-1. Run `release:local` and `release:preflight` before staging.
-2. Stage only the eight listed release files.
-3. Use compact PR gate waiting and preserve required checks.
-4. Use the exact merged full SHA for production deployment and smoke.
-5. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry in sync.
+1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry synchronized.
+2. Use the exact merged full SHA for the protected production release.
+3. Verify release health and production smoke before claiming deployment.
+4. Preserve unrelated changes in the original dirty checkout.
 
 ## 相關 Commit
 
-- Base commit: `a152f7a4734e1d2686fa607e4c07e6b593f2fedc`.
-- Current implementation commit: not committed yet.
+- Base commit: `05b4beb9915f21be770bd1dbe5adb20133ccd219`.
+- Current implementation commit before final commit: `pending`.
