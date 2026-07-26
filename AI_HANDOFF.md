@@ -1,60 +1,60 @@
 # BookFlow AI Handoff
 
-## 任務目標
+## Current release
 
-Deploy purchase CTA 8-second timeout follow-up
-
-## 目前狀態與背景
-
-- Task ID: 20260723-purchase-cta-loading-loop.
-- Task: Deploy purchase CTA 8-second timeout follow-up.
-- Branch: agent/fix-purchase-cta-loading-loop-20260723.
-- Base commit: d0e88fc3d35e763891d33ea03b0a2dbc4c1ddb4b.
-- History: .ai/history/20260723-purchase-cta-loading-loop.md.
+- Task ID: `20260726-marketplace-conversation-recovery`.
+- Task: Centralize conversation read recovery behind the navigation seam.
+- Branch: `agent/marketplace-architecture-20260726`.
+- Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`.
+- Current commit: `e6d1e734ed58651e1c34523e42454355e1892ba1`.
 - No database migration is included; staging migration is NOT APPLICABLE.
 - No GitHub workflow or protected recovery file is changed.
-- Do not add Rollback-Workflow-Approved: true unless this is an authorized rollback/recovery change.
 
-## 已完成
+## Root cause
 
-- Production browser proof reproduced the previous release's permanent Confirming state after more than 9 seconds.
-- Root cause identified: the active-request React effect depended on its own key/loading state, so setting loading triggered cleanup and discarded the query result.
-- Removed the self-cancelling dependencies, retained the 8-second AbortController timeout, and added a focused regression guard.
+`TradeChatPanel` called `markConversationRead` directly, bypassing the
+conversation navigation recovery path. A failed mark-read could therefore
+leave navigation state stale instead of refreshing chats.
 
-## 下一步
+## Changes
 
-1. Pass PR #134 required release checks.
-2. Merge PR #134 and record the exact squash merge SHA.
-3. Run the protected production release workflow with that exact merged SHA.
-4. Verify /api/health/release and release-smoke, then repeat authenticated production CTA proof.
+- Added a pure conversation navigation policy for local read state, recovery,
+  restoration, and removal.
+- Routed app-level mark-read through the policy and refresh-on-failure seam.
+- Removed direct data-layer mark-read calls from `TradeChatPanel`.
+- Added focused behavior checks for reset, restore, hide, and recovery paths.
 
-## 變更檔案
+## Evidence
 
-- components/marketplace-app.tsx
-- scripts/check-chat-listing-order-ux.mjs
-- AI_HANDOFF.md
-- .ai/state.json
-- .ai/history/20260723-purchase-cta-loading-loop.md
+- Conversation navigation behavior: 4/4.
+- Trade chat checks: 9/9.
+- Chat switching checks: 5/5.
+- Changed-file ESLint, TypeScript, and production build passed.
+- Release plan: clean at current commit.
+- PR #140 is draft; merge, deployment, release health, and production smoke
+  remain NOT VERIFIED.
 
-## 驗證結果
+## Next steps
 
-- Focused check passed 30/30; typecheck, lint, tests 22/22, and production build passed.
-- Staging migration is NOT APPLICABLE because no SQL changed.
-- PR #134 CI, merge, production approval, deployment health, smoke, and post-follow-up browser CTA verification are NOT VERIFIED.
+1. Pass PR #140 required checks and review.
+2. Merge and record the exact full main SHA.
+3. Run the protected production release workflow with that SHA.
+4. Verify `/api/health/release` and production smoke for the same SHA.
 
-## 風險與注意事項
+## Files
 
-- Do not deploy from the original dirty checkout or use PR #105. Preserve unrelated edits and never use reset --hard or git clean.
-- The previous production release SHA d0e88fc3d35e763891d33ea03b0a2dbc4c1ddb4b is not evidence that this follow-up is deployed.
-- Keep unavailable release evidence marked NOT VERIFIED.
+- `components/marketplace-app.tsx`
+- `components/marketplace/conversation-navigation-policy.ts`
+- `scripts/check-conversation-navigation-behavior.mjs`
+- `package.json`
+- `AI_HANDOFF.md`
+- `.ai/state.json`
+- `.ai/history/20260726-marketplace-conversation-recovery.md`
+- `AI_WORK_MANUAL.md`
 
-## 下一位 AI 工作指引
+## Safety
 
-1. Keep AI_HANDOFF.md, .ai/state.json, and the matching .ai/history/ archive synchronized.
-2. Run node scripts/ai-collaboration.mjs check-ci origin/main HEAD before merging.
-3. Use the protected release workflow only with the exact full merged main SHA.
-
-## 相關 Commit
-
-- Base commit: d0e88fc3d35e763891d33ea03b0a2dbc4c1ddb4b.
-- Current commit: 78dac77.
+- Unrelated edits in the original dirty checkout were excluded.
+- Protected recovery files remain unchanged.
+- Do not claim production deployment until the merged full SHA, release
+  health, and production smoke are verified.

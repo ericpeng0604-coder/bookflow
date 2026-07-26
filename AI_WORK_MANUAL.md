@@ -1323,6 +1323,22 @@ the manual full-SHA GitHub Actions workflow.
 
 ## New Lesson Template
 
+### LESSON-073: Run release preflight before opening a substantive PR
+
+**Observed problem:** A substantive architecture PR was opened before the
+release preflight, which then stopped because the required handoff, state, and
+history metadata had not been synchronized.
+
+**Cause:** Local code verification was treated as sufficient release
+readiness, while the repository's provenance contract was checked too late.
+
+**Detection:** Run `release:preflight` against the clean release worktree
+before opening or merging the PR; it must report no missing handoff metadata.
+
+**Prevention rule:** Synchronize `AI_HANDOFF.md`, `.ai/state.json`, and a new
+`.ai/history` entry before opening every substantive PR, then run preflight and
+only proceed when it passes.
+
 ### LESSON-NNN: Short title
 
 **Observed problem:** What verifiably went wrong.
