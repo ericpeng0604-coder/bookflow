@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260726-marketplace-conversation-recovery",
-  "taskTitle": "Centralize conversation read recovery behind navigation",
-  "baseCommit": "0a65850fb04cb9afae751e8e6f8a616096eb3e6f",
+  "taskId": "20260726-marketplace-notification-feed",
+  "taskTitle": "Extract the notification feed module from MarketplaceApp",
+  "baseCommit": "1bdf349d1937fdad79340f97bb923fa71e92c30a",
   "updatedAt": "2026-07-26T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260726-marketplace-conversation-recovery.md"
+  "historyFile": ".ai/history/20260726-marketplace-notification-feed.md"
 }

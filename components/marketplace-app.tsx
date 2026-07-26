@@ -93,11 +93,9 @@ import {
   fetchConversationsPage,
   type ConversationCursor,
   submitTradeReview,
-  fetchUnreadNotificationCount,
   loadModerationData,
   loadWorkspaceTabData,
   mergeProfiles,
-  fetchNotifications,
   fetchRiskProfileDetail,
   RISK_REVIEW_PAGE_SIZE,
 } from "@/lib/marketplace/queries";
@@ -122,6 +120,7 @@ import {
 } from "@/lib/marketplace/taiwan-textbook";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { TurnstileWidget } from "@/components/turnstile-widget";
+import { useNotificationFeed } from "@/components/marketplace/use-notification-feed";
 import {
   markConversationReadLocally,
   markConversationReadWithRecovery,
@@ -692,14 +691,6 @@ function authErrorMessage(message: string, fallback: string) {
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 
-function unreadNotificationIds(items: Notification[]) {
-  const ids: string[] = [];
-  for (const item of items) {
-    if (!item.readAt) ids.push(item.id);
-  }
-  return ids;
-}
-
 function uniqueFavoriteBooks(knownBooks: Book[], favoriteIds: Set<string>) {
   const booksById = new Map<string, Book>();
   for (const book of knownBooks) {
@@ -840,8 +831,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [editingRequest, setEditingRequest] = useState<PurchaseRequest | null>(null);
   const [toast, setToast] = useState("");
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const notificationWrapRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -919,9 +908,20 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [cartOpen, setCartOpen] = useState(false);
   const [cartSaving, setCartSaving] = useState(false);
   const cartSyncUserRef = useRef<string | null>(null);
-  const lastNotificationRefreshRef = useRef(0);
   const debouncedQuery = useDebouncedValue(query, 300);
   const currentUser = store.currentUser;
+  const {
+    notifications,
+    unreadCount: unreadNotificationCount,
+    markRead: markNotificationRead,
+    markAllRead: markAllNotificationsRead,
+    reset: resetNotificationFeed,
+  } = useNotificationFeed({
+    client: supabase,
+    currentUser,
+    notificationOpen,
+    onToast: setToast,
+  });
   const cartGroups = useMemo(() => groupCartItems(cartItems), [cartItems]);
 
   useEffect(() => {
@@ -1239,55 +1239,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     });
   }, []);
 
-  const loadNotificationFeed = useCallback(async () => {
-    if (!supabase || !store.currentUser) return;
-    const client = supabase;
-    await runGuarded("notifications", async (signal) => {
-      try {
-        const items = await fetchNotifications(client);
-        if (signal.aborted) return;
-        setNotifications(items);
-        const unreadIds = unreadNotificationIds(items);
-        setUnreadNotificationCount(unreadIds.length);
-        lastNotificationRefreshRef.current = Date.now();
-
-        if (unreadIds.length > 0) {
-          const readAt = new Date().toISOString();
-          const { error } = await client
-            .from("notifications")
-            .update({ read_at: readAt })
-            .in("id", unreadIds)
-            .is("read_at", null);
-          if (signal.aborted) return;
-          if (error) {
-            setToast(`通知已載入，但無法更新已讀狀態：${error.message}`);
-            return;
-          }
-          const unreadIdSet = new Set(unreadIds);
-          setNotifications((previous) => previous.map((notification) =>
-            unreadIdSet.has(notification.id) ? { ...notification, readAt } : notification
-          ));
-          setUnreadNotificationCount(0);
-        }
-      } catch (error) {
-        if (!isAbortError(error)) {
-          setToast(`讀取通知失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
-        }
-      }
-    });
-  }, [store.currentUser]);
-
-  const loadNotificationCount = useCallback(async () => {
-    if (!supabase || !store.currentUser) return;
-    try {
-      const count = await fetchUnreadNotificationCount(supabase);
-      setUnreadNotificationCount(count);
-      lastNotificationRefreshRef.current = Date.now();
-    } catch {
-      // Keep the last known badge value when the network is temporarily unavailable.
-    }
-  }, [store.currentUser]);
-
   const loadConversationSummary = useCallback(async () => {
     if (!supabase || !store.currentUser || conversationSummaryLoadingRef.current) return;
     const userId = store.currentUser.id;
@@ -1468,8 +1419,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         setStore((previous) => ({ ...previous, currentUser: null, requests: [] }));
         setMyBooks([]);
         setRequestBooks([]);
-        setNotifications([]);
-        setUnreadNotificationCount(0);
+        resetNotificationFeed();
         setConversations([]);
         setConversationHasMore(false);
         conversationCursorRef.current = null;
@@ -1494,8 +1444,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         setStore((previous) => ({ ...previous, currentUser: null, requests: [] }));
         setMyBooks([]);
         setRequestBooks([]);
-        setNotifications([]);
-        setUnreadNotificationCount(0);
+        resetNotificationFeed();
         setConversations([]);
         setConversationHasMore(false);
         conversationCursorRef.current = null;
@@ -1548,9 +1497,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         currentUser: googleProfile,
         profiles: mergeProfiles(previous.profiles, [], [], googleProfile),
       }));
-      void fetchUnreadNotificationCount(client)
-        .then(setUnreadNotificationCount)
-        .catch(() => setUnreadNotificationCount(0));
       void fetchFavoriteIds(client)
         .then((ids) => setFavoriteIds(new Set(ids)))
         .catch(() => setFavoriteIds(new Set()));
@@ -1563,23 +1509,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     });
 
     return () => data.subscription.unsubscribe();
-  }, [ready, ensureAdminOtp]);
-
-  useEffect(() => {
-    if (!supabase || !store.currentUser) return;
-    const refreshWhenVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      if (Date.now() - lastNotificationRefreshRef.current < NOTIFICATION_REFRESH_INTERVAL_MS) return;
-      void loadNotificationCount();
-      if (!((view === "dashboard" && dashboardTab === "chats") || view === "chat")) void loadConversationSummary();
-    };
-    const interval = window.setInterval(refreshWhenVisible, NOTIFICATION_REFRESH_INTERVAL_MS);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [dashboardTab, loadConversationSummary, loadNotificationCount, store.currentUser, view]);
+  }, [ready, ensureAdminOtp, resetNotificationFeed]);
 
   useEffect(() => {
     if (!supabase || !store.currentUser || (view === "dashboard" && dashboardTab === "chats") || view === "chat") return;
@@ -1619,11 +1549,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       void client.removeChannel(channel);
     };
   }, [store.currentUser, updateConversationActivity]);
-
-  useEffect(() => {
-    if (!notificationOpen || !store.currentUser) return;
-    void loadNotificationFeed();
-  }, [notificationOpen, store.currentUser, loadNotificationFeed]);
 
   useEffect(() => {
     if (!supabase || !store.currentUser) {
@@ -2235,7 +2160,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setStore((previous) => ({ ...previous, requests: [], currentUser: null }));
     setMyBooks([]);
     setRequestBooks([]);
-    setNotifications([]);
+    resetNotificationFeed();
     conversationSummaryUserRef.current = null;
     conversationSummaryLoadingRef.current = false;
     lastConversationRefreshRef.current = 0;
@@ -3452,42 +3377,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     }
     await reloadAfterModerationMutation();
     setToast("刊登已恢復顯示");
-  }
-
-  async function markNotificationRead(notificationId: string) {
-    if (!supabase || !currentUser) return;
-    const readAt = new Date().toISOString();
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read_at: readAt })
-      .eq("id", notificationId);
-    if (error) {
-      setToast(`通知更新失敗：${error.message}`);
-      return;
-    }
-    setNotifications((previous) =>
-      previous.map((notification) =>
-        notification.id === notificationId ? { ...notification, readAt } : notification,
-      ),
-    );
-    setUnreadNotificationCount((count) => Math.max(0, count - 1));
-  }
-
-  async function markAllNotificationsRead() {
-    if (!supabase || !currentUser) return;
-    const readAt = new Date().toISOString();
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read_at: readAt })
-      .is("read_at", null);
-    if (error) {
-      setToast(`通知更新失敗：${error.message}`);
-      return;
-    }
-    setNotifications((previous) =>
-      previous.map((notification) => ({ ...notification, readAt: notification.readAt || readAt })),
-    );
-    setUnreadNotificationCount(0);
   }
 
   function openNotification(notification: Notification) {

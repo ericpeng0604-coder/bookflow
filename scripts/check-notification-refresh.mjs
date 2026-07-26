@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
+const feed = readFileSync(new URL("../components/marketplace/use-notification-feed.ts", import.meta.url), "utf8");
 const migration = readFileSync(
   new URL("../supabase/request-update-notification-dedupe.sql", import.meta.url),
   "utf8",
 );
 
 assert.match(
-  app,
+  feed,
   /\.in\("id", unreadIds\)\s*\.is\("read_at", null\)/,
   "opening notifications must only mark the fetched unread notification IDs",
 );
