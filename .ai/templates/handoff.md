@@ -1,10 +1,10 @@
 # BookFlow AI Handoff
 
-## 任務目標
+## Task title
 
-<用一段話描述本次任務要完成什麼>
+<task title>
 
-## 目前狀態與背景
+## Release context
 
 - Task ID: `<task-id>`.
 - Task: `<task-title>`.
@@ -15,33 +15,33 @@
 - No GitHub workflow or protected recovery file is changed unless explicitly listed here.
 - Do not add `Rollback-Workflow-Approved: true` unless this is an authorized rollback/recovery change.
 
-## 已完成
+## Completed work
 
-- <列出已完成且有證據的項目>
+- <completed work>
 
-## 下一步
+## Next steps
 
-1. <下一個具體步驟>
-2. <下一個具體步驟>
+1. <next step>
+2. <next step>
 
-## 變更檔案
+## Changed files
 
 - `path/to/file`
 
-## 驗證結果
+## Verification
 
 - `<command>`: passed / failed / NOT VERIFIED
 
-## 風險與注意事項
+## Risks and blockers
 
-- <仍需注意的風險、限制或未驗證事項>
+- <known risk or blocker, or None>
 
-## 下一位 AI 工作指引
+## AI follow-up
 
-1. <下一位 AI 應如何接手>
+1. <follow-up action>
 2. Keep `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/*.md` in sync.
 
-## 相關 Commit
+## Commit
 
 - Base commit: `<base-commit>`.
 - Current implementation commit before final commit: `<sha-or-not-committed-yet>`.

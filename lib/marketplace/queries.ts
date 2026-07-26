@@ -56,11 +56,12 @@ export async function fetchMarketplacePage(
   client: SupabaseClient,
   filters: MarketplaceFilters,
   cursor: MarketplaceCursor,
+  signal?: AbortSignal,
 ): Promise<MarketplacePageResult> {
   const { data: rows, error } = await client.rpc(
     "list_books_page",
     marketplaceRpcParams(filters, MARKETPLACE_PAGE_SIZE, cursor),
-  );
+  ).abortSignal(signal ?? AbortSignal.timeout(10_000));
   if (error) throw error;
 
   const mapped = (rows ?? []).map((row: Record<string, unknown>) => mapBook(row));

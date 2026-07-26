@@ -24,6 +24,13 @@ export function useTradeChatSession({ client, conversationId, currentUserId, onR
   const cursorRef = useRef<{ createdAt: string; id: string } | null>(null);
   const sessionRef = useRef<ReturnType<typeof beginTradeChatSession> | null>(null);
   const tokenRef = useRef<number | null>(null);
+  const onReadRef = useRef(onRead);
+  const onMessageActivityRef = useRef(onMessageActivity);
+
+  useEffect(() => {
+    onReadRef.current = onRead;
+    onMessageActivityRef.current = onMessageActivity;
+  }, [onMessageActivity, onRead]);
 
   const reportError = useCallback((message: string) => setError(message), []);
   const retry = useCallback(() => setRetryKey((previous) => previous + 1), []);
@@ -81,7 +88,7 @@ export function useTradeChatSession({ client, conversationId, currentUserId, onR
         if (!session.isCurrent(token)) return;
         const state = buildTradeChatPageState(page, currentUserId);
         setMessages(state.messages); setHasOlderMessages(state.hasMore); cursorRef.current = state.nextCursor;
-        try { await onRead(conversationId); } catch (readError) { if (session.isCurrent(token)) reportError(readError instanceof Error ? readError.message : "Conversation read failed"); }
+        try { await onReadRef.current(conversationId); } catch (readError) { if (session.isCurrent(token)) reportError(readError instanceof Error ? readError.message : "Conversation read failed"); }
         if (!session.isCurrent(token)) return;
         const paths = [...new Set(page.messages.flatMap((message) => message.imagePaths))];
         if (paths.length === 0) return;
@@ -95,12 +102,12 @@ export function useTradeChatSession({ client, conversationId, currentUserId, onR
       let message: TradeMessage;
       try { message = mapTradeMessage(payload.new as Record<string, unknown>); } catch { return; }
       addMessage(message);
-      onMessageActivity?.(message);
-      void Promise.resolve(onRead(conversationId)).catch((readError) => { if (session.isCurrent(token)) reportError(readError instanceof Error ? readError.message : "Conversation read failed"); });
+      onMessageActivityRef.current?.(message);
+      void Promise.resolve(onReadRef.current(conversationId)).catch((readError) => { if (session.isCurrent(token)) reportError(readError instanceof Error ? readError.message : "Conversation read failed"); });
       if (message.imagePaths.length > 0) void signChatImages(client, message.imagePaths).then((signed) => { if (session.isCurrent(token)) addImageUrls(signed); }).catch((signError) => { if (session.isCurrent(token)) reportError(signError instanceof Error ? signError.message : "Unable to sign chat images"); });
     }).subscribe();
     return () => { session.dispose(); void client.removeChannel(channel); };
-  }, [addImageUrls, addMessage, client, conversationId, currentUserId, onMessageActivity, onRead, reportError, retryKey]);
+  }, [addImageUrls, addMessage, client, conversationId, currentUserId, reportError, retryKey]);
 
   return { messages, imageUrls, loading, loadingOlder, hasOlderMessages, showQuickPhrases, setShowQuickPhrases, error, addImageUrls, addMessage, loadOlderMessages, recallMessage, retry, setError: reportError };
 }

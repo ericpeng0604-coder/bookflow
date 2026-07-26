@@ -1,13 +1,13 @@
 export const REQUIRED_HANDOFF_SECTIONS = [
-  "任務目標",
-  "目前狀態與背景",
-  "已完成",
-  "下一步",
-  "變更檔案",
-  "驗證結果",
-  "風險與注意事項",
-  "下一位 AI 工作指引",
-  "相關 Commit",
+  "Task title",
+  "Release context",
+  "Completed work",
+  "Next steps",
+  "Changed files",
+  "Verification",
+  "Risks and blockers",
+  "AI follow-up",
+  "Commit",
 ];
 
 export const UNREADABLE_TEXT_PATTERN =
@@ -32,7 +32,7 @@ export function missingHandoffSections(markdown) {
 
 export function renderHandoffDraft({
   taskId = "<task-id>",
-  title = "<任務標題>",
+  title = "<task title>",
   branch = "<branch>",
   baseCommit = "<base-commit>",
   currentCommit = "<current-or-pending-commit>",
@@ -40,11 +40,11 @@ export function renderHandoffDraft({
 } = {}) {
   return `# BookFlow AI Handoff
 
-## 任務目標
+## Task title
 
 ${title}
 
-## 目前狀態與背景
+## Release context
 
 - Task ID: \`${taskId}\`.
 - Task: \`${title}\`.
@@ -55,36 +55,36 @@ ${title}
 - No GitHub workflow or protected recovery file is changed unless explicitly listed here.
 - Do not add \`Rollback-Workflow-Approved: true\` unless this is an authorized rollback/recovery change.
 
-## 已完成
+## Completed work
 
 - Not started yet.
 
-## 下一步
+## Next steps
 
 1. Implement the scoped change.
 2. Run the required local checks.
 3. Commit, run \`node scripts/release-preflight.mjs\`, then open a PR.
 4. After merge, verify production with \`/api/health/release\` and \`release:smoke\`.
 
-## 變更檔案
+## Changed files
 
 - ${historyFile}
 
-## 驗證結果
+## Verification
 
 - Not verified yet.
 
-## 風險與注意事項
+## Risks and blockers
 
 - None known yet.
 
-## 下一位 AI 工作指引
+## AI follow-up
 
 1. Replace every placeholder in this handoff with confirmed facts.
 2. Keep \`AI_HANDOFF.md\`, \`.ai/state.json\`, and the matching \`.ai/history/*.md\` in sync.
 3. Run \`node scripts/ai-collaboration.mjs check-ci origin/main HEAD\` before opening or merging the PR.
 
-## 相關 Commit
+## Commit
 
 - Base commit: \`${baseCommit}\`.
 - Current implementation commit before final commit: \`${currentCommit}\`.
