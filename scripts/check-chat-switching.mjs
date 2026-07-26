@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
+const session = readFileSync(new URL("../components/marketplace/use-trade-chat-session.ts", import.meta.url), "utf8");
 
 assert.match(
   app,
@@ -9,18 +10,18 @@ assert.match(
   "each selected conversation must receive an isolated chat component state",
 );
 assert.match(
-  app,
+  session,
   /const \[messages, setMessages\] = useState<TradeMessage\[\]>\(\[\]\);[\s\S]*const \[imageUrls, setImageUrls\] = useState<Record<string, string>>\(\{\}\);/,
   "newly mounted chat panels must start with empty conversation content",
 );
 assert.match(
-  app,
-  /if \(!active\) return;[\s\S]*setMessages\(page\.messages\)/,
+  session,
+  /if \(!session\.isCurrent\(token\)\) return;[\s\S]*setMessages\(state\.messages\)/,
   "a stale conversation response must not replace the active conversation",
 );
 assert.match(
-  app,
-  /return \(\) => \{\s*active = false;\s*void client\.removeChannel\(channel\);/,
+  session,
+  /return \(\) => \{ session\.dispose\(\); void client\.removeChannel\(channel\); \};/,
   "conversation cleanup must invalidate async work before removing realtime",
 );
 assert.match(

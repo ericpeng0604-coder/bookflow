@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260726-marketplace-workspace",
-  "taskTitle": "Extract the marketplace workspace data orchestration from MarketplaceApp",
-  "baseCommit": "a152f7a4734e1d2686fa607e4c07e6b593f2fedc",
-  "updatedAt": "2026-07-26T12:00:00.000Z",
+  "taskId": "20260726-marketplace-conversation-chat",
+  "taskTitle": "Extract conversation navigation and trade chat session modules",
+  "baseCommit": "05b4beb9915f21be770bd1dbe5adb20133ccd219",
+  "updatedAt": "2026-07-26T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260726-marketplace-workspace.md"
+  "historyFile": ".ai/history/20260726-marketplace-conversation-chat.md"
 }

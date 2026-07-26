@@ -72,10 +72,7 @@ import type {
 } from "@/lib/marketplace/free-ocr";
 import {
   deleteChatImageUploads,
-  fetchTradeMessages,
   mapTradeMessage,
-  markConversationRead,
-  recallTradeMessage,
   sendTradeMessage,
   signChatImages,
   uploadChatImages,
@@ -120,10 +117,8 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { TurnstileWidget } from "@/components/turnstile-widget";
 import { useNotificationFeed } from "@/components/marketplace/use-notification-feed";
 import { useMarketplaceWorkspace } from "@/components/marketplace/use-marketplace-workspace";
-import {
-  markConversationReadLocally,
-  markConversationReadWithRecovery,
-} from "@/components/marketplace/conversation-navigation-policy";
+import { useConversationNavigation } from "@/components/marketplace/use-conversation-navigation";
+import { useTradeChatSession } from "@/components/marketplace/use-trade-chat-session";
 import {
   addCartItem,
   canCheckoutGroup,
@@ -159,12 +154,10 @@ import type {
 
 const STORAGE_KEY = "bookflow-market-v1";
 const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
-const LAST_CHAT_KEY = "bookflow-last-chat-v1";
 const IMAGE_SEARCH_MAX_FILE_BYTES = 5 * 1024 * 1024;
 const IMAGE_SEARCH_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MESSAGE_RECALL_WINDOW_MS = 10 * 60_000;
 const pushPromptStorageKey = (userId: string) => `${PUSH_PROMPT_KEY}:${userId}`;
-const lastChatStorageKey = (userId: string) => `${LAST_CHAT_KEY}:${userId}`;
 function marketplaceFiltersKey(filters: MarketplaceFilters) {
   return JSON.stringify([
     filters.listingType,
@@ -633,32 +626,6 @@ function conversationMessagePreview(message: TradeMessage) {
   return "訊息";
 }
 
-function mergeConversationSummaries(previous: Conversation[], incoming: Conversation[]) {
-  const merged = new Map(previous.map((conversation) => [conversation.id, conversation]));
-  for (const conversation of incoming) {
-    const existing = merged.get(conversation.id);
-    if (!existing) {
-      merged.set(conversation.id, conversation);
-      continue;
-    }
-    const existingTime = new Date(existing.lastMessageAt).getTime();
-    const incomingTime = new Date(conversation.lastMessageAt).getTime();
-    if (existingTime > incomingTime) continue;
-    if (existingTime === incomingTime && existing.unreadCount === 0 && conversation.unreadCount > 0) {
-      merged.set(conversation.id, { ...conversation, unreadCount: 0 });
-      continue;
-    }
-    merged.set(conversation.id, {
-      ...conversation,
-      lastMessagePreview: conversation.lastMessagePreview || existing.lastMessagePreview,
-      lastMessageSenderId: conversation.lastMessageSenderId || existing.lastMessageSenderId,
-    });
-  }
-  return [...merged.values()].sort((left, right) =>
-    new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime(),
-  );
-}
-
 function maskEmail(email: string) {
   const [name, domain] = email.split("@");
   if (!name || !domain) return email;
@@ -848,7 +815,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [detailImageIndex, setDetailImageIndex] = useState(0);
   const [bookDetailLoading, setBookDetailLoading] = useState(false);
   const [bookDetailMissing, setBookDetailMissing] = useState(false);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationHasMore, setConversationHasMore] = useState(false);
   const [conversationLoadingMore, setConversationLoadingMore] = useState(false);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
@@ -963,10 +929,24 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [notificationOpen]);
+  const conversationRefreshRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const refreshConversations = useCallback(() => conversationRefreshRef.current(), []);
+  const conversationNavigation = useConversationNavigation({
+    client: supabase,
+    currentUser,
+    onRefresh: refreshConversations,
+    onToast: setToast,
+  });
+  const { conversations, expandedConversationId } = conversationNavigation;
+  const resetConversationNavigation = conversationNavigation.reset;
+  const onConversationsLoaded = conversationNavigation.onConversationsLoaded;
+  const mergeConversations = conversationNavigation.mergeConversations;
+  const openConversation = conversationNavigation.openConversation;
+  const keepConversationRead = conversationNavigation.markRead;
+  const hideClosedConversation = conversationNavigation.hideConversation;
   const {
     adminWorkspace,
     dashboardTab,
-    expandedConversationId,
     openBookRoute,
     openDashboard: showDashboard,
     returnToChatListRoute,
@@ -974,7 +954,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     selectedId,
     setDashboardTab,
     setAdminWorkspace,
-    setExpandedConversationId,
     setSelectedId,
     setView,
     view,
@@ -982,13 +961,14 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     ready,
     listingType,
     currentUser,
-    conversations,
-    lastChatStorageKey,
+    expandedConversationId,
+    lastConversationId: conversationNavigation.lastConversationId,
+    onExpandedConversationChange: conversationNavigation.setExpandedConversationId,
     initialView,
     initialDashboardTab,
     onListingTypeChange: setListingType,
     onBookRouteChange: clearBookDetailRouteState,
-    onConversationRoute: openConversation,
+    onConversationRoute: conversationNavigation.openConversation,
   });
   const isStandaloneChatRoute = view === "chat"
     || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "chat");
@@ -1246,13 +1226,13 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     }));
   }, []);
   const onWorkspaceConversationsLoaded = useCallback((loadedConversations: Conversation[]) => {
-    setConversations((previous) => mergeConversationSummaries(previous, loadedConversations));
-  }, []);
+    onConversationsLoaded(loadedConversations);
+  }, [onConversationsLoaded]);
   const onWorkspaceConversationPageLoaded = useCallback((page: Awaited<ReturnType<typeof fetchConversationsPage>>) => {
-    setConversations((previous) => mergeConversationSummaries(previous, page.conversations));
+    onConversationsLoaded(page.conversations);
     setConversationHasMore(page.hasMore);
     conversationCursorRef.current = page.nextCursor;
-  }, []);
+  }, [onConversationsLoaded]);
   const onWorkspaceAdminVerificationExpired = useCallback((message: string, user: Profile) => (
     recoverAdminVerification(message, user)
   ), []);
@@ -1298,6 +1278,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     onToast: setToast,
     onAdminVerificationExpired: onWorkspaceAdminVerificationExpired,
   });
+
+  conversationRefreshRef.current = async () => {
+    if (store.currentUser) await loadUserWorkspace(store.currentUser, "chats");
+  };
 
   const riskProfileIds = riskProfiles.map((risk) => risk.userId);
 
@@ -1348,7 +1332,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     try {
       const page = await fetchConversationsPage(supabase);
       if (conversationSummaryUserRef.current !== userId) return;
-      setConversations((previous) => mergeConversationSummaries(previous, page.conversations));
+      onConversationsLoaded(page.conversations);
       setConversationHasMore(page.hasMore);
       conversationCursorRef.current = page.nextCursor;
       lastConversationRefreshRef.current = Date.now();
@@ -1357,7 +1341,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     } finally {
       conversationSummaryLoadingRef.current = false;
     }
-  }, [store.currentUser]);
+  }, [onConversationsLoaded, store.currentUser]);
 
   const loadMoreConversations = useCallback(async () => {
     if (!supabase || !store.currentUser || !conversationHasMore || conversationLoadingMoreRef.current) return;
@@ -1367,7 +1351,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setConversationLoadingMore(true);
     try {
       const page = await fetchConversationsPage(supabase, cursor);
-      setConversations((previous) => mergeConversationSummaries(previous, page.conversations));
+      onConversationsLoaded(page.conversations);
       setConversationHasMore(page.hasMore);
       conversationCursorRef.current = page.nextCursor;
       const profileIds = page.conversations.flatMap((item) => [item.buyerId, item.sellerId]);
@@ -1387,26 +1371,23 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       conversationLoadingMoreRef.current = false;
       setConversationLoadingMore(false);
     }
-  }, [appendRequestBooks, conversationHasMore, store.currentUser]);
+  }, [appendRequestBooks, conversationHasMore, onConversationsLoaded, store.currentUser]);
 
   const updateConversationActivity = useCallback((message: TradeMessage) => {
     if (!conversationIdsRef.current.has(message.conversationId)) {
       void loadConversationSummary();
       return;
     }
-    setConversations((previous) => {
-      const current = previous.find((conversation) => conversation.id === message.conversationId);
-      if (!current || new Date(message.createdAt).getTime() <= new Date(current.lastMessageAt).getTime()) return previous;
-      const updated: Conversation = {
-        ...current,
-        lastMessageAt: message.createdAt,
-        lastMessageSenderId: message.senderId,
-        lastMessagePreview: conversationMessagePreview(message),
-        unreadCount: expandedConversationId === message.conversationId ? 0 : current.unreadCount + 1,
-      };
-      return mergeConversationSummaries(previous.filter((conversation) => conversation.id !== message.conversationId), [updated]);
-    });
-  }, [expandedConversationId, loadConversationSummary]);
+    const current = conversations.find((conversation) => conversation.id === message.conversationId);
+    if (!current || new Date(message.createdAt).getTime() <= new Date(current.lastMessageAt).getTime()) return;
+    mergeConversations([{
+      ...current,
+      lastMessageAt: message.createdAt,
+      lastMessageSenderId: message.senderId,
+      lastMessagePreview: conversationMessagePreview(message),
+      unreadCount: expandedConversationId === message.conversationId ? 0 : current.unreadCount + 1,
+    }]);
+  }, [conversations, expandedConversationId, loadConversationSummary, mergeConversations]);
 
   /* Legacy reload callbacks superseded by useMarketplaceWorkspace.
   const reloadAfterUserMutation = useCallback(async () => {
@@ -1520,7 +1501,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         setStore((previous) => ({ ...previous, currentUser: null, requests: [] }));
         clearWorkspace();
         resetNotificationFeed();
-        setConversations([]);
+        resetConversationNavigation();
         setConversationHasMore(false);
         conversationCursorRef.current = null;
         conversationIdsRef.current = new Set();
@@ -1542,7 +1523,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         setStore((previous) => ({ ...previous, currentUser: null, requests: [] }));
         clearWorkspace();
         resetNotificationFeed();
-        setConversations([]);
+        resetConversationNavigation();
         setConversationHasMore(false);
         conversationCursorRef.current = null;
         conversationIdsRef.current = new Set();
@@ -1580,7 +1561,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
           conversationSummaryUserRef.current = null;
           conversationSummaryLoadingRef.current = false;
           lastConversationRefreshRef.current = 0;
-          setConversations([]);
+          resetConversationNavigation();
           setStore((previous) => ({ ...previous, currentUser: null }));
           setToast("請完成安全驗證後寄送管理員驗證碼");
           return;
@@ -1605,7 +1586,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     });
 
     return () => data.subscription.unsubscribe();
-  }, [clearWorkspace, ready, ensureAdminOtp, replaceFavoriteIds, resetNotificationFeed]);
+  }, [clearWorkspace, ready, ensureAdminOtp, replaceFavoriteIds, resetConversationNavigation, resetNotificationFeed]);
 
   useEffect(() => {
     if (!supabase || !store.currentUser || (view === "dashboard" && dashboardTab === "chats") || view === "chat") return;
@@ -2256,7 +2237,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     conversationSummaryUserRef.current = null;
     conversationSummaryLoadingRef.current = false;
     lastConversationRefreshRef.current = 0;
-    setConversations([]);
+    resetConversationNavigation();
     setDetailBook(null);
     setNotificationOpen(false);
     setMobileMenuOpen(false);
@@ -2928,14 +2909,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     void openConversation(String(data));
   }
 
-  function restorePageScroll(position: { x: number; y: number }) {
-    window.requestAnimationFrame(() => {
-      window.scrollTo({ top: position.y, left: position.x, behavior: "auto" });
-      window.requestAnimationFrame(() => window.scrollTo({ top: position.y, left: position.x, behavior: "auto" }));
-      window.setTimeout(() => window.scrollTo({ top: position.y, left: position.x, behavior: "auto" }), 120);
-    });
-  }
-
+  /* Legacy inline conversation read handlers superseded by useConversationNavigation.
   async function openConversation(conversationId: string, options: { preservePageScroll?: boolean } = {}) {
     const preserveScroll = typeof window !== "undefined" && options.preservePageScroll
       ? { x: window.scrollX, y: window.scrollY }
@@ -2952,7 +2926,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     if (!client || !currentUser) return;
     try {
       await markConversationReadWithRecovery(conversationId, {
-        markRead: (id) => markConversationRead(client, id),
         refresh: () => loadUserWorkspace(currentUser, "chats"),
       });
     } catch (error) {
@@ -2966,13 +2939,13 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     if (!client || !currentUser) return;
     try {
       await markConversationReadWithRecovery(conversationId, {
-        markRead: (id) => markConversationRead(client, id),
         refresh: () => loadUserWorkspace(currentUser, "chats"),
       });
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Unable to update read state");
     }
   }, [currentUser, loadUserWorkspace]);
+  */
 
   async function sellerConfirmHandoff(requestId: string) {
     if (!supabase) return;
@@ -3304,6 +3277,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setToast("問題回報已標記為完成");
   }
 
+  /* Legacy inline hide handler superseded by useConversationNavigation.
   async function hideClosedConversation(conversationId: string) {
     if (!supabase || !currentUser) return;
     const { error } = await supabase.rpc("hide_closed_conversation", {
@@ -3317,6 +3291,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     setConversations((previous) => previous.filter((conversation) => conversation.id !== conversationId));
     setToast("訊息已從你的清單刪除");
   }
+  */
 
   function openReport(type: ReportTargetType, id: string, label: string) {
     requireActive(() => {
@@ -7542,7 +7517,7 @@ function TradeChatPanel({
   currentUserId: string;
   profiles: Profile[];
   onChanged: () => void;
-  onRead: (conversationId: string) => void;
+  onRead: (conversationId: string) => void | Promise<void>;
   onBack: () => void;
   onMessageActivity: (message: TradeMessage) => void;
   onHide: () => void;
@@ -7550,35 +7525,48 @@ function TradeChatPanel({
   onEditRequest: () => void;
   onRespondToRequest: (requestId: string, status: "accepted" | "rejected") => void | Promise<void>;
 }) {
-  const [messages, setMessages] = useState<TradeMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
   const [safetyMenuOpen, setSafetyMenuOpen] = useState(false);
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
   const [contextDetailsOpen, setContextDetailsOpen] = useState(false);
-  const [showQuickPhrases, setShowQuickPhrases] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [loadingOlder, setLoadingOlder] = useState(false);
-  const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
-  const [messageRetryKey, setMessageRetryKey] = useState(0);
   const [canRetrySend, setCanRetrySend] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [filePreviews, setFilePreviews] = useState<Array<{ file: File; url: string }>>([]);
   const actionDialog = useActionDialog();
   const logRef = useRef<HTMLDivElement>(null);
   const draftInputRef = useRef<HTMLTextAreaElement>(null);
-  const messageCursorRef = useRef<{ createdAt: string; id: string } | null>(null);
   const sendingRef = useRef(false);
   const stickToBottomRef = useRef(true);
   const lastMessageCountRef = useRef(0);
   const sentByCurrentUserRef = useRef(false);
   const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
   const [messageActionNow, setMessageActionNow] = useState<number | null>(null);
+  const {
+    messages,
+    imageUrls,
+    loading,
+    loadingOlder,
+    hasOlderMessages,
+    showQuickPhrases,
+    setShowQuickPhrases,
+    error,
+    addImageUrls,
+    addMessage,
+    loadOlderMessages,
+    recallMessage,
+    retry: retryTradeChatSession,
+    setError,
+  } = useTradeChatSession({
+    client: supabase,
+    conversationId: conversation.id,
+    currentUserId,
+    onRead,
+    onMessageActivity,
+  });
   const otherUserId = conversation.buyerId === currentUserId ? conversation.sellerId : conversation.buyerId;
   const isSeller = conversation.sellerId === currentUserId;
   const canRespondToRequest = Boolean(
@@ -7607,6 +7595,7 @@ function TradeChatPanel({
     return () => previews.forEach((preview) => URL.revokeObjectURL(preview.url));
   }, [files]);
 
+  /* Legacy inline trade-chat fetch and realtime session superseded by useTradeChatSession.
   useEffect(() => {
     if (!supabase) {
       setLoading(false);
@@ -7688,6 +7677,7 @@ function TradeChatPanel({
       void client.removeChannel(channel);
     };
   }, [conversation.id, currentUserId, messageRetryKey, onMessageActivity, onRead]);
+  */
 
   useEffect(() => {
     const updateMessageActionTime = () => setMessageActionNow(Date.now());
@@ -7751,10 +7741,10 @@ function TradeChatPanel({
       const message = await sendTradeMessage(supabase, conversation.id, body, uploadedPaths);
       sentByCurrentUserRef.current = true;
       onMessageActivity(message);
-      setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
+      addMessage(message);
       if (uploadedPaths.length > 0) {
         const signed = await signChatImages(supabase, uploadedPaths);
-        setImageUrls((previous) => ({ ...previous, ...signed }));
+        addImageUrls(signed);
       }
       setFiles([]);
       setUploadProgress(0);
@@ -7778,11 +7768,7 @@ function TradeChatPanel({
     draftInputRef.current?.form?.requestSubmit();
   }
 
-  function retryLoadMessages() {
-    setLoading(true);
-    setError("");
-    setMessageRetryKey((previous) => previous + 1);
-  }
+  const retryLoadMessages = retryTradeChatSession;
 
   function removeSelectedFile(index: number) {
     setFiles((previous) => previous.filter((_, fileIndex) => fileIndex !== index));
@@ -7811,6 +7797,7 @@ function TradeChatPanel({
     scrollChatLogToBottom("smooth");
   }
 
+  /* Legacy inline pagination and recall handlers superseded by useTradeChatSession.
   async function loadOlderMessages() {
     const cursor = messageCursorRef.current;
     if (!supabase || !cursor || loadingOlder) return;
@@ -7852,6 +7839,8 @@ function TradeChatPanel({
       setError(recallError instanceof Error ? recallError.message : "無法收回訊息");
     }
   }
+  */
+  const recall = recallMessage;
 
   async function closeChat() {
     if (!supabase) return;
