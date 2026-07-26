@@ -2,72 +2,64 @@
 
 ## 任務目標
 
-Extract conversation navigation and trade chat session modules.
+Enable scheduled Dependabot checks for npm dependencies and GitHub Actions.
 
 ## 目前狀態與背景
 
-- Task ID: `20260726-marketplace-conversation-chat`.
-- Task: `Extract conversation navigation and trade chat session modules`.
-- Branch: `agent/marketplace-conversation-chat-20260726`.
-- Base commit: `05b4beb9915f21be770bd1dbe5adb20133ccd219`.
-- History: `.ai/history/20260726-marketplace-conversation-chat.md`.
-- No database migration is included; staging migration is NOT APPLICABLE.
-- No GitHub workflow or protected recovery file is changed.
+- Task ID: `20260726-enable-dependabot`.
+- Task: `Enable scheduled Dependabot checks`.
+- Branch: `chore/enable-dependabot-20260726`.
+- Base commit: `34d359b59729cbbecf737c5c73b072b727a65733`.
+- History: `.ai/history/20260726-enable-dependabot.md`.
+- No database migration is included.
+- No production code, GitHub workflow, or protected recovery file is changed.
 - Do not add `Rollback-Workflow-Approved: true`; this is not a rollback change.
 
 ## 已完成
 
-- Completed the conversation navigation and TradeChat session extraction.
-- The original dirty checkout and unrelated seller, bundle, migration, and API edits remain excluded.
-- Production is pending the merged SHA release workflow and independent smoke.
+- Added `.github/dependabot.yml` with weekly npm and GitHub Actions update checks.
+- Limited each ecosystem to three open Dependabot PRs.
+- Ignored automatic major-version update PRs.
+- Kept the change free of dependency, application, database, secret, and deployment updates.
 
 ## 下一步
 
-1. Push this commit and open the PR.
-2. Wait for required checks and merge the PR.
-3. Deploy the exact merged main SHA through `release-production.yml`.
-4. Verify `/api/health/release` and independent production smoke.
+1. Confirm the PR checks pass.
+2. Merge PR #146 using the repository's normal merge protection.
+3. Confirm Dependabot configuration is present on `main`; no production deployment is required.
 
 ## 變更檔案
 
-- `.ai/history/20260726-marketplace-conversation-chat.md`
-- `components/marketplace-app.tsx`
-- `components/marketplace/conversation-navigation-policy.ts`
-- `components/marketplace/navigation-state.ts`
-- `components/marketplace/trade-chat-session-policy.ts`
-- `components/marketplace/use-conversation-navigation.ts`
-- `components/marketplace/use-trade-chat-session.ts`
-- `package.json`
-- `scripts/check-chat-listing-order-ux.mjs`
-- `scripts/check-chat-switching.mjs`
-- `scripts/check-conversation-navigation.mjs`
-- `scripts/check-trade-chat-session-behavior.mjs`
-- `scripts/run-project-checks.mjs`
+- `.github/dependabot.yml`
+- `AI_HANDOFF.md`
+- `.ai/state.json`
+- `.ai/history/20260726-enable-dependabot.md`
 
 ## 驗證結果
 
-- Focused conversation navigation behavior: passed 4/4.
-- Trade chat session behavior: passed 4/4.
-- Full project checks: passed 38/38.
-- TypeScript typecheck: passed.
-- Changed-file ESLint: passed.
-- Production build: passed.
-- Production deployment: NOT VERIFIED yet.
+- PR diff reviewed: one Dependabot configuration plus required handoff metadata.
+- Vercel preview: passed; no production deployment required.
+- Staging Migration: passed; no database migration is included.
+- Quality and build: passed.
+- CodeQL: passed.
+- Workflow syntax: NOT VERIFIED because the actionlint Docker image pull timed out.
+- AI handoff: pending after metadata synchronization.
 
 ## 風險與注意事項
 
-- No database migration, workflow, or protected recovery file changed.
-- Node emitted existing module-type warnings during strip-types checks; they did not fail any gate.
-- Production remains unverified until the exact merged SHA is deployed and smoked.
+- Dependabot will create future update PRs according to the committed schedule and limits.
+- Major-version updates remain intentionally ignored.
+- No database or production runtime behavior changes.
 
 ## 下一位 AI 工作指引
 
-1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry synchronized.
-2. Use the exact merged full SHA for the protected production release.
-3. Verify release health and production smoke before claiming deployment.
-4. Preserve unrelated changes in the original dirty checkout.
+1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching `.ai/history/*.md` entry synchronized.
+2. Verify the exact PR head checks before merging.
+3. Preserve all protected recovery files and unrelated local edits.
+4. Do not claim a production deployment for this configuration-only change.
 
 ## 相關 Commit
 
-- Base commit: `05b4beb9915f21be770bd1dbe5adb20133ccd219`.
-- Current implementation commit before final commit: `pending`.
+- Base commit: `34d359b59729cbbecf737c5c73b072b727a65733`.
+- Configuration commit: `f3223c855389e915e011ccc61e928b22d0601aa8`.
+- Handoff metadata commit: pending.
