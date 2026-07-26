@@ -1,0 +1,99 @@
+name: Bug 回報
+description: 回報可重現的功能、版面、流程或錯誤問題
+title: "[BUG] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感謝回報。請勿貼上密碼、API key、access token、service role key、完整個資或 production secrets。
+        未執行的測試請明確標示 `NOT VERIFIED`。
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 問題範圍
+      options:
+        - 首頁／搜尋／篩選
+        - 登入／註冊／學生驗證
+        - 商品刊登／圖片／OCR
+        - 購物車／購買申請／訂單
+        - 聊天／通知
+        - 贈送流程
+        - 管理員／停權／審核
+        - 響應式 UI／Accessibility
+        - Supabase／RLS／RPC／Migration
+        - CI／部署／監控
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: page
+    attributes:
+      label: 發生頁面或路由
+      description: 請填 URL、路由或功能名稱；請移除 token、conversation ID 等敏感資訊。
+      placeholder: 例如 /?market=book&view=chat
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重現步驟
+      description: 請依實際操作順序列出。
+      placeholder: |
+        1. 開啟……
+        2. 點擊……
+        3. 發生……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 預期結果
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 實際結果
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 測試環境
+      description: 請填 staging／production、裝置、作業系統、瀏覽器與 viewport。
+      placeholder: staging；Windows 11；Chrome；390x844
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 錯誤訊息與證據
+      description: 可貼已遮罩的 console、network、Sentry event、截圖或錄影；請勿洩漏 secrets 或完整個資。
+
+  - type: dropdown
+    id: data_write
+    attributes:
+      label: 是否可能涉及資料寫入或交易狀態
+      options:
+        - 否／純 UI 或唯讀問題
+        - 是／可能涉及商品、訊息、交易、通知或帳號資料
+        - 不確定
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: 提交確認
+      options:
+        - label: 我已確認沒有在 Issue 中貼出密碼、token、API key、service role key 或其他 secrets。
+          required: true
+        - label: 我已標示哪些測試已執行，未執行的項目會寫成 `NOT VERIFIED`。
+          required: true
