@@ -34,6 +34,7 @@ jobs:
           const email = process.env.E2E_TEST_EMAIL;
           const password = process.env.E2E_TEST_PASSWORD;
 
+          console.log("PASS: staging test credentials are present");
           const login = await fetch(`${base}/auth/v1/token?grant_type=password`, {
             method: "POST",
             headers: {
@@ -42,10 +43,24 @@ jobs:
             },
             body: JSON.stringify({ email, password }),
           });
-          if (!login.ok) throw new Error(`Password authentication failed with HTTP ${login.status}.`);
+          if (!login.ok) {
+            let authError = {};
+            try { authError = await login.json(); } catch {}
+            const code = String(authError?.error_code || authError?.code || "").toLowerCase();
+            const message = String(authError?.msg || authError?.message || authError?.error_description || "").toLowerCase();
+            if (code.includes("captcha") || message.includes("captcha")) {
+              throw new Error("Password authentication requires CAPTCHA/Turnstile; direct API login cannot verify these credentials.");
+            }
+            if (code.includes("invalid_credentials") || message.includes("invalid login credentials")) {
+              throw new Error("Staging authentication rejected the supplied account credentials.");
+            }
+            if (code.includes("email_not_confirmed") || message.includes("email not confirmed")) {
+              throw new Error("The staging test account email is not confirmed.");
+            }
+            throw new Error(`Password authentication failed with HTTP ${login.status} and an unclassified safe error.`);
+          }
           const session = await login.json();
           if (!session?.access_token || !session?.user?.id) throw new Error("Authentication response did not contain a usable session.");
-          console.log("PASS: staging test credentials are present");
           console.log("PASS: password authentication succeeded");
 
           const userResponse = await fetch(`${base}/auth/v1/user`, {
