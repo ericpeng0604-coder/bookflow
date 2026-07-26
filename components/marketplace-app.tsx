@@ -93,8 +93,6 @@ import {
   fetchConversationsPage,
   type ConversationCursor,
   submitTradeReview,
-  loadModerationData,
-  loadWorkspaceTabData,
   mergeProfiles,
   fetchRiskProfileDetail,
   RISK_REVIEW_PAGE_SIZE,
@@ -121,6 +119,7 @@ import {
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { TurnstileWidget } from "@/components/turnstile-widget";
 import { useNotificationFeed } from "@/components/marketplace/use-notification-feed";
+import { useMarketplaceWorkspace } from "@/components/marketplace/use-marketplace-workspace";
 import {
   markConversationReadLocally,
   markConversationReadWithRecovery,
@@ -140,24 +139,18 @@ import type {
   BookStatus,
   Conversation,
   CartItem,
-  Feedback,
   Notification,
   Profile,
   PurchaseRequest,
   PurchaseOrder,
-  Report,
   ReportReason,
   ReportTargetType,
   RequestStatus,
   ReviewStatus,
-  SellerLifecycle,
   StudentVerification,
   StudentVerificationSummary,
-  TradeContact,
   TradeMessage,
   TradeReviewTag,
-  TrustBadge,
-  RiskPolicy,
   RiskProfile,
   ListingType,
   MeetupMode,
@@ -835,20 +828,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const notificationWrapRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [adminOtpEmail, setAdminOtpEmail] = useState("");
-  const [contacts, setContacts] = useState<Record<string, TradeContact>>({});
-  const [reports, setReports] = useState<Report[]>([]);
-  const [feedback, setFeedback] = useState<Feedback[]>([]);
-  const [trustBadges, setTrustBadges] = useState<TrustBadge[]>([]);
-  const [verifiedPartyIds, setVerifiedPartyIds] = useState<Set<string>>(() => new Set());
-  const [riskProfiles, setRiskProfiles] = useState<RiskProfile[]>([]);
-  const [riskPolicy, setRiskPolicy] = useState<RiskPolicy | null>(null);
   const [riskProfileDetail, setRiskProfileDetail] = useState<RiskProfile | null>(null);
   const [riskFilters, setRiskFilters] = useState({ status: "all", riskLevel: "all" });
-  const riskProfileIds = riskProfiles.map((risk) => risk.userId);
   const [reviewRequest, setReviewRequest] = useState<PurchaseRequest | null>(null);
   const [reviewStatus, setReviewStatus] = useState<{ reviewed: boolean; revieweeId: string; revieweeName: string } | null>(null);
-  const [studentVerifications, setStudentVerifications] = useState<StudentVerification[]>([]);
-  const [myStudentVerification, setMyStudentVerification] = useState<StudentVerificationSummary | null>(null);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; label: string } | null>(null);
   const [marketplaceBooks, setMarketplaceBooks] = useState<Book[]>([]);
   const [marketplaceCount, setMarketplaceCount] = useState(0);
@@ -861,22 +844,15 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [imageSearchQuery, setImageSearchQuery] = useState("");
   const [imageSearchActive, setImageSearchActive] = useState(false);
   const [imageSearchResultCount, setImageSearchResultCount] = useState<number | null>(null);
-  const [myBooks, setMyBooks] = useState<Book[]>([]);
-  const [requestBooks, setRequestBooks] = useState<Book[]>([]);
   const [detailBook, setDetailBook] = useState<Book | null>(null);
   const [detailImageIndex, setDetailImageIndex] = useState(0);
   const [bookDetailLoading, setBookDetailLoading] = useState(false);
   const [bookDetailMissing, setBookDetailMissing] = useState(false);
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => new Set());
-  const [favoriteBookCache, setFavoriteBookCache] = useState<Book[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationHasMore, setConversationHasMore] = useState(false);
   const [conversationLoadingMore, setConversationLoadingMore] = useState(false);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
-  const [pendingReviews, setPendingReviews] = useState<Book[]>([]);
   const [selectedAdminBook, setSelectedAdminBook] = useState<Book | null>(null);
-  const [hiddenBooks, setHiddenBooks] = useState<Book[]>([]);
-  const [sellerLifecycle, setSellerLifecycle] = useState<SellerLifecycle | null>(null);
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
   const [activeRequestCheckState, setActiveRequestCheckState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [chatListCollapsed, setChatListCollapsed] = useState(false);
@@ -924,6 +900,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   });
   const cartGroups = useMemo(() => groupCartItems(cartItems), [cartItems]);
 
+  /* Workspace-dependent cart reconciliation runs after the workspace hook is initialized.
   useEffect(() => {
     setCartItems(readCart(window.localStorage));
   }, []);
@@ -961,6 +938,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       cancelled = true;
     };
   }, [currentUser?.id, marketplaceBooks, myBooks, requestBooks, store.books]);
+  */
   useEffect(() => {
     if (!supabase || !currentUser?.id || cartItems.length === 0) return;
     void supabase
@@ -1146,6 +1124,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     });
   }, [imageSearchActive, marketplaceBooks, marketplaceFilters, marketplaceHasMore]);
 
+  /* Legacy inline workspace loader retained temporarily while the hook seam is wired below.
   const loadUserWorkspace = useCallback(async (user: Profile, tab: DashboardTab) => {
     if (!supabase) return;
     const client = supabase;
@@ -1239,6 +1218,128 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     });
   }, []);
 
+  */
+
+  const reloadMarketplace = useCallback(async () => {
+    if (!supabase) return;
+    invalidateMarketplaceCache(marketplaceCacheRef.current, marketplaceFiltersKey(marketplaceFilters));
+    await Promise.all([loadMarketplaceBooks(), loadMarketplaceCount()]);
+  }, [loadMarketplaceBooks, loadMarketplaceCount, marketplaceFilters]);
+
+  const onWorkspaceRequestsLoaded = useCallback((requests: PurchaseRequest[], user: Profile) => {
+    setStore((previous) => ({ ...previous, requests, currentUser: user }));
+  }, []);
+  const onWorkspaceOrdersLoaded = useCallback((orders: PurchaseOrder[], user: Profile) => {
+    setStore((previous) => ({ ...previous, orders, currentUser: user }));
+  }, []);
+  const onWorkspaceProfilesLoaded = useCallback((profiles: Profile[], user: Profile) => {
+    setStore((previous) => ({
+      ...previous,
+      profiles: mergeProfiles(previous.profiles, profiles, [], user),
+      currentUser: user,
+    }));
+  }, []);
+  const onWorkspaceAdminProfilesLoaded = useCallback((profiles: Profile[]) => {
+    setStore((previous) => ({
+      ...previous,
+      profiles: mergeProfiles(previous.profiles, [], profiles, previous.currentUser),
+    }));
+  }, []);
+  const onWorkspaceConversationsLoaded = useCallback((loadedConversations: Conversation[]) => {
+    setConversations((previous) => mergeConversationSummaries(previous, loadedConversations));
+  }, []);
+  const onWorkspaceConversationPageLoaded = useCallback((page: Awaited<ReturnType<typeof fetchConversationsPage>>) => {
+    setConversations((previous) => mergeConversationSummaries(previous, page.conversations));
+    setConversationHasMore(page.hasMore);
+    conversationCursorRef.current = page.nextCursor;
+  }, []);
+  const onWorkspaceAdminVerificationExpired = useCallback((message: string, user: Profile) => (
+    recoverAdminVerification(message, user)
+  ), []);
+
+  const {
+    appendRequestBooks,
+    clearWorkspace,
+    contacts,
+    favoriteBookCache,
+    favoriteIds,
+    feedback,
+    hiddenBooks,
+    loadDashboardWorkspace,
+    loadModerationPanel,
+    loadUserWorkspace,
+    mergeTrustBadges,
+    myBooks,
+    myStudentVerification,
+    pendingReviews,
+    reports,
+    requestBooks,
+    reloadAfterModerationMutation,
+    reloadAfterUserMutation,
+    replaceFavoriteIds,
+    riskPolicy,
+    riskProfiles,
+    sellerLifecycle,
+    studentVerifications,
+    trustBadges,
+    updateFavoriteIds,
+    verifiedPartyIds,
+  } = useMarketplaceWorkspace({
+    client: supabase,
+    currentUser: store.currentUser,
+    dashboardTab,
+    reloadMarketplace,
+    onRequestsLoaded: onWorkspaceRequestsLoaded,
+    onOrdersLoaded: onWorkspaceOrdersLoaded,
+    onProfilesLoaded: onWorkspaceProfilesLoaded,
+    onAdminProfilesLoaded: onWorkspaceAdminProfilesLoaded,
+    onConversationsLoaded: onWorkspaceConversationsLoaded,
+    onConversationPageLoaded: onWorkspaceConversationPageLoaded,
+    onToast: setToast,
+    onAdminVerificationExpired: onWorkspaceAdminVerificationExpired,
+  });
+
+  const riskProfileIds = riskProfiles.map((risk) => risk.userId);
+
+  useEffect(() => {
+    setCartItems(readCart(window.localStorage));
+  }, []);
+
+  useEffect(() => {
+    writeCart(cartItems, window.localStorage);
+  }, [cartItems]);
+
+  useEffect(() => {
+    const knownBooks = [...marketplaceBooks, ...myBooks, ...requestBooks, ...store.books];
+    if (knownBooks.length === 0) return;
+    setCartItems((previous) => {
+      const next = reconcileCart(previous, knownBooks);
+      return next.length === previous.length && next.every((item, index) => item.bookId === previous[index]?.bookId) ? previous : next;
+    });
+  }, [marketplaceBooks, myBooks, requestBooks, store.books]);
+
+  useEffect(() => {
+    if (!supabase || !currentUser?.id || cartSyncUserRef.current === currentUser.id) return;
+    cartSyncUserRef.current = currentUser.id;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("purchase_cart_items")
+        .select("book_id")
+        .eq("user_id", currentUser.id);
+      if (cancelled || (error && !["PGRST205", "42P01"].includes(error.code || ""))) return;
+      const knownBooks = [...marketplaceBooks, ...myBooks, ...requestBooks, ...store.books];
+      const remoteItems = (data || [])
+        .map((row) => knownBooks.find((book) => book.id === row.book_id))
+        .filter((book): book is Book => Boolean(book))
+        .map(cartItemFromBook);
+      setCartItems((previous) => reconcileCart([...previous, ...remoteItems], knownBooks));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, marketplaceBooks, myBooks, requestBooks, store.books]);
+
   const loadConversationSummary = useCallback(async () => {
     if (!supabase || !store.currentUser || conversationSummaryLoadingRef.current) return;
     const userId = store.currentUser.id;
@@ -1279,16 +1380,14 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         ...previous,
         profiles: mergeProfiles(previous.profiles, partyProfiles, [], previous.currentUser),
       }));
-      setRequestBooks((previous) => [
-        ...new Map([...previous, ...books].map((book) => [book.id, book])).values(),
-      ]);
+      appendRequestBooks(books);
     } catch (error) {
       setToast(`載入更多訊息失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
     } finally {
       conversationLoadingMoreRef.current = false;
       setConversationLoadingMore(false);
     }
-  }, [conversationHasMore, store.currentUser]);
+  }, [appendRequestBooks, conversationHasMore, store.currentUser]);
 
   const updateConversationActivity = useCallback((message: TradeMessage) => {
     if (!conversationIdsRef.current.has(message.conversationId)) {
@@ -1309,6 +1408,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     });
   }, [expandedConversationId, loadConversationSummary]);
 
+  /* Legacy reload callbacks superseded by useMarketplaceWorkspace.
   const reloadAfterUserMutation = useCallback(async () => {
     if (!supabase || !store.currentUser) return;
     invalidateMarketplaceCache(marketplaceCacheRef.current, marketplaceFiltersKey(marketplaceFilters));
@@ -1328,6 +1428,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       loadMarketplaceCount(),
     ]);
   }, [loadMarketplaceBooks, loadMarketplaceCount, loadModerationPanel, marketplaceFilters, store.currentUser]);
+  */
 
   const openDashboard = useCallback(() => {
     showDashboard();
@@ -1363,10 +1464,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
 
   useEffect(() => {
     window.localStorage.removeItem(STORAGE_KEY);
-    setFavoriteIds(readFavoriteIds());
+    replaceFavoriteIds(readFavoriteIds());
     setOnline(navigator.onLine);
     setReady(true);
-  }, []);
+  }, [replaceFavoriteIds]);
 
   useEffect(() => {
     const updateConnection = () => setOnline(navigator.onLine);
@@ -1417,15 +1518,12 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         conversationSummaryLoadingRef.current = false;
         lastConversationRefreshRef.current = 0;
         setStore((previous) => ({ ...previous, currentUser: null, requests: [] }));
-        setMyBooks([]);
-        setRequestBooks([]);
+        clearWorkspace();
         resetNotificationFeed();
         setConversations([]);
         setConversationHasMore(false);
         conversationCursorRef.current = null;
         conversationIdsRef.current = new Set();
-        setContacts({});
-        setSellerLifecycle(null);
         setSelectedArchivedIds(new Set());
         return;
       }
@@ -1442,14 +1540,12 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         conversationSummaryLoadingRef.current = false;
         lastConversationRefreshRef.current = 0;
         setStore((previous) => ({ ...previous, currentUser: null, requests: [] }));
-        setMyBooks([]);
-        setRequestBooks([]);
+        clearWorkspace();
         resetNotificationFeed();
         setConversations([]);
         setConversationHasMore(false);
         conversationCursorRef.current = null;
         conversationIdsRef.current = new Set();
-        setContacts({});
         return;
       }
       const googleProfile: Profile = {
@@ -1498,8 +1594,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         profiles: mergeProfiles(previous.profiles, [], [], googleProfile),
       }));
       void fetchFavoriteIds(client)
-        .then((ids) => setFavoriteIds(new Set(ids)))
-        .catch(() => setFavoriteIds(new Set()));
+        .then((ids) => replaceFavoriteIds(ids))
+        .catch(() => replaceFavoriteIds([]));
     };
 
     void client.auth.getSession().then(({ data }) => void syncUser(data.session?.user ?? null));
@@ -1509,7 +1605,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     });
 
     return () => data.subscription.unsubscribe();
-  }, [ready, ensureAdminOtp, resetNotificationFeed]);
+  }, [clearWorkspace, ready, ensureAdminOtp, replaceFavoriteIds, resetNotificationFeed]);
 
   useEffect(() => {
     if (!supabase || !store.currentUser || (view === "dashboard" && dashboardTab === "chats") || view === "chat") return;
@@ -1799,12 +1895,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     if (!supabase || !selectedSellerId || view !== "book" || badgeLookupRef.current.has(selectedSellerId)) return;
     badgeLookupRef.current.add(selectedSellerId);
     void fetchPublicTrustBadges(supabase, [selectedSellerId])
-      .then((badges) => setTrustBadges((previous) => [
-        ...previous.filter((badge) => !badges.some((item) => item.userId === badge.userId && item.badgeType === badge.badgeType)),
-        ...badges,
-      ]))
+      .then((badges) => mergeTrustBadges(badges))
       .catch(() => badgeLookupRef.current.delete(selectedSellerId));
-  }, [selectedSellerId, view]);
+  }, [mergeTrustBadges, selectedSellerId, view]);
 
   function openBook(id: string) {
     const target = filteredBooks.find((book) => book.id === id)
@@ -2158,17 +2251,12 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   async function logout() {
     if (supabase) await supabase.auth.signOut();
     setStore((previous) => ({ ...previous, requests: [], currentUser: null }));
-    setMyBooks([]);
-    setRequestBooks([]);
+    clearWorkspace();
     resetNotificationFeed();
     conversationSummaryUserRef.current = null;
     conversationSummaryLoadingRef.current = false;
     lastConversationRefreshRef.current = 0;
     setConversations([]);
-    setContacts({});
-    setPendingReviews([]);
-    setHiddenBooks([]);
-    setMyStudentVerification(null);
     setDetailBook(null);
     setNotificationOpen(false);
     setMobileMenuOpen(false);
@@ -3436,7 +3524,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         return;
       }
     }
-    setFavoriteIds((previous) => {
+    updateFavoriteIds((previous) => {
       const next = new Set(previous);
       if (wasFavorite) next.delete(bookId);
       else next.add(bookId);

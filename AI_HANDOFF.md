@@ -7,22 +7,22 @@
 
 ## 目前狀態與背景
 
-- Task ID: `20260726-marketplace-notification-feed`.
-- Task: Extract the notification feed module from MarketplaceApp.
-- Branch: `agent/marketplace-wave1-20260726`.
-- Base commit: `1bdf349d1937fdad79340f97bb923fa71e92c30a`.
-- History: `.ai/history/20260726-marketplace-notification-feed.md`.
+- Task ID: `20260726-marketplace-workspace`.
+- Task: Extract the marketplace workspace data orchestration from MarketplaceApp.
+- Branch: `agent/marketplace-workspace-20260726`.
+- Base commit: `a152f7a4734e1d2686fa607e4c07e6b593f2fedc`.
+- History: `.ai/history/20260726-marketplace-workspace.md`.
 - PR: not opened yet.
 - No database migration is included; staging migration is NOT APPLICABLE.
 - No GitHub workflow or protected recovery file is changed.
 
 ## 已完成
 
-- Added `useNotificationFeed` for feed loading, unread count, mark-read,
-  mark-all-read, visibility refresh, and user reset.
-- Removed duplicate notification data-layer functions from `MarketplaceApp`.
-- Kept notification destination routing in `MarketplaceApp`.
-- Added focused static module checks and updated the existing refresh contract.
+- Added `useMarketplaceWorkspace` for workspace tabs, moderation data,
+  favorites, trust badges, verification state, and workspace reset.
+- Preserved requests/orders, student verification, conversation page recovery,
+  and admin permission-expiry handling through explicit callbacks.
+- Added a focused static workspace module check.
 
 ## 下一步
 
@@ -34,13 +34,12 @@
 ## 變更檔案
 
 - `components/marketplace-app.tsx`
-- `components/marketplace/use-notification-feed.ts`
-- `scripts/check-notification-feed.mjs`
-- `scripts/check-notification-refresh.mjs`
+- `components/marketplace/use-marketplace-workspace.ts`
+- `scripts/check-marketplace-workspace.mjs`
 - `package.json`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260726-marketplace-notification-feed.md`
+- `.ai/history/20260726-marketplace-workspace.md`
 
 ## 驗證結果
 
@@ -53,8 +52,8 @@
 
 ## 風險與注意事項
 
-- Workspace, conversation navigation, and trade chat module work is excluded
-  from this release wave.
+- Conversation navigation and trade chat module work is excluded from this
+  release wave.
 - Original dirty checkout changes remain excluded.
 - Protected recovery files remain unchanged.
 - Do not claim production deployment until merged full SHA, release health,
@@ -70,5 +69,5 @@
 
 ## 相關 Commit
 
-- Base commit: `1bdf349d1937fdad79340f97bb923fa71e92c30a`.
+- Base commit: `a152f7a4734e1d2686fa607e4c07e6b593f2fedc`.
 - Current implementation commit: not committed yet.

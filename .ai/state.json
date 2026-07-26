@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260726-marketplace-notification-feed",
-  "taskTitle": "Extract the notification feed module from MarketplaceApp",
-  "baseCommit": "1bdf349d1937fdad79340f97bb923fa71e92c30a",
-  "updatedAt": "2026-07-26T00:00:00.000Z",
+  "taskId": "20260726-marketplace-workspace",
+  "taskTitle": "Extract the marketplace workspace data orchestration from MarketplaceApp",
+  "baseCommit": "a152f7a4734e1d2686fa607e4c07e6b593f2fedc",
+  "updatedAt": "2026-07-26T12:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260726-marketplace-notification-feed.md"
+  "historyFile": ".ai/history/20260726-marketplace-workspace.md"
 }
