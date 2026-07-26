@@ -63,6 +63,7 @@
     "check:meetup-modes": "node scripts/check-meetup-modes.mjs",
     "check:risk-warning": "node scripts/check-risk-warning.mjs",
     "check:chat-state": "node scripts/check-chat-switching.mjs",
+    "check:conversation-navigation-behavior": "node --experimental-strip-types scripts/check-conversation-navigation-behavior.mjs",
     "check:notifications": "node scripts/check-notification-refresh.mjs",
     "check:push": "node scripts/check-browser-push.mjs",
     "check:capacity": "node scripts/check-capacity-optimization.mjs",

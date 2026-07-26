@@ -123,6 +123,10 @@ import {
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { TurnstileWidget } from "@/components/turnstile-widget";
 import {
+  markConversationReadLocally,
+  markConversationReadWithRecovery,
+} from "@/components/marketplace/conversation-navigation-policy";
+import {
   addCartItem,
   canCheckoutGroup,
   cartItemFromBook,
@@ -2883,8 +2887,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }
 
   async function startConversation(bookId: string) {
-    if (!supabase || !currentUser) return;
-    const { data, error } = await supabase.rpc("start_conversation", { target_book_id: bookId });
+    const client = supabase;
+    if (!client || !currentUser) return;
+    const { data, error } = await client.rpc("start_conversation", { target_book_id: bookId });
     if (error) {
       setToast(`無法開啟訊息：${error.message}`);
       return;
@@ -2895,11 +2900,12 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }
 
   async function openOrderConversation(requestId: string) {
-    if (!supabase || !currentUser) return;
+    const client = supabase;
+    if (!client || !currentUser) return;
     const targetRequest = store.requests.find((request) => request.id === requestId);
     const { data, error } = targetRequest?.orderId
-      ? await supabase.rpc("open_purchase_order_conversation", { p_order_id: targetRequest.orderId })
-      : await supabase.rpc("open_order_conversation", { target_request_id: requestId });
+      ? await client.rpc("open_purchase_order_conversation", { p_order_id: targetRequest.orderId })
+      : await client.rpc("open_order_conversation", { target_request_id: requestId });
     if (error) {
       setToast(`無法開啟訊息：${error.message}`);
       return;
@@ -2928,23 +2934,32 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     if (currentUser) {
       window.localStorage.setItem(lastChatStorageKey(currentUser.id), conversationId);
     }
-    setConversations((previous) => previous.map((conversation) =>
-      conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation,
-    ));
-    if (!supabase || !currentUser) return;
+    setConversations((previous) => markConversationReadLocally(previous, conversationId));
+    const client = supabase;
+    if (!client || !currentUser) return;
     try {
-      await markConversationRead(supabase, conversationId);
+      await markConversationReadWithRecovery(conversationId, {
+        markRead: (id) => markConversationRead(client, id),
+        refresh: () => loadUserWorkspace(currentUser, "chats"),
+      });
     } catch (error) {
-      await loadUserWorkspace(currentUser, "chats");
       setToast(error instanceof Error ? error.message : "無法更新訊息已讀狀態");
     }
   }
 
-  const keepConversationRead = useCallback((conversationId: string) => {
-    setConversations((previous) => previous.map((conversation) =>
-      conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation,
-    ));
-  }, []);
+  const keepConversationRead = useCallback(async (conversationId: string) => {
+    setConversations((previous) => markConversationReadLocally(previous, conversationId));
+    const client = supabase;
+    if (!client || !currentUser) return;
+    try {
+      await markConversationReadWithRecovery(conversationId, {
+        markRead: (id) => markConversationRead(client, id),
+        refresh: () => loadUserWorkspace(currentUser, "chats"),
+      });
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Unable to update read state");
+    }
+  }, [currentUser, loadUserWorkspace]);
 
   async function sellerConfirmHandoff(requestId: string) {
     if (!supabase) return;
@@ -7636,13 +7651,6 @@ function TradeChatPanel({
         setHasOlderMessages(page.hasMore);
         messageCursorRef.current = page.nextCursor;
         onRead(conversation.id);
-        try {
-          await markConversationRead(client, conversation.id);
-        } catch (readError) {
-          if (active) {
-            setError(readError instanceof Error ? readError.message : "無法更新已讀狀態");
-          }
-        }
         if (!active) return;
         const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
         if (paths.length === 0) return;
@@ -7685,7 +7693,6 @@ function TradeChatPanel({
           setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
           onMessageActivity(message);
           onRead(conversation.id);
-          void markConversationRead(client, conversation.id).catch(() => undefined);
           if (message.imagePaths.length === 0) return;
           void signChatImages(client, message.imagePaths)
             .then((signed) => {
