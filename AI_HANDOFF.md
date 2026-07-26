@@ -12,6 +12,7 @@
 - Branch: `agent/marketplace-architecture-20260726`.
 - Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`.
 - History: `.ai/history/20260726-marketplace-conversation-recovery.md`.
+- Current commit: `a63a612`.
 - PR #140 已建立為 draft；尚未 merge 或部署。
 - 無 database migration；staging migration 為 NOT APPLICABLE。
 - 未修改 GitHub workflow 或 protected recovery file。
@@ -50,7 +51,8 @@
 - Chat switching checks: 5/5 passed。
 - Changed-file ESLint、TypeScript、production build passed。
 - Release plan：clean。
-- Release preflight：待 handoff 章節格式修正後重跑。
+- Release preflight：passed。
+- Full release:local：passed（35/35 project checks、typecheck、lint、production build）。
 
 ## 風險與注意事項
 
@@ -71,3 +73,4 @@
 - Base commit: `0a65850fb04cb9afae751e8e6f8a616096eb3e6f`。
 - Implementation commit: `e6d1e734ed58651e1c34523e42454355e1892ba1`。
 - Current metadata commit: `b22aadc46e95beb80098a7ccb0d5c3454689569b`。
+- CI typecheck fix: `a63a612`。
