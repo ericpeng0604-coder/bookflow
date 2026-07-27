@@ -53,6 +53,10 @@ Establish first-phase Copilot collaboration protection.
 - `pnpm run check:project`: passed, 38/38 checks.
 - `node scripts/check-release-scope.mjs`: passed.
 - `git diff --check`: passed.
+- Second-phase update checks: `node scripts/check-memory.mjs`,
+  `node scripts/ai-collaboration.mjs check`, `node scripts/ai-collaboration.mjs
+  check-ci origin/main HEAD`, `node scripts/check-workflows.mjs`,
+  `node scripts/check-release-scope.mjs`, and `git diff --check`: passed.
 - Main ruleset enforcement: VERIFIED — the main ruleset is active with
   `strict=true`, and requires `Release Readiness`, `Staging Migration`, and
   `Vercel`.
