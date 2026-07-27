@@ -7,7 +7,6 @@ Secure legacy Books RLS policies and make seller reservations atomic.
 ## Release context
 
 - Task ID: `20260727-security-hardening`.
-- Task: `secure legacy Books RLS and atomic reservations`.
 - Branch: `codex/security-hardening-20260727`.
 - Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
 - History: `.ai/history/20260727-security-hardening.md`.
