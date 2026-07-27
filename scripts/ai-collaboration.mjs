@@ -206,7 +206,7 @@ function validateState(state) {
   }
   validateMode(state.mode);
   if (state.owner !== "none" && !AGENTS.has(state.owner)) {
-    fail(".ai/state.json owner must be none, codex, or cursor.");
+    fail(".ai/state.json owner must be none, codex, cursor, or copilot.");
   }
   if (!["idle", "in_progress", "handoff", "blocked"].includes(state.status)) {
     fail(".ai/state.json status must be idle, in_progress, handoff, or blocked.");
@@ -218,7 +218,7 @@ function validateState(state) {
     ["in_progress", "handoff", "blocked"].includes(state.status) &&
     !AGENTS.has(state.owner)
   ) {
-    fail(`${state.status} state must be owned by codex or cursor.`);
+    fail(`${state.status} state must be owned by codex, cursor, or copilot.`);
   }
   if (!/^[0-9a-f]{40}$/i.test(state.baseCommit)) {
     fail("baseCommit must be a full Git commit SHA.");

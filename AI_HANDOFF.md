@@ -28,9 +28,11 @@ Establish first-phase Copilot collaboration protection.
 
 ## Next steps
 
-1. Run the focused collaboration checks, lint, typecheck, tests, and diff check.
-2. Review the final diff for scope and encoding safety.
-3. Stop before push, merge, auto-merge, main-ruleset changes, or cleanup.
+1. Complete the final local checks and release preflight on the clean PR head.
+2. Keep PR #157 unmerged with auto-merge disabled; human reviewer approval is
+   the only remaining review action.
+3. Keep production behavior/deployment marked `NOT VERIFIED` because it is out
+   of scope for this tooling-only PR.
 
 ## Changed files
 
@@ -94,3 +96,5 @@ Establish first-phase Copilot collaboration protection.
 
 - Base commit: `1bb3673d52222c9bc96afb6d8ed33b1a49c6905a`.
 - Current implementation commit: `00420d8` (initial PR #157 implementation).
+- Final review correction: diagnostic messages now include the supported
+  `copilot` owner.

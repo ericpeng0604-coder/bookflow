@@ -33,3 +33,10 @@ migrations, RLS, main rulesets, or existing branches/worktrees.
 PR #157 remains an open Draft and only commits the first-phase repository
 collaboration protection. It does not claim to implement cross-PR overlap
 blocking.
+
+## Final review correction
+
+- Updated invalid-owner diagnostics to include the supported `copilot` agent.
+- No product behavior, migration, RLS, transaction, recovery, main-ruleset,
+  or cross-PR overlap-blocking implementation was added.
+- Production behavior/deployment remains `NOT VERIFIED` and out of scope.
