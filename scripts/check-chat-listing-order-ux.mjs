@@ -17,6 +17,7 @@ const checks = [
   ["chat context card links back to listing", app.includes("chat-context-card") && app.includes("onOpenBook(book.id)")],
   ["seller can respond to request inside chat", app.includes("canRespondToRequest") && app.includes('respondFromChat("accepted")') && app.includes('respondFromChat("rejected")')],
   ["request modal captures meetup preferences and message jump", app.includes('name="preferredMeetupLocation"') && app.includes('name="preferredMeetupTime"') && app.includes("先去訊息確認")],
+  ["meetup preferences stay optional and editable after submission", app.includes("希望面交地點（選填）") && app.includes("送出後，在賣家按下「已完成面交」前，都能回訊息再修改") && app.includes("preferred_meetup_location: preferredMeetupLocation")],
   ["buyer can edit meetup preferences from chat before seller handoff", app.includes("canEditRequestFromChat") && app.includes("onEditRequest") && app.includes("修改面交資訊")],
   ["request modal rehydrates saved purchase fields", /const initialMessage = request\?\.message \|\| REQUEST_PHRASES\[0\]/.test(app) && /setPreferredMeetupLocation\(initialPreferredMeetupLocation\)/.test(app) && /setPreferredMeetupTime\(initialPreferredMeetupTime\)/.test(app)],
   ["chat safety actions are hidden behind menu", app.includes('className="trade-chat-actions chat-safety-actions"') && app.includes('className="chat-safety-menu"')],
@@ -40,6 +41,8 @@ const checks = [
   ["seller can cancel reserved handoff in migration", sellerCancelMigration.includes("actor = target_book.seller_id") && sellerCancelMigration.includes("target.status in ('reserved', 'awaiting_confirmation')")],
   ["chat context and safety menu have styles", css.includes(".chat-context-card") && css.includes(".chat-safety-menu")],
   ["mobile chat long text has wrapping styles", css.includes(".trade-chat-bubble p") && css.includes("overflow-wrap: anywhere") && css.includes(".chat-new-message-button")],
+  ["cart badge is anchored to the cart button", app.includes('className="icon-button cart-button"') && css.includes(".cart-button { position: relative; }")],
+  ["seller storefront tabs fit four controls on mobile", css.includes(".seller-storefront-tabs { gap: 6px; min-width: 0; overflow: visible; }") && css.includes(".seller-storefront-tabs button { flex: 1 1 0; min-width: 0;")],
   ["collapsed chat list keeps a compact restore control", css.includes("grid-template-columns: 56px minmax(0, 1fr)") && css.includes(".conversation-layout.chat-list-collapsed .chat-list-toggle") && css.includes("width: 38px")],
 ];
 

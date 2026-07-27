@@ -5635,26 +5635,29 @@ function AdminOtpModal({
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [requestingCode, setRequestingCode] = useState(false);
+  const [codeRequested, setCodeRequested] = useState(false);
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
-  const requestInFlightRef = useRef(false);
 
-  useEffect(() => {
-    if (siteKey && !captchaToken) return;
-    if (requestInFlightRef.current) return;
-    requestInFlightRef.current = true;
-    setLoading(true);
+  async function requestCode() {
+    if (siteKey && !captchaToken) {
+      setError("請先完成安全驗證");
+      return;
+    }
+    setRequestingCode(true);
     setError("");
-    void onRequestCode(captchaToken || undefined).then((message) => {
-      if (message) setError(message);
-      else setCode("");
-    }).finally(() => {
-      requestInFlightRef.current = false;
-      setLoading(false);
-      setCaptchaToken("");
-      if (siteKey) setCaptchaResetKey((previous) => previous + 1);
-    });
-  }, [captchaToken, onRequestCode, siteKey]);
+    const message = await (codeRequested ? onResend : onRequestCode)(captchaToken || undefined);
+    setRequestingCode(false);
+    setCaptchaToken("");
+    if (siteKey) setCaptchaResetKey((previous) => previous + 1);
+    if (message) {
+      setError(message);
+      return;
+    }
+    setCodeRequested(true);
+    setCode("");
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5663,21 +5666,6 @@ function AdminOtpModal({
     const message = await onVerify(code);
     setLoading(false);
     if (message) setError(message);
-  }
-
-  async function resend() {
-    if (siteKey && !captchaToken) {
-      setError("請先完成安全驗證");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    const message = await onResend(captchaToken || undefined);
-    setLoading(false);
-    setCaptchaToken("");
-    if (siteKey) setCaptchaResetKey((previous) => previous + 1);
-    if (message) setError(message);
-    else setCode("");
   }
 
   return (
@@ -5693,11 +5681,19 @@ function AdminOtpModal({
               onToken={setCaptchaToken}
               onError={() => setError("安全驗證載入失敗，請重新整理後再試")}
             />
-            <p className="auth-hint">完成安全驗證後會寄送管理員驗證碼。</p>
+            <p className="auth-hint">完成安全驗證後，請按下寄碼按鈕。</p>
           </>
         )}
+        <button
+          className="primary wide"
+          type="button"
+          disabled={loading || requestingCode || Boolean(siteKey && !captchaToken)}
+          onClick={() => void requestCode()}
+        >
+          {requestingCode ? "寄送中..." : codeRequested ? "重新寄送驗證碼" : "寄送管理員登入代碼"}
+        </button>
         <h3>輸入 8 位數驗證碼</h3>
-        <p>驗證碼已寄到 <b>{maskEmail(email)}</b>，請在有效期限內完成驗證。</p>
+        <p>{codeRequested ? <>驗證碼已寄到 <b>{maskEmail(email)}</b>，請在有效期限內完成驗證。</> : "先寄送驗證碼，再輸入收到的 8 位數代碼。"}</p>
         <form className="otp-form" onSubmit={submit}>
           <label>
             管理員驗證碼
@@ -5709,16 +5705,14 @@ function AdminOtpModal({
               minLength={8}
               maxLength={8}
               value={code}
+              disabled={!codeRequested || requestingCode}
               onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 8))}
               placeholder="輸入 8 位數字"
               required
             />
           </label>
-          <button className="primary wide" type="submit" disabled={loading || code.length !== 8}>
+          <button className="primary wide" type="submit" disabled={!codeRequested || loading || requestingCode || code.length !== 8}>
             {loading ? "驗證中..." : "完成安全驗證"}
-          </button>
-          <button className="text-button" type="button" disabled={loading} onClick={() => void resend()}>
-            重新寄送驗證碼
           </button>
         </form>
         {error && <p className="auth-error">{error}</p>}

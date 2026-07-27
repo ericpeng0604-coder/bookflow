@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260727-security-hardening",
-  "taskTitle": "secure legacy Books RLS and atomic reservations",
-  "baseCommit": "c41695f7157a2ed1c42db3992fb493559a493467",
-  "updatedAt": "2026-07-27T15:01:00.000+08:00",
+  "taskId": "20260727-admin-marketplace-fixes",
+  "taskTitle": "admin OTP delivery, optional meetup coordination, and responsive marketplace fixes",
+  "baseCommit": "c0c4ebbf997c233b4a0e9c4e195ee21062ff7649",
+  "updatedAt": "2026-07-27T16:55:00+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260727-security-hardening.md"
+  "historyFile": ".ai/history/20260727-admin-marketplace-fixes.md"
 }

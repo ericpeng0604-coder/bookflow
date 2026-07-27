@@ -2,69 +2,67 @@
 
 ## Task title
 
-Secure legacy Books RLS policies and make seller reservations atomic.
+Admin OTP, order coordination, and responsive marketplace fixes
 
 ## Release context
 
-- Task ID: `20260727-security-hardening`.
-- Task: `secure legacy Books RLS and atomic reservations`.
-- Branch: `codex/security-hardening-20260727`.
-- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
-- History: `.ai/history/20260727-security-hardening.md`.
-- Production database migration and history reconciliation are complete.
-- No protected recovery files or GitHub workflows were changed.
+- Task ID: `20260727-admin-marketplace-fixes`.
+- Task: `admin OTP delivery, optional meetup coordination, and responsive marketplace fixes`.
+- Branch: `codex/admin-marketplace-fixes`.
+- Base commit: `c0c4ebbf997c233b4a0e9c4e195ee21062ff7649`.
+- Base ref at merge resolution: `origin/main`.
+- History: `.ai/history/20260727-admin-marketplace-fixes.md`.
+- The latest main security-hardening release is included as the base; this PR adds only the admin/auth and marketplace UI fixes.
+- No protected recovery files or GitHub workflows are changed.
 
 ## Completed work
 
-- Removed known permissive legacy Books policies and recreated the active-listing authorization model.
-- Blocked anonymous writes and suspended-user listing writes through RLS.
-- Locked the request and listing during single-item acceptance with update-count assertions.
-- Locked every active book in a bundle in deterministic order with an updated-book-count assertion.
-- Added the security contract and staging concurrency harness.
-- Ran the staging two-session concurrency test: exactly one bundle was reserved and the other received `A selected listing is unavailable`.
-- Removed all temporary staging auth, profile, book, bundle, item, and notification fixtures.
+- Changed admin OTP from Turnstile-token auto-send to an explicit send/resend action.
+- Kept meetup location/time optional and editable before seller handoff, with regression coverage.
+- Anchored the cart count badge to the cart button.
+- Made all four seller storefront tabs fit the mobile layout without horizontal clipping.
 
 ## Next steps
 
-1. Wait for PR checks, merge the approved branch, and confirm the Vercel production deployment.
-2. Verify `/api/health/release`, homepage, and marketplace count against the merged SHA.
-3. Keep the staging concurrency harness available for future regression runs.
+1. Re-run exact-SHA local release gates after the latest-main merge.
+2. Wait for PR checks and Vercel deployment.
+3. Verify `/api/health/release`, homepage, marketplace count, and requested UI after production propagation.
+4. Test real Supabase email delivery and Turnstile with the configured admin account.
 
 ## Changed files
 
-- `supabase/migrations/20260727060919_secure_book_rls_and_atomic_reservations.sql`
-- `scripts/check-security-hardening.mjs`
-- `scripts/check-bundle-concurrency.mjs`
-- `package.json`
+- `app/globals.css`
+- `components/marketplace-app.tsx`
+- `scripts/check-chat-listing-order-ux.mjs`
+- `scripts/check-turnstile.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260727-security-hardening.md`
-- Restored versioned migrations under `supabase/migrations/` required by staging and production history.
+- `AI_WORK_MANUAL.md`
+- `.ai/history/20260727-admin-marketplace-fixes.md`
 
 ## Verification
 
-- `node scripts/check-security-hardening.mjs`: passed.
-- `node --check scripts/check-bundle-concurrency.mjs`: passed.
-- `git diff --check`: passed.
-- Staging concurrent bundle accepts: passed; one success, one unavailable error, one reserved book.
-- Staging fixture cleanup: passed; zero auth users, profiles, books, bundles, and items remained.
-- Production RLS/RPC/anonymous read-write probes: passed.
-- Production migration history: aligned to `20260727060919`.
-- Production web deployment and merged-SHA health: NOT VERIFIED; current endpoint still reports `c41695f7157a2ed1c42db3992fb493559a493467`.
+- `release:preflight`: passed before latest-main merge.
+- `release:local`: passed for the pre-merge exact SHA; must be rerun after resolving the latest-main metadata merge.
+- Local gates: memory, 22 tests, 38 project checks, TypeScript, ESLint, and production build passed before latest-main merge.
+- Local browser: page content, no error overlay, no console errors, desktop cart anchor and mobile overflow checked.
+- PR #155 Vercel release gates: passed before latest-main merge.
+- Real admin email delivery, Turnstile challenge, seller-data storefront rendering, staging, production, and post-merge health: NOT VERIFIED.
 
 ## Risks and blockers
 
-- The production web deployment must propagate the merged `main` commit before release health can be called verified.
-- Existing Supabase advisor notices are broader pre-existing findings and were not changed by this task.
-- No suspended-user fixture was available in staging; suspended-user RLS is covered by the migration contract and policy probes, but a live suspended-session test remains NOT VERIFIED.
+- Supabase email template/SMTP/Turnstile settings are external configuration and were not changed.
+- No production database migration was performed by this PR.
+- Production deployment is not complete until the merged SHA is reported by `/api/health/release`.
 
 ## AI follow-up
 
-1. Preserve the exact migration history and do not rerun the migration manually.
-2. Verify the deployed commit through `/api/health/release` before claiming production completion.
-3. Keep `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/*.md` in sync.
+1. Keep the original dirty checkout untouched.
+2. Keep this handoff, `.ai/state.json`, and the matching history entry synchronized.
+3. Do not claim production deployment until the merged SHA and smoke evidence are confirmed.
 
 ## Commit
 
-- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
-- Current implementation commit before final handoff update: `7140e9432d42c06ede282958f97b23ad165792a0`.
+- Latest main base: `c0c4ebbf997c233b4a0e9c4e195ee21062ff7649`.
+- Feature commit before latest-main merge: `1ca943206582147dc40f313f1922deb805265137`.
+- Current implementation: merge conflict resolution pending commit.

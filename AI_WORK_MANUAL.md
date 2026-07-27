@@ -1358,6 +1358,21 @@ declare every plugin imported by the lint configuration or required by its
 framework preset, and keep clean-install verification separate from any shared
 `node_modules` junction.
 
+### LESSON-075: Handoff branch metadata must match before release gates
+
+**Observed problem:** The release-local memory gate stopped because the handoff
+still described a detached worktree after the implementation had been placed
+on a named branch.
+
+**Cause:** Branch metadata was written before the branch was created and was not
+rechecked before running the release candidate.
+
+**Detection:** Compare `AI_HANDOFF.md` branch metadata with `git branch
+--show-current` before `release:local` or `release:preflight`.
+
+**Prevention rule:** Create or switch to the final implementation branch first,
+then synchronize handoff metadata and run the memory gate before release work.
+
 ### LESSON-NNN: Short title
 
 **Observed problem:** What verifiably went wrong.
