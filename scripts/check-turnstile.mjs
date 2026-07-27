@@ -34,7 +34,13 @@ for (const fragment of [
   "auth.resend({",
   "captchaToken",
   'action="admin_otp"',
+  "寄送管理員登入代碼",
+  "codeRequested",
 ]) assertIncludes(app, fragment, fragment);
+
+if (app.includes("if (siteKey && !captchaToken) return;\n    if (requestInFlightRef.current) return;")) {
+  throw new Error("Turnstile check failed: admin OTP must not auto-send on widget token changes");
+}
 
 if (widget.includes("SUPABASE_SERVICE_ROLE_KEY") || widget.includes("secret")) {
   throw new Error("Turnstile check failed: client widget contains a server secret");

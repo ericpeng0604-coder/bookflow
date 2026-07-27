@@ -2,52 +2,55 @@
 
 ## Task title
 
-Chat, marketplace return, and order confirmation release
+Admin OTP, order coordination, and responsive marketplace fixes
 
 ## Release context
 
-- Task ID: `20260726-chat-market-order-release`.
-- Task: `chat navigation, marketplace return loading, and order confirmation UX`.
-- Branch: `codex/release-chat-market-order-20260726`.
-- Base commit: `07655cd5f6847d70f5a5968199a74b8dbbdd6c7c`.
-- History: `.ai/history/20260726-chat-market-order-release.md`.
-- The seller storefront bundle migration and core chat modules are already in the production base.
+- Task ID: `20260727-admin-marketplace-fixes`.
+- Task: `admin OTP delivery, optional meetup coordination, and responsive marketplace fixes`.
+- Branch: `codex/admin-marketplace-fixes`.
+- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
+- History: `.ai/history/20260727-admin-marketplace-fixes.md`.
+- The implementation is based on the latest `origin/main`; the original dirty checkout remains untouched.
 - No protected recovery files or GitHub workflows are changed.
 
 ## Completed work
 
-- Added a fresh marketplace reload when returning from chat or selecting the current market.
-- Added cart and single-order confirmation dialogs with explicit confirm and return actions.
-- Stabilized chat session callback updates and cancellation behavior.
-- Added focused regression checks for marketplace return and order UI annotations.
+- Changed admin OTP from Turnstile-token auto-send to an explicit send/resend action.
+- Kept meetup location/time optional and editable before seller handoff, with regression coverage.
+- Anchored the cart count badge to the cart button.
+- Made all four seller storefront tabs fit the mobile layout without horizontal clipping.
 
 ## Next steps
 
-1. Run the focused regression checks and production build.
-2. Run the repository release checks in GitHub Actions.
-3. Merge the PR only after required checks pass.
+1. Review the diff and create an implementation branch/commit if shipping is requested.
+2. Run staging auth/order/browser proof with real Supabase and Turnstile configuration.
+3. Merge and deploy only through the clean release flow.
 4. Verify `/api/health/release` and production smoke after deployment.
 
 ## Changed files
 
 - `app/globals.css`
 - `components/marketplace-app.tsx`
-- `components/marketplace/use-trade-chat-session.ts`
-- `lib/marketplace/queries.ts`
-- `scripts/check-marketplace-return.mjs`
-- `scripts/check-order-ui.mjs`
+- `scripts/check-chat-listing-order-ux.mjs`
+- `scripts/check-turnstile.mjs`
 
 ## Verification
 
-- Marketplace return regression checks: passed 1/1.
-- Order/UI annotation checks: passed 12/12.
+- Targeted Turnstile check: passed.
+- Chat/listing/order UX check: passed 33/33.
+- TypeScript: passed.
+- ESLint: passed.
+- Tests: passed 22/22.
 - Next production build: passed.
-- Production deployment: pending PR merge and deployment propagation.
+- Local browser: page content, no error overlay, no console errors, desktop cart anchor and mobile overflow checked.
+- Real admin email delivery, Turnstile, seller-data tab rendering, staging, and production: NOT VERIFIED.
 
 ## Risks and blockers
 
 - The original dirty checkout contains unrelated mixed changes and remains untouched.
-- The release candidate is based on the exact production commit `07655cd5f6847d70f5a5968199a74b8dbbdd6c7c`.
+- Supabase email template/SMTP/Turnstile settings are external configuration and were not changed.
+- No production deployment or migration was performed.
 
 ## AI follow-up
 
@@ -57,5 +60,5 @@ Chat, marketplace return, and order confirmation release
 
 ## Commit
 
-- Base commit: `07655cd5f6847d70f5a5968199a74b8dbbdd6c7c`.
-- Current implementation commit before handoff update: `9759f657f8ce6172edfe3bc68d1f014c8f746760`.
+- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
+- Current implementation: working tree changes pending commit.
