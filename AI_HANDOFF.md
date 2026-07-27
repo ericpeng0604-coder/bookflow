@@ -9,7 +9,8 @@ Admin OTP, order coordination, and responsive marketplace fixes
 - Task ID: `20260727-admin-marketplace-fixes`.
 - Task: `admin OTP delivery, optional meetup coordination, and responsive marketplace fixes`.
 - Branch: `codex/admin-marketplace-fixes`.
-- Base commit: `c0c4ebbf997c233b4a0e9c4e195ee21062ff7649` (`origin/main` at rebase/merge time).
+- Base commit: `c0c4ebbf997c233b4a0e9c4e195ee21062ff7649`.
+- Base ref at merge resolution: `origin/main`.
 - History: `.ai/history/20260727-admin-marketplace-fixes.md`.
 - The latest main security-hardening release is included as the base; this PR adds only the admin/auth and marketplace UI fixes.
 - No protected recovery files or GitHub workflows are changed.
