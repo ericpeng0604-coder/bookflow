@@ -11,3 +11,5 @@ files during ordinary feature, bug-fix, refactoring, or documentation work:
 These files may only be changed when the user explicitly requests a rollback or
 recovery-system change. Authorized commits must include the exact trailer
 `Rollback-Workflow-Approved: true`. Never use that trailer for unrelated work.
+
+<!-- temporary negative ruleset verification -->
