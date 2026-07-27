@@ -1373,6 +1373,25 @@ rechecked before running the release candidate.
 **Prevention rule:** Create or switch to the final implementation branch first,
 then synchronize handoff metadata and run the memory gate before release work.
 
+### LESSON-076: Release proof must finish with propagation-aware SHA verification
+
+**Observed problem:** The first production smoke ran while the deployment was
+still propagating and correctly reported the previous commit SHA. A successful
+workflow was then required before the final smoke could prove the merged SHA.
+
+**Cause:** Deployment initiation and production availability were treated as
+one event, and the release evidence was not reduced to one exact-SHA probe.
+
+**Detection:** After the production workflow finishes, run the dependency-free
+release smoke against `/`, `/api/marketplace/count`, and `/api/health/release`.
+If the health endpoint reports an older SHA, mark the release `NOT VERIFIED`
+and retry only after a bounded propagation wait.
+
+**Prevention rule:** Dispatch production with the full merged 40-character SHA,
+wait for the workflow result, then perform one final exact-SHA smoke. Never
+claim production completion from a deployment URL, workflow start, or HTTP 200
+alone.
+
 ### LESSON-NNN: Short title
 
 **Observed problem:** What verifiably went wrong.
