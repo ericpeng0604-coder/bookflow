@@ -3,10 +3,16 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260727-release-memory-guards",
-  "taskTitle": "release metadata and propagation guard hardening",
-  "baseCommit": "4ba9aa7c741b7a946b3eb495bb8018f664f82011",
-  "updatedAt": "2026-07-27T17:20:00+08:00",
+  "mode": "write",
+  "taskId": "20260727-copilot-protection",
+  "taskTitle": "establish first-phase Copilot collaboration protection",
+  "baseCommit": "1bb3673d52222c9bc96afb6d8ed33b1a49c6905a",
+  "updatedAt": "2026-07-27T21:35:00+08:00",
+  "verification": {
+    "mainRulesetEnforcement": "VERIFIED",
+    "crossPrOverlapBlocking": "VERIFIED: NOT IMPLEMENTED",
+    "productionBehaviorDeployment": "NOT VERIFIED — out of scope, no merge or deployment performed"
+  },
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260727-release-memory-guards.md"
+  "historyFile": ".ai/history/20260727-copilot-protection.md"
 }
