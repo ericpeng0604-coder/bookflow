@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+// temporary negative handoff verification
+
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
