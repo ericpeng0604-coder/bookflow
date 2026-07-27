@@ -55,3 +55,17 @@ workflow problem is discovered:
 3. Do not record secrets, credentials, personal data, or unsupported blame.
 4. Keep entries general enough to help future work, and update an existing
    lesson instead of adding duplicates.
+
+## AI collaboration protection
+
+- Supported collaboration agents are `codex`, `cursor`, and `copilot`.
+- Collaboration state includes `mode: review` or `mode: write`; the default
+  mode is `review`.
+- Copilot must remain in `review` mode unless a task explicitly opts into
+  `write` mode. Copilot write mode is temporarily prohibited for any
+  `purchase`, `supabase`, or `notification` scope.
+- Agent PR branches must use `codex/*` for Codex and `copilot/*` for Copilot.
+  Agent PRs start as Draft and must include test results plus a `NOT VERIFIED`
+  section for anything not proven.
+- Do not use this phase to change product behavior, Supabase migrations/RLS,
+  main rulesets, existing branches/worktrees, or cross-PR overlap automation.

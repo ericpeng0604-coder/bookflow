@@ -23,7 +23,14 @@ const ROOT = findGitRoot();
 const STATE_PATH = join(ROOT, ".ai", "state.json");
 const HANDOFF_PATH = join(ROOT, "AI_HANDOFF.md");
 const HISTORY_DIR = join(ROOT, ".ai", "history");
-const AGENTS = new Set(["codex", "cursor"]);
+const AGENTS = new Set(["codex", "cursor", "copilot"]);
+const MODES = new Set(["review", "write"]);
+const DEFAULT_MODE = "review";
+const COPILOT_WRITE_RESTRICTIONS = [
+  /purchase/i,
+  /supabase/i,
+  /notification/i,
+];
 const TERMINAL_STATUSES = new Set(["idle", "handoff"]);
 const SENSITIVE_PATTERNS = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i,
@@ -105,7 +112,72 @@ function timestampForFile() {
 
 function validateAgent(agent) {
   if (!AGENTS.has(agent)) {
-    fail("Agent must be codex or cursor.");
+    fail("Agent must be codex, cursor, or copilot.");
+  }
+}
+
+function validateMode(mode) {
+  if (!MODES.has(mode)) {
+    fail("Mode must be review or write.");
+  }
+}
+
+function currentBranch() {
+  return process.env.GITHUB_HEAD_REF?.trim() || git(["branch", "--show-current"]);
+}
+
+function validateAgentBranch(agent) {
+  if (agent !== "codex" && agent !== "copilot") return;
+  const branch = currentBranch();
+  const expectedPrefix = `${agent}/`;
+  if (!branch || !branch.startsWith(expectedPrefix)) {
+    fail(`${agent} PRs must use a ${expectedPrefix} branch.`);
+  }
+}
+
+function validateCopilotWriteScope(agent, mode, taskTitle = "", files = []) {
+  validateMode(mode);
+  if (agent !== "copilot" || mode !== "write") return;
+
+  const restricted = [taskTitle, ...files].filter((value) =>
+    COPILOT_WRITE_RESTRICTIONS.some((pattern) => pattern.test(value)),
+  );
+  if (restricted.length > 0) {
+    fail(
+      "Copilot write mode is temporarily disabled for purchase, supabase, and notification scope.",
+    );
+  }
+}
+
+function workingTreeFiles() {
+  return git(["status", "--short", "--untracked-files=all"])
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => line.slice(3).split(" -> ").pop())
+    .filter(Boolean)
+    .map((file) => file.replaceAll("\\", "/"));
+}
+
+function validateAgentHandoff(markdown, agent) {
+  if (agent === "codex" || agent === "copilot") {
+    if (!/\bNOT VERIFIED\b/.test(markdown)) {
+      fail("Agent handoffs must list unverified items with the exact label NOT VERIFIED.");
+    }
+  }
+}
+
+function validateDraftPullRequest(agent) {
+  if (agent !== "codex" && agent !== "copilot") return;
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (!eventPath || !existsSync(eventPath)) return;
+
+  try {
+    const event = JSON.parse(readFileSync(eventPath, "utf8"));
+    if (event.pull_request && event.pull_request.draft !== true) {
+      fail("Agent PRs must remain Draft until explicitly approved for review.");
+    }
+  } catch {
+    fail("GITHUB_EVENT_PATH is not valid JSON; unable to verify Draft PR status.");
   }
 }
 
@@ -129,6 +201,10 @@ function validateState(state) {
   if (state.schemaVersion !== 1 || state.project !== "bookflow") {
     fail(".ai/state.json must use schemaVersion 1 and project bookflow.");
   }
+  if (!("mode" in state)) {
+    fail(".ai/state.json is missing: mode.");
+  }
+  validateMode(state.mode);
   if (state.owner !== "none" && !AGENTS.has(state.owner)) {
     fail(".ai/state.json owner must be none, codex, or cursor.");
   }
@@ -196,6 +272,7 @@ function archiveHandoff(state, actor, statusLabel) {
     "",
     `- Task: ${state.taskTitle}`,
     `- Actor: ${actor}`,
+    `- Mode: ${state.mode}`,
     `- Status: ${statusLabel}`,
     `- Base commit: \`${state.baseCommit}\``,
     `- Archived at: ${nowIso()}`,
@@ -231,6 +308,7 @@ function printStatus(state = readState()) {
   console.log(`Project: ${state.project}`);
   console.log(`Status: ${state.status}`);
   console.log(`Owner: ${state.owner}`);
+  console.log(`Mode: ${state.mode}`);
   console.log(`Task: ${state.taskTitle}`);
   console.log(`Updated: ${state.updatedAt}`);
   console.log(`Handoff: ${state.handoffFile}`);
@@ -239,11 +317,32 @@ function printStatus(state = readState()) {
   }
 }
 
-function claim(agent, title) {
+function parseModeArgs(args) {
+  let mode = DEFAULT_MODE;
+  const titleParts = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const value = args[index];
+    if (value === "--mode") {
+      mode = args[index + 1];
+      index += 1;
+    } else if (value.startsWith("--mode=")) {
+      mode = value.slice("--mode=".length);
+    } else {
+      titleParts.push(value);
+    }
+  }
+  return { mode, title: titleParts.join(" ").trim() };
+}
+
+function claim(agent, titleArgs) {
   validateAgent(agent);
+  const { mode, title } = parseModeArgs(titleArgs);
   if (!title?.trim()) {
     fail("Provide a task title.");
   }
+  validateMode(mode);
+  validateAgentBranch(agent);
+  validateCopilotWriteScope(agent, mode, title);
 
   const state = readState();
   validateState(state);
@@ -262,6 +361,7 @@ function claim(agent, title) {
   state.status = "in_progress";
   state.taskId = `${date}-${taskSlug(title)}`;
   state.taskTitle = title.trim();
+  state.mode = mode;
   state.baseCommit = git(["rev-parse", "HEAD"]);
   state.updatedAt = nowIso();
   state.historyFile = null;
@@ -277,7 +377,7 @@ function assertOwner(state, agent) {
   }
 }
 
-function handoff(from, to) {
+function handoff(from, to, modeArgs) {
   validateAgent(from);
   validateAgent(to);
   if (from === to) {
@@ -287,9 +387,13 @@ function handoff(from, to) {
   const state = readState();
   validateState(state);
   assertOwner(state, from);
+  const { mode } = parseModeArgs(modeArgs);
+  validateAgentBranch(to);
+  validateCopilotWriteScope(to, mode, state.taskTitle, workingTreeFiles());
   validateHandoff(readHandoff());
   state.historyFile = archiveHandoff(state, from, `handoff to ${to}`);
   state.owner = to;
+  state.mode = mode;
   state.status = "handoff";
   state.updatedAt = nowIso();
   writeState(state);
@@ -305,6 +409,7 @@ function complete(agent) {
   state.historyFile = archiveHandoff(state, agent, "complete");
   state.owner = "none";
   state.status = "idle";
+  state.mode = DEFAULT_MODE;
   state.updatedAt = nowIso();
   writeState(state);
   console.log(`${agent} marked the task complete.`);
@@ -374,7 +479,11 @@ function checkSecretsInHistory(files) {
 function checkLocal() {
   const state = readState();
   validateState(state);
+  validateAgentBranch(state.owner);
+  validateCopilotWriteScope(state.owner, state.mode, state.taskTitle, workingTreeFiles());
+  validateDraftPullRequest(state.owner);
   validateHandoff(readHandoff());
+  validateAgentHandoff(readHandoff(), state.owner);
   if (state.historyFile && !existsSync(join(ROOT, state.historyFile))) {
     fail(`historyFile is set but missing: ${state.historyFile}`);
   }
@@ -400,7 +509,11 @@ function checkCi(base, head) {
   checkSecretsInHistory(files);
   const state = readState();
   validateState(state);
+  validateAgentBranch(state.owner);
+  validateCopilotWriteScope(state.owner, state.mode, state.taskTitle, files);
+  validateDraftPullRequest(state.owner);
   validateHandoff(readHandoff());
+  validateAgentHandoff(readHandoff(), state.owner);
   validateProjectMemoryContract();
   if (!TERMINAL_STATUSES.has(state.status)) {
     fail("PR handoff status must be idle or handoff before opening or merging a release PR.");
@@ -461,10 +574,10 @@ switch (command) {
     printStatus();
     break;
   case "claim":
-    claim(args[0], args.slice(1).join(" "));
+    claim(args[0], args.slice(1));
     break;
   case "handoff":
-    handoff(args[0], args[1]);
+    handoff(args[0], args[1], args.slice(2));
     break;
   case "complete":
     complete(args[0]);
