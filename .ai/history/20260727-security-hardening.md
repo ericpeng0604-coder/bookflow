@@ -13,9 +13,11 @@ writes, hardens `respond_to_purchase_request`, and hardens
 deterministic order and asserting update counts. The 12 migrations already
 present in staging/production but missing from this checkout were restored.
 
-The migration applied successfully to staging. Policy/function checks and the
-anonymous write denial probe passed. Staging has no suspended users and not
-enough authenticated fixtures for a real two-session concurrency test, so that
-test remains `NOT VERIFIED`. A staging-only concurrency harness was added; it
-requires explicit staging credentials and confirmation before creating exact,
-temporary fixtures. Production was not modified.
+The migration applied successfully to staging and production. Policy/function
+checks and the anonymous read/write probes passed in both environments.
+Production's generated migration history version was reconciled to the source
+version; this changed history metadata only. Staging has no suspended users
+and not enough authenticated fixtures for a real two-session concurrency test,
+so that test remains `NOT VERIFIED`. A staging-only concurrency harness was
+added; it requires explicit staging credentials and confirmation before
+creating exact, temporary fixtures.

@@ -24,13 +24,14 @@ Secure legacy Books RLS policies and make seller reservations atomic.
 - Staging migration `secure_book_rls_and_atomic_reservations` applied successfully.
 - Staging policy/function/anon-write probes passed; staging has no suspended users and insufficient fixtures for a real two-session concurrency test.
 - The concurrency harness is ready but was not run because staging credentials/confirmation were not present in this shell.
-- No production migration or production data mutation was performed.
+- Production migration was applied with the connected Supabase migration executor after explicit approval.
+- Production migration history was reconciled from generated version `20260727064646` to source version `20260727060919`; this changed history metadata only, not business data or SQL objects.
+- Production RLS/RPC/anonymous read-write probes passed.
 
 ## Release requirements
 
-1. Run the repository staging workflow and confirm the exact migration history.
-2. Add authenticated staging fixtures for suspended-user and two-session concurrency tests.
-3. Review existing advisor warnings separately from this change.
-4. Apply to production only with explicit production database approval, then verify release health and reservation behavior.
+1. Add authenticated staging fixtures for suspended-user and two-session concurrency tests.
+2. Review existing advisor warnings separately from this change.
+3. Complete the application PR/deployment gates and verify release health; the database migration itself is applied.
 
 Protected rollback files were not changed.
