@@ -109,7 +109,9 @@
     "release:smoke": "node scripts/release-smoke.mjs",
     "release:smoke:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/release-smoke.mjs",
     "staging:check": "node scripts/check-staging.mjs",
-    "staging:check:strict": "node scripts/check-staging.mjs --require-role-probes"
+    "staging:check:strict": "node scripts/check-staging.mjs --require-role-probes",
+    "check:security-hardening": "node scripts/check-security-hardening.mjs",
+    "check:bundle-concurrency": "node scripts/check-bundle-concurrency.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.63.0",

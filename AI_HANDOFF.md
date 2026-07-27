@@ -9,9 +9,9 @@ Admin OTP, order coordination, and responsive marketplace fixes
 - Task ID: `20260727-admin-marketplace-fixes`.
 - Task: `admin OTP delivery, optional meetup coordination, and responsive marketplace fixes`.
 - Branch: `codex/admin-marketplace-fixes`.
-- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
+- Base commit: `c0c4ebbf997c233b4a0e9c4e195ee21062ff764` (`origin/main` at rebase/merge time).
 - History: `.ai/history/20260727-admin-marketplace-fixes.md`.
-- The implementation is based on the latest `origin/main`; the original dirty checkout remains untouched.
+- The latest main security-hardening release is included as the base; this PR adds only the admin/auth and marketplace UI fixes.
 - No protected recovery files or GitHub workflows are changed.
 
 ## Completed work
@@ -23,10 +23,10 @@ Admin OTP, order coordination, and responsive marketplace fixes
 
 ## Next steps
 
-1. Review the diff and create an implementation branch/commit if shipping is requested.
-2. Run staging auth/order/browser proof with real Supabase and Turnstile configuration.
-3. Merge and deploy only through the clean release flow.
-4. Verify `/api/health/release` and production smoke after deployment.
+1. Re-run exact-SHA local release gates after the latest-main merge.
+2. Wait for PR checks and Vercel deployment.
+3. Verify `/api/health/release`, homepage, marketplace count, and requested UI after production propagation.
+4. Test real Supabase email delivery and Turnstile with the configured admin account.
 
 ## Changed files
 
@@ -34,31 +34,34 @@ Admin OTP, order coordination, and responsive marketplace fixes
 - `components/marketplace-app.tsx`
 - `scripts/check-chat-listing-order-ux.mjs`
 - `scripts/check-turnstile.mjs`
+- `AI_HANDOFF.md`
+- `.ai/state.json`
+- `AI_WORK_MANUAL.md`
+- `.ai/history/20260727-admin-marketplace-fixes.md`
 
 ## Verification
 
-- Targeted Turnstile check: passed.
-- Chat/listing/order UX check: passed 33/33.
-- TypeScript: passed.
-- ESLint: passed.
-- Tests: passed 22/22.
-- Next production build: passed.
+- `release:preflight`: passed before latest-main merge.
+- `release:local`: passed for the pre-merge exact SHA; must be rerun after resolving the latest-main metadata merge.
+- Local gates: memory, 22 tests, 38 project checks, TypeScript, ESLint, and production build passed before latest-main merge.
 - Local browser: page content, no error overlay, no console errors, desktop cart anchor and mobile overflow checked.
-- Real admin email delivery, Turnstile, seller-data tab rendering, staging, and production: NOT VERIFIED.
+- PR #155 Vercel release gates: passed before latest-main merge.
+- Real admin email delivery, Turnstile challenge, seller-data storefront rendering, staging, production, and post-merge health: NOT VERIFIED.
 
 ## Risks and blockers
 
-- The original dirty checkout contains unrelated mixed changes and remains untouched.
 - Supabase email template/SMTP/Turnstile settings are external configuration and were not changed.
-- No production deployment or migration was performed.
+- No production database migration was performed by this PR.
+- Production deployment is not complete until the merged SHA is reported by `/api/health/release`.
 
 ## AI follow-up
 
 1. Keep the original dirty checkout untouched.
 2. Keep this handoff, `.ai/state.json`, and the matching history entry synchronized.
-3. Do not claim production deployment until the merged SHA is confirmed by `/api/health/release`.
+3. Do not claim production deployment until the merged SHA and smoke evidence are confirmed.
 
 ## Commit
 
-- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
-- Current implementation: working tree changes pending commit.
+- Latest main base: `c0c4ebbf997c233b4a0e9c4e195ee21062ff764`.
+- Feature commit before latest-main merge: `1ca943206582147dc40f313f1922deb805265137`.
+- Current implementation: merge conflict resolution pending commit.
