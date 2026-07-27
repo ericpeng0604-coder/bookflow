@@ -36,6 +36,12 @@ for (const fragment of [
   'action="admin_otp"',
   "寄送管理員登入代碼",
   "codeRequested",
+  "function authErrorMessage(error: unknown, fallback: string)",
+  "email_provider_disabled",
+  "code.includes(\"rate_limit\")",
+  "try {\n      const message = await (codeRequested ? onResend : onRequestCode)",
+  "} finally {\n      setRequestingCode(false)",
+  "管理員驗證碼寄送服務暫時無法使用，請稍後再試",
 ]) assertIncludes(app, fragment, fragment);
 
 if (app.includes("if (siteKey && !captchaToken) return;\n    if (requestInFlightRef.current) return;")) {

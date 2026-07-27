@@ -634,17 +634,32 @@ function maskEmail(email: string) {
   return `${name.slice(0, 2)}${"*".repeat(Math.max(2, name.length - 2))}@${domain}`;
 }
 
-function authErrorMessage(message: string, fallback: string) {
-  const normalized = message.toLowerCase();
+function authErrorMessage(error: unknown, fallback: string) {
+  const authError = error && typeof error === "object" ? error as { code?: unknown; message?: unknown } : null;
+  const code = typeof authError?.code === "string" ? authError.code.toLowerCase() : "";
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : typeof authError?.message === "string"
+        ? authError.message
+        : "";
+  const normalized = `${code} ${message}`.toLowerCase();
   if (normalized.includes("captcha") || normalized.includes("turnstile") || normalized.includes("verification failed")) {
     return "請完成安全驗證後再試";
+  }
+  if (code.includes("email_address_invalid") || normalized.includes("invalid email")) {
+    return "管理員 Email 格式無效，請確認帳號設定";
+  }
+  if (code.includes("email_provider_disabled") || normalized.includes("email provider") || normalized.includes("smtp") || normalized.includes("error sending email")) {
+    return "Email 寄送服務目前無法使用，請確認 Supabase Email/SMTP 設定";
   }
   if (normalized.includes("invalid login credentials")) return "Email 或密碼錯誤，請重新確認";
   if (normalized.includes("email not confirmed")) return "這個 Email 尚未完成驗證，請先完成註冊驗證";
   if (normalized.includes("user already registered") || normalized.includes("already been registered")) return "這個 Email 已經註冊，請直接登入";
   if (normalized.includes("password should be at least")) return "密碼至少需要 8 個字元";
   if (normalized.includes("signup is disabled")) return "目前暫停開放註冊";
-  if (normalized.includes("rate limit") || normalized.includes("security purposes")) return "操作次數過多，請稍後再試";
+  if (code.includes("rate_limit") || normalized.includes("rate limit") || normalized.includes("security purposes")) return "操作次數過多，請稍後再試";
   if (normalized.includes("expired") || normalized.includes("invalid token") || normalized.includes("token has expired")) {
     return "驗證碼錯誤或已過期，請重新寄送";
   }
@@ -987,16 +1002,21 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     if (!force && adminOtpRequestedRef.current === email) return null;
 
     adminOtpRequestedRef.current = email;
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: false,
-        ...(captchaToken ? { captchaToken } : {}),
-      },
-    });
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false,
+          ...(captchaToken ? { captchaToken } : {}),
+        },
+      });
+      if (error) {
+        adminOtpRequestedRef.current = null;
+        return authErrorMessage(error, "管理員驗證碼寄送失敗，請稍後再試；若持續發生，請確認 Email/SMTP 設定");
+      }
+    } catch {
       adminOtpRequestedRef.current = null;
-      return authErrorMessage(error.message, "管理員驗證碼寄送失敗，請稍後再試");
+      return "無法連線到管理員驗證服務，請稍後再試";
     }
     return null;
   }, []);
@@ -5647,25 +5667,35 @@ function AdminOtpModal({
     }
     setRequestingCode(true);
     setError("");
-    const message = await (codeRequested ? onResend : onRequestCode)(captchaToken || undefined);
-    setRequestingCode(false);
-    setCaptchaToken("");
-    if (siteKey) setCaptchaResetKey((previous) => previous + 1);
-    if (message) {
-      setError(message);
-      return;
+    try {
+      const message = await (codeRequested ? onResend : onRequestCode)(captchaToken || undefined);
+      if (message) {
+        setError(message);
+        return;
+      }
+      setCodeRequested(true);
+      setCode("");
+    } catch {
+      setError("管理員驗證碼寄送服務暫時無法使用，請稍後再試");
+    } finally {
+      setRequestingCode(false);
+      setCaptchaToken("");
+      if (siteKey) setCaptchaResetKey((previous) => previous + 1);
     }
-    setCodeRequested(true);
-    setCode("");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError("");
-    const message = await onVerify(code);
-    setLoading(false);
-    if (message) setError(message);
+    try {
+      const message = await onVerify(code);
+      if (message) setError(message);
+    } catch {
+      setError("管理員驗證服務暫時無法使用，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

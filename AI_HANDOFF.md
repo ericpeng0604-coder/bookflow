@@ -2,51 +2,48 @@
 
 ## Task title
 
-Admin OTP, order coordination, and responsive marketplace fixes
+Repair admin OTP delivery and retry handling
 
 ## Release context
 
-- Task ID: `20260727-release-memory-guards`.
-- Task: `release metadata and propagation guard hardening`.
-- Branch: `codex/release-memory-guards-20260727`.
-- Base commit: `4ba9aa7c741b7a946b3eb495bb8018f664f82011`.
+- Task ID: `20260727-admin-otp-delivery-repair`.
+- Task: `repair admin OTP delivery and retry handling`.
+- Branch: `codex/admin-otp-delivery-repair-20260727`.
+- Base commit: `1bb3673d52222c9bc96afb6d8ed33b1a49c6905a`.
 - Base ref at merge resolution: `origin/main`.
-- History: `.ai/history/20260727-release-memory-guards.md`.
-- The latest main security-hardening release is included as the base; this PR adds only the admin/auth and marketplace UI fixes.
+- History: `.ai/history/20260727-admin-otp-delivery-repair.md`.
+- The latest main security-hardening release is included as the base; this PR adds only admin OTP delivery handling.
 - No protected recovery files or GitHub workflows are changed.
 
 ## Completed work
 
-- Added an early release-preflight stop when the handoff branch differs from the current checkout branch.
-- Added a release-flow regression assertion for the new branch metadata guard.
-- Documented propagation-aware exact-SHA production verification as LESSON-076.
+- Classified Supabase Auth OTP errors using provider codes and messages.
+- Added exception-safe loading reset and retry behavior to the admin OTP modal.
+- Extended the Turnstile regression check for delivery failures and rate-limit codes.
 
 ## Next steps
 
-1. Run the focused release-flow and memory checks.
-2. Run release preflight and the applicable local quality gates.
-3. Open a small PR and merge only after required checks pass.
+1. Run focused checks and release preflight.
+2. Open a small PR and merge only after required checks pass.
+3. Verify the merged SHA through release health and production smoke.
 
 ## Changed files
 
-- `app/globals.css`
 - `components/marketplace-app.tsx`
-- `scripts/check-chat-listing-order-ux.mjs`
 - `scripts/check-turnstile.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `AI_WORK_MANUAL.md`
-- `.ai/history/20260727-release-memory-guards.md`
+- `.ai/history/20260727-admin-otp-delivery-repair.md`
 
 ## Verification
 
-- Focused checks: pending.
-- Release preflight and local quality gates: pending.
-- Production deployment is not in scope for this tooling-only guard until the PR merges.
+- Turnstile focused check, TypeScript and production build: passed.
+- ESLint: NOT VERIFIED; clean install lacks `@next/eslint-plugin-next`.
+- Production deployment and real SMTP delivery: pending.
 
 ## Risks and blockers
 
-- This change only hardens local release checks and documentation; it does not alter application runtime behavior.
+- Real delivery still depends on matching Turnstile hostname/secret and Supabase Email/SMTP settings.
 
 ## AI follow-up
 
@@ -56,5 +53,5 @@ Admin OTP, order coordination, and responsive marketplace fixes
 
 ## Commit
 
-- Latest main base: `4ba9aa7c741b7a946b3eb495bb8018f664f82011`.
+- Latest main base: `1bb3673d52222c9bc96afb6d8ed33b1a49c6905a`.
 - Current implementation commit: pending.
