@@ -2,60 +2,69 @@
 
 ## Task title
 
-Chat, marketplace return, and order confirmation release
+Secure legacy Books RLS policies and make seller reservations atomic.
 
 ## Release context
 
-- Task ID: `20260726-chat-market-order-release`.
-- Task: `chat navigation, marketplace return loading, and order confirmation UX`.
-- Branch: `codex/release-chat-market-order-20260726`.
-- Base commit: `07655cd5f6847d70f5a5968199a74b8dbbdd6c7c`.
-- History: `.ai/history/20260726-chat-market-order-release.md`.
-- The seller storefront bundle migration and core chat modules are already in the production base.
-- No protected recovery files or GitHub workflows are changed.
+- Task ID: `20260727-security-hardening`.
+- Task: `secure legacy Books RLS and atomic reservations`.
+- Branch: `codex/security-hardening-20260727`.
+- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
+- History: `.ai/history/20260727-security-hardening.md`.
+- Production database migration and history reconciliation are complete.
+- No protected recovery files or GitHub workflows were changed.
 
 ## Completed work
 
-- Added a fresh marketplace reload when returning from chat or selecting the current market.
-- Added cart and single-order confirmation dialogs with explicit confirm and return actions.
-- Stabilized chat session callback updates and cancellation behavior.
-- Added focused regression checks for marketplace return and order UI annotations.
+- Removed known permissive legacy Books policies and recreated the active-listing authorization model.
+- Blocked anonymous writes and suspended-user listing writes through RLS.
+- Locked the request and listing during single-item acceptance with update-count assertions.
+- Locked every active book in a bundle in deterministic order with an updated-book-count assertion.
+- Added the security contract and staging concurrency harness.
+- Ran the staging two-session concurrency test: exactly one bundle was reserved and the other received `A selected listing is unavailable`.
+- Removed all temporary staging auth, profile, book, bundle, item, and notification fixtures.
 
 ## Next steps
 
-1. Run the focused regression checks and production build.
-2. Run the repository release checks in GitHub Actions.
-3. Merge the PR only after required checks pass.
-4. Verify `/api/health/release` and production smoke after deployment.
+1. Wait for PR checks, merge the approved branch, and confirm the Vercel production deployment.
+2. Verify `/api/health/release`, homepage, and marketplace count against the merged SHA.
+3. Keep the staging concurrency harness available for future regression runs.
 
 ## Changed files
 
-- `app/globals.css`
-- `components/marketplace-app.tsx`
-- `components/marketplace/use-trade-chat-session.ts`
-- `lib/marketplace/queries.ts`
-- `scripts/check-marketplace-return.mjs`
-- `scripts/check-order-ui.mjs`
+- `supabase/migrations/20260727060919_secure_book_rls_and_atomic_reservations.sql`
+- `scripts/check-security-hardening.mjs`
+- `scripts/check-bundle-concurrency.mjs`
+- `package.json`
+- `AI_HANDOFF.md`
+- `.ai/state.json`
+- `.ai/history/20260727-security-hardening.md`
+- Restored versioned migrations under `supabase/migrations/` required by staging and production history.
 
 ## Verification
 
-- Marketplace return regression checks: passed 1/1.
-- Order/UI annotation checks: passed 12/12.
-- Next production build: passed.
-- Production deployment: pending PR merge and deployment propagation.
+- `node scripts/check-security-hardening.mjs`: passed.
+- `node --check scripts/check-bundle-concurrency.mjs`: passed.
+- `git diff --check`: passed.
+- Staging concurrent bundle accepts: passed; one success, one unavailable error, one reserved book.
+- Staging fixture cleanup: passed; zero auth users, profiles, books, bundles, and items remained.
+- Production RLS/RPC/anonymous read-write probes: passed.
+- Production migration history: aligned to `20260727060919`.
+- Production web deployment and merged-SHA health: NOT VERIFIED; current endpoint still reports `c41695f7157a2ed1c42db3992fb493559a493467`.
 
 ## Risks and blockers
 
-- The original dirty checkout contains unrelated mixed changes and remains untouched.
-- The release candidate is based on the exact production commit `07655cd5f6847d70f5a5968199a74b8dbbdd6c7c`.
+- The production web deployment must propagate the merged `main` commit before release health can be called verified.
+- Existing Supabase advisor notices are broader pre-existing findings and were not changed by this task.
+- No suspended-user fixture was available in staging; suspended-user RLS is covered by the migration contract and policy probes, but a live suspended-session test remains NOT VERIFIED.
 
 ## AI follow-up
 
-1. Keep the original dirty checkout untouched.
-2. Keep this handoff, `.ai/state.json`, and the matching history entry synchronized.
-3. Do not claim production deployment until the merged SHA is confirmed by `/api/health/release`.
+1. Preserve the exact migration history and do not rerun the migration manually.
+2. Verify the deployed commit through `/api/health/release` before claiming production completion.
+3. Keep `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/*.md` in sync.
 
 ## Commit
 
-- Base commit: `07655cd5f6847d70f5a5968199a74b8dbbdd6c7c`.
-- Current implementation commit before handoff update: `9759f657f8ce6172edfe3bc68d1f014c8f746760`.
+- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
+- Current implementation commit before final handoff update: `7140e9432d42c06ede282958f97b23ad165792a0`.

@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260726-chat-market-order-release",
-  "taskTitle": "chat navigation, marketplace return loading, and order confirmation UX",
-  "baseCommit": "07655cd5f6847d70f5a5968199a74b8dbbdd6c7c",
-  "updatedAt": "2026-07-26T20:40:00+08:00",
+  "taskId": "20260727-security-hardening",
+  "taskTitle": "secure legacy Books RLS and atomic reservations",
+  "baseCommit": "c41695f7157a2ed1c42db3992fb493559a493467",
+  "updatedAt": "2026-07-27T15:01:00.000+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260726-chat-market-order-release.md"
+  "historyFile": ".ai/history/20260727-security-hardening.md"
 }
