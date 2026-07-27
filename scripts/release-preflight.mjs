@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import process from "node:process";
 import { analyzeReleaseScope, formatReleaseScopeStop } from "./lib/release-scope.mjs";
 
@@ -68,6 +69,18 @@ console.log(`Working tree: ${status.length ? `${status.length} uncommitted/untra
 console.log(`PR files vs ${baseRef}: ${changedInPr.length}`);
 console.log(`Unapplied commits: ${unapplied.length}`);
 console.log(`Already-applied commits: ${alreadyApplied.length}`);
+
+if (branch !== "(detached)") {
+  try {
+    const handoff = readFileSync("AI_HANDOFF.md", "utf8");
+    const handoffBranch = handoff.match(/^- Branch:\s*`([^`]+)`\.?\s*$/m)?.[1]?.trim();
+    if (handoffBranch && handoffBranch !== branch) {
+      fail(`AI_HANDOFF.md Branch is ${handoffBranch}, but the checkout is ${branch}. Update handoff metadata before release gates.`);
+    }
+  } catch {
+    // The substantive-change checks below provide the canonical missing-file error.
+  }
+}
 
 if (scope.riskyMixedScope) {
   fail("release scope is mixed. Move the intended change into a clean worktree or fresh branch before opening or merging a PR.");

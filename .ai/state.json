@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "codex",
   "status": "handoff",
-  "taskId": "20260727-admin-marketplace-fixes",
-  "taskTitle": "admin OTP delivery, optional meetup coordination, and responsive marketplace fixes",
-  "baseCommit": "c0c4ebbf997c233b4a0e9c4e195ee21062ff7649",
-  "updatedAt": "2026-07-27T16:55:00+08:00",
+  "taskId": "20260727-release-memory-guards",
+  "taskTitle": "release metadata and propagation guard hardening",
+  "baseCommit": "4ba9aa7c741b7a946b3eb495bb8018f664f82011",
+  "updatedAt": "2026-07-27T17:20:00+08:00",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260727-admin-marketplace-fixes.md"
+  "historyFile": ".ai/history/20260727-release-memory-guards.md"
 }

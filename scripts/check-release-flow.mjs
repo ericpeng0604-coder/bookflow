@@ -58,6 +58,7 @@ const preflight = read("scripts/release-preflight.mjs");
 assert.match(preflight, /check-ci/);
 assert.match(preflight, /release scope is mixed/);
 assert.match(preflight, /AI_HANDOFF\.md, \.ai\/state\.json, and a new \.ai\/history entry/);
+assert.match(preflight, /Update handoff metadata before release gates/);
 assert.match(preflight, /origin\/main/);
 const releaseScope = read("scripts/lib/release-scope.mjs");
 assert.match(releaseScope, /isReleaseInfrastructure/);
