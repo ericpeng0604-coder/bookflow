@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "project": "bookflow",
   "owner": "codex",
-  "status": "in_progress",
+  "status": "handoff",
   "taskId": "20260727-security-hardening",
   "taskTitle": "secure legacy Books RLS and atomic reservations",
   "baseCommit": "c41695f7157a2ed1c42db3992fb493559a493467",
-  "updatedAt": "2026-07-27T12:00:00.000Z",
+  "updatedAt": "2026-07-27T15:01:00.000+08:00",
   "handoffFile": "AI_HANDOFF.md",
   "historyFile": ".ai/history/20260727-security-hardening.md"
 }
