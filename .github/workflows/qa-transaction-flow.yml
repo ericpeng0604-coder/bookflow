@@ -39,24 +39,29 @@ jobs:
         continue-on-error: true
         env:
           RELEASE_BASE_URL: https://bookflow-green.vercel.app
-        run: node scripts/qa-transaction-flow.mjs
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/qa-transaction-flow.mjs
+          node scripts/qa-order-targeted.mjs
 
       - name: Add test summary
         if: always()
         shell: bash
         run: |
-          if [ -f artifacts/transaction-flow/summary.md ]; then
-            cat artifacts/transaction-flow/summary.md >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Transaction QA did not produce a summary." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for summary in artifacts/*/summary.md; do
+            if [ -f "$summary" ]; then
+              cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
       - name: Upload screenshots and report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: transaction-flow-qa-${{ github.sha }}
-          path: artifacts/transaction-flow
+          path: artifacts
           if-no-files-found: error
 
       - name: Require QA script completion
