@@ -25,7 +25,7 @@ const checks = [
   ["chat submit is guarded against rapid duplicate sends", app.includes("const sendingRef = useRef(false)") && app.includes("sendingRef.current ||") && app.includes("sendingRef.current = true") && app.includes("sendingRef.current = false")],
   ["chat does not force-scroll while reading older messages", app.includes("stickToBottomRef") && app.includes("hasUnreadBelow") && app.includes('className="chat-new-message-button"')],
   ["new message jump only scrolls the chat log", app.includes("function scrollChatLogToBottom") && app.includes("log.scrollTo({ top: log.scrollHeight, behavior })") && !app.includes("bottomRef.current?.scrollIntoView")],
-  ["chat preserves scroll when loading older messages", app.includes("previousScrollHeight") && app.includes("previousScrollTop") && app.includes("heightDelta")],
+  ["chat preserves scroll when loading older messages", app.includes("previousScrollHeight") && app.includes("previousScrollTop") && app.includes("heightDelta") && app.includes("loadOlderChatMessages")],
   ["chat compose uses multiline input and dedicated phrase scroller", app.includes("<textarea") && app.includes('className="trade-chat-phrases-scroll"') && css.includes(".trade-chat-compose textarea")],
   ["seller can keep tracking completed orders", app.includes("sellerRequestNextStep") && app.includes('"completed"].includes(request.status)') && app.includes('className="order-next-step"')],
   ["standalone message route owns chat scrolling", !app.includes("chat-page-toolbar") && !app.includes("chat-page-exit") && app.includes('chat-route-page') && /\.chat-route-page\s*\{\s*position:\s*fixed/.test(css) && css.includes(".chat-route-page .trade-chat-log")],

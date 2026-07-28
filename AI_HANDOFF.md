@@ -19,7 +19,9 @@ Review and release TradeChat session architecture
 
 - Confirmed that `origin/main` already contains the TradeChat session hook and session policy.
 - Rejected a duplicate session hook created in a dirty checkout before release.
-- Re-ran chat checks, typecheck, lint, and production build in a clean worktree.
+- Removed the obsolete inline TradeChat lifecycle block and kept scroll restoration at the UI caller seam.
+- Updated chat regression checks to inspect the session hook and made cleanup matching whitespace-tolerant.
+- Re-ran chat checks, project checks, typecheck, lint, and production build in a clean worktree.
 
 ## Next steps
 
@@ -31,9 +33,13 @@ Review and release TradeChat session architecture
 
 - `components/marketplace/use-trade-chat-session.ts`
 - `components/marketplace/trade-chat-session-policy.ts`
+- `components/marketplace-app.tsx`
 
 ## Changed files
 
+- `scripts/check-trade-chat.mjs`
+- `scripts/check-chat-listing-order-ux.mjs`
+- `scripts/check-chat-switching.mjs`
 - `scripts/check-turnstile.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
@@ -42,7 +48,7 @@ Review and release TradeChat session architecture
 ## Verification
 
 - TradeChat checks, chat switching, chat listing UX, TypeScript, ESLint, and production build: passed.
-- Full project check: blocked by stale handoff metadata in the base; this release synchronizes it.
+- Full project checks: passed (38/38).
 - Production deployment and exact-SHA verification: pending.
 
 ## Risks and blockers

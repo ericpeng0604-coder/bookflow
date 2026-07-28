@@ -7762,90 +7762,6 @@ function TradeChatPanel({
     return () => previews.forEach((preview) => URL.revokeObjectURL(preview.url));
   }, [files]);
 
-  /* Legacy inline trade-chat fetch and realtime session superseded by useTradeChatSession.
-  useEffect(() => {
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
-    const client = supabase;
-    let active = true;
-    setLoading(true);
-    setError("");
-    setImageUrls({});
-    void fetchTradeMessages(client, conversation.id)
-      .then(async (page) => {
-        if (!active) return;
-        setMessages(page.messages);
-        lastMessageCountRef.current = page.messages.length;
-        stickToBottomRef.current = true;
-        window.requestAnimationFrame(() => scrollChatLogToBottom("auto"));
-        setShowQuickPhrases(!page.messages.some((item) => item.senderId === currentUserId));
-        setHasOlderMessages(page.hasMore);
-        messageCursorRef.current = page.nextCursor;
-        onRead(conversation.id);
-        if (!active) return;
-        const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
-        if (paths.length === 0) return;
-        try {
-          const signed = await signChatImages(client, paths);
-          if (active) setImageUrls(signed);
-        } catch (signError) {
-          if (active) {
-            setError(signError instanceof Error ? signError.message : "部分圖片無法載入");
-          }
-        }
-      })
-      .catch((loadError) => {
-        if (!active) return;
-        setMessages([]);
-        setError(loadError instanceof Error ? loadError.message : "無法載入訊息");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    const channel = client
-      .channel(`trade-chat:${conversation.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "trade_messages",
-          filter: `conversation_id=eq.${conversation.id}`,
-        },
-        (payload) => {
-          if (!active) return;
-          let message: TradeMessage;
-          try {
-            message = mapTradeMessage(payload.new as Record<string, unknown>);
-          } catch {
-            return;
-          }
-          setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
-          onMessageActivity(message);
-          onRead(conversation.id);
-          if (message.imagePaths.length === 0) return;
-          void signChatImages(client, message.imagePaths)
-            .then((signed) => {
-              if (active) setImageUrls((previous) => ({ ...previous, ...signed }));
-            })
-            .catch((signError) => {
-              if (active) {
-                setError(signError instanceof Error ? signError.message : "部分圖片無法載入");
-              }
-            });
-        },
-      )
-      .subscribe();
-    return () => {
-      active = false;
-      void client.removeChannel(channel);
-    };
-  }, [conversation.id, currentUserId, messageRetryKey, onMessageActivity, onRead]);
-  */
-
   useEffect(() => {
     const updateMessageActionTime = () => setMessageActionNow(Date.now());
     updateMessageActionTime();
@@ -7964,49 +7880,18 @@ function TradeChatPanel({
     scrollChatLogToBottom("smooth");
   }
 
-  /* Legacy inline pagination and recall handlers superseded by useTradeChatSession.
-  async function loadOlderMessages() {
-    const cursor = messageCursorRef.current;
-    if (!supabase || !cursor || loadingOlder) return;
+  async function loadOlderChatMessages() {
     const log = logRef.current;
     const previousScrollHeight = log?.scrollHeight ?? 0;
     const previousScrollTop = log?.scrollTop ?? 0;
-    setLoadingOlder(true);
-    try {
-      const page = await fetchTradeMessages(supabase, conversation.id, cursor);
-      setMessages((previous) => [
-        ...page.messages.filter((item) => !previous.some((existing) => existing.id === item.id)),
-        ...previous,
-      ]);
-      setHasOlderMessages(page.hasMore);
-      messageCursorRef.current = page.nextCursor;
-      window.requestAnimationFrame(() => {
-        if (!logRef.current) return;
-        const heightDelta = logRef.current.scrollHeight - previousScrollHeight;
-        logRef.current.scrollTop = previousScrollTop + heightDelta;
-      });
-      const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
-      const signed = await signChatImages(supabase, paths);
-      setImageUrls((previous) => ({ ...previous, ...signed }));
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "無法載入較早訊息");
-    } finally {
-      setLoadingOlder(false);
-    }
+    await loadOlderMessages();
+    window.requestAnimationFrame(() => {
+      if (!logRef.current) return;
+      const heightDelta = logRef.current.scrollHeight - previousScrollHeight;
+      logRef.current.scrollTop = previousScrollTop + heightDelta;
+    });
   }
 
-  async function recall(messageId: string) {
-    if (!supabase) return;
-    try {
-      await recallTradeMessage(supabase, messageId);
-      setMessages((previous) => previous.map((message) =>
-        message.id === messageId ? { ...message, body: "", recalledAt: new Date().toISOString() } : message,
-      ));
-    } catch (recallError) {
-      setError(recallError instanceof Error ? recallError.message : "無法收回訊息");
-    }
-  }
-  */
   const recall = recallMessage;
 
   async function closeChat() {
@@ -8177,7 +8062,7 @@ function TradeChatPanel({
       <div className="trade-chat-log" ref={logRef} onScroll={updateStickToBottom} aria-live="polite" aria-busy={loading}>
         {loading && <p className="trade-chat-empty">載入訊息中...</p>}
         {!loading && hasOlderMessages && (
-          <button className="chat-load-older" type="button" disabled={loadingOlder} onClick={() => void loadOlderMessages()}>
+          <button className="chat-load-older" type="button" disabled={loadingOlder} onClick={() => void loadOlderChatMessages()}>
             {loadingOlder ? "載入中..." : "載入較早訊息"}
           </button>
         )}

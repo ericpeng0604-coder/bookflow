@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const chat = readFileSync(new URL("../lib/marketplace/trade-chat.ts", import.meta.url), "utf8");
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
+const session = readFileSync(new URL("../components/marketplace/use-trade-chat-session.ts", import.meta.url), "utf8");
 
 const checks = [
   ["quoted pagination cursor filters", chat.includes("postgrestFilterLiteral")],
@@ -12,9 +13,9 @@ const checks = [
   ["upload rollback helper", chat.includes("deleteChatImageUploads")],
   ["shared trade message mapper export", chat.includes("export function mapTradeMessage")],
   ["chat error mapping helper", chat.includes("export function mapChatError")],
-  ["initial load keeps messages when sign fails", /fetchTradeMessages[\s\S]*catch\(\(signError\)/.test(app)],
+  ["initial load keeps messages when sign fails", /fetchTradeMessages[\s\S]*catch \(signError\)/.test(session)],
   ["send failure cleans uploaded chat images", app.includes("deleteChatImageUploads(supabase, uploadedPaths)")],
-  ["realtime uses shared mapper", app.includes("mapTradeMessage(payload.new")],
+  ["realtime uses shared mapper", session.includes("mapTradeMessage(payload.new")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
