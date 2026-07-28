@@ -21,7 +21,7 @@ assert.match(
 );
 assert.match(
   session,
-  /return \(\) => \{ session\.dispose\(\); void client\.removeChannel\(channel\); \};/,
+  /return \(\) => \{\s*session\.dispose\(\);\s*void client\.removeChannel\(channel\);\s*\};/,
   "conversation cleanup must invalidate async work before removing realtime",
 );
 assert.match(
