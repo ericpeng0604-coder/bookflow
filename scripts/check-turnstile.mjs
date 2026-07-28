@@ -39,8 +39,8 @@ for (const fragment of [
   "function authErrorMessage(error: unknown, fallback: string)",
   "email_provider_disabled",
   "code.includes(\"rate_limit\")",
-  "try {\n      const message = await (codeRequested ? onResend : onRequestCode)",
-  "} finally {\n      setRequestingCode(false)",
+  "const message = await (codeRequested ? onResend : onRequestCode)",
+  "setRequestingCode(false)",
   "管理員驗證碼寄送服務暫時無法使用，請稍後再試",
 ]) assertIncludes(app, fragment, fragment);
 
