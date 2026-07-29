@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: supply chain risk remediation PR3
+- Actor: codex
+- Status: complete
+- Base commit: `8585a8875ac809e08aa9af09f021a0bb1794ff89`
+- Archived at: 2026-07-29T07:01:28.916Z
+
+---
 # BookFlow AI Handoff
 
 ## Task title
@@ -31,7 +40,7 @@ supply chain risk remediation PR3
 - `package-lock.json`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260729-0701-20260729-supply-chain-risk-remediation-p.md`
+- `.ai/history/20260729-0652-supply-chain-risk-remediation-pr3.md`
 
 ## Verification
 
