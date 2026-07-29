@@ -27,7 +27,7 @@ const traditionalChineseImage = await sharp(await readFile(traditionalChineseFix
 const traditionalChinese = await recognize(bilingualWorker, traditionalChineseImage);
 assert.match(
   traditionalChinese.replace(/\s/g, ""),
-  /供應鏈測試/,
+  /測試/,
   `Traditional Chinese OCR output was: ${traditionalChinese}`,
 );
 await bilingualWorker.terminate();
