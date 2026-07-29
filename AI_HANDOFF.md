@@ -2,58 +2,50 @@
 
 ## Task title
 
-supply chain risk remediation PR2
+supply chain risk remediation PR3
 
 ## Release context
 
-- Task ID: `20260729-supply-chain-risk-remediation-pr2`.
-- Task: `supply chain risk remediation PR2`.
-- Branch: `codex/supply-chain-pr2-20260729`.
-- Base commit: `30b743b42281b195bafac6d47f4083ab68f6efea`.
-- History: `.ai/history/20260729-0646-20260729-supply-chain-risk-remediation-p.md`.
+- Task ID: `20260729-supply-chain-risk-remediation-pr3`.
+- Task: `supply chain risk remediation PR3`.
+- Branch: `codex/supply-chain-pr3-20260729`.
+- Base commit: `8585a8875ac809e08aa9af09f021a0bb1794ff89`.
+- History: `.ai/history/20260729-0652-supply-chain-risk-remediation-pr3.md`.
 - No database migration is included.
 - Protected recovery files and recovery workflows are not changed.
 
 ## Completed work
 
-- Added high-severity npm audit and registry signature checks.
-- Added a lockfile source, integrity, and lifecycle-script allowlist guard.
-- Added a negative test that rejects an unknown lifecycle-script package.
-- Added pinned GitHub dependency review to Release Readiness and made the aggregator require it.
+- Updated web-push to exact 3.6.7.
+- Updated tesseract.js to exact 7.0.0 while preserving worker reuse and English-first fallback behavior.
+- Updated @eslint/eslintrc to 3.3.6 while retaining the legacy config required by Next 15.
 
 ## Next steps
 
-1. Run the tooling checks, commit, open the PR, and wait for required checks.
-2. Verify Dependabot security alerts and security updates are enabled.
+1. Run dependency, OCR, and project verification; do not merge if fixed OCR samples fail.
+2. Commit, open the PR, wait for required checks, and publish with exact-SHA smoke evidence.
 
 ## Changed files
 
 - `package.json`
-- `scripts/check-dependency-install-scripts.mjs`
-- `scripts/run-project-checks.mjs`
-- `tests/dependency-install-scripts.test.mjs`
-- `.github/workflows/release-readiness.yml`
-- `scripts/check-workflows.mjs`
+- `package-lock.json`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260729-0646-20260729-supply-chain-risk-remediation-p.md`
+- `.ai/history/20260729-0652-supply-chain-risk-remediation-pr3.md`
 
 ## Verification
 
 - `npm ci --ignore-scripts`: passed.
-- `npm run security:audit`: passed with 0 vulnerabilities.
-- `npm run security:signatures`: passed; 488 registry signatures and 103 attestations verified.
-- `npm run check:dependency-install-scripts`: passed.
-- Negative lifecycle-script test: passed; 24/24 tests passed.
+- `npm audit --audit-level=high`: passed with 0 vulnerabilities.
+- `npm audit signatures`: passed; 487 registry signatures and 103 attestations verified.
+- `npm run check:tesseract-runtime`: passed English worker reuse, resource loading, and Traditional Chinese fallback sample.
 - `npm run check:memory`: passed.
-- `npm run check:project`: passed (39/39).
-- `npm run check:workflows`: passed.
-- TypeScript, lint, and production build: passed.
-- GitHub API verification: Dependabot security updates enabled; automated security fixes enabled and not paused; security alerts endpoint enabled with no current alerts.
+- `npm run check:project`: passed (40/40).
+- TypeScript, lint, 24 tests, and production build: passed.
 
 ## Risks and blockers
 
-- Final CI and PR checks remain pending.
+- Tesseract 7 fixed English and Traditional Chinese runtime OCR samples are a merge gate.
 
 ## AI follow-up
 
@@ -63,5 +55,5 @@ supply chain risk remediation PR2
 
 ## Commit
 
-- Base commit: `30b743b42281b195bafac6d47f4083ab68f6efea`.
+- Base commit: `8585a8875ac809e08aa9af09f021a0bb1794ff89`.
 - Current implementation commit: pending.

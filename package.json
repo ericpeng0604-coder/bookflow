@@ -58,6 +58,7 @@
     "check:market-switch": "node scripts/check-market-switch.mjs",
     "check:market-cache": "node scripts/check-market-cache.mjs",
     "check:mobile-ocr": "node scripts/check-mobile-book-ocr.mjs",
+    "check:tesseract-runtime": "node scripts/check-tesseract-runtime.mjs",
     "check:book-ocr-ai": "node --experimental-strip-types scripts/check-book-ocr-ai.mjs",
     "check:image-search": "node --experimental-strip-types scripts/check-image-search.mjs",
     "check:student-verification": "node --experimental-strip-types scripts/check-student-verification.mjs",
@@ -129,11 +130,11 @@
     "next": "^15.5.21",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "tesseract.js": "^5.1.1",
-    "web-push": "^3.6.7"
+    "tesseract.js": "7.0.0",
+    "web-push": "3.6.7"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.5",
+    "@eslint/eslintrc": "^3.3.6",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
