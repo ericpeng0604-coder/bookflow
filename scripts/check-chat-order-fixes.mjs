@@ -28,7 +28,8 @@ assert.match(appSource, /<ResilientBookCover book=\{book\} variant="listing" \/>
 assert.match(appSource, /onError=\{\(\) => setFailedImageUrl\(book\.imageUrl\)\}/, "cover failures should switch to the fallback state");
 assert.match(appSource, /暫無封面/, "cover fallback should communicate the unavailable image state");
 assert.match(appSource, /function MeetupInfoModal/, "chat should expose a meetup information modal");
-assert.match(appSource, /chat-meetup-summary/, "chat should keep the outer transaction card compact");
+assert.match(appSource, /request-coordination-lines/, "chat should render compact shared meetup details");
+assert.doesNotMatch(appSource, /chat-meetup-summary/, "chat should not duplicate the shared meetup summary");
 assert.match(appSource, /canEditMeetupInfo/, "chat editing should use the shared permission helper");
 assert.doesNotMatch(appSource, /function MeetupCoordinationEditor/, "the old inline meetup editor should be removed");
 assert.match(appSource, /update_purchase_request_coordination/, "chat coordination should persist through its RPC");

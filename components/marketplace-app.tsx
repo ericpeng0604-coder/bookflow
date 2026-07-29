@@ -192,7 +192,7 @@ const messageTimeFormatter = new Intl.DateTimeFormat("zh-TW", {
   minute: "2-digit",
 });
 
-type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "meetup" | "report" | "feedback" | "tradeReview" | null;
+type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "sellerConfirm" | "meetup" | "report" | "feedback" | "tradeReview" | null;
 
 type Store = {
   books: Book[];
@@ -474,6 +474,18 @@ function meetupSummary(book: Pick<Book, "listingType" | "meetupMode" | "meetup">
     : book.listingType === "giveaway"
       ? meetupModeLabel(book.meetupMode)
       : NON_GIVEAWAY_MEETUP_MODE_LABELS[normalizeMeetupMode(book.meetupMode)];
+}
+
+function FixedMeetupBadge({ book, compact = false }: { book: Pick<Book, "meetupMode" | "meetup">; compact?: boolean }) {
+  const location = normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? book.meetup.trim() : "";
+  if (!location) return null;
+  return (
+    <span className={`fixed-meetup-badge ${compact ? "compact" : ""}`}>
+      <MapPin size={compact ? 13 : 15} aria-hidden="true" />
+      <b>刊登者指定位置</b>
+      <span>{location}</span>
+    </span>
+  );
 }
 
 const MEETUP_MODE_DETAILS: Record<MeetupMode, { summary: string; detail: string }> = {
@@ -828,6 +840,8 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [listingFormType, setListingFormType] = useState<ListingType>("book");
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [editingRequest, setEditingRequest] = useState<PurchaseRequest | null>(null);
+  const [sellerConfirmationRequest, setSellerConfirmationRequest] = useState<PurchaseRequest | null>(null);
+  const [sellerConfirmationSaving, setSellerConfirmationSaving] = useState(false);
   const [editingMeetupRequest, setEditingMeetupRequest] = useState<PurchaseRequest | null>(null);
   const [toast, setToast] = useState("");
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -1841,6 +1855,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     ?? store.books.find((book) => book.id === selectedId)
     ?? null;
   const selectedBookImages = selectedBook ? bookImageUrls(selectedBook) : [];
+  const sellerConfirmationBook = sellerConfirmationRequest
+    ? [...myBooks, ...requestBooks, ...marketplaceBooks, ...store.books].find((book) => book.id === sellerConfirmationRequest.bookId) ?? null
+    : null;
 
   useEffect(() => {
     setDetailImageIndex(0);
@@ -2871,6 +2888,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     }
     const target = store.requests.find((request) => request.id === requestId);
     if (!target) return;
+    if (status === "accepted") {
+      setSellerConfirmationRequest(target);
+      setModal("sellerConfirm");
+      return;
+    }
     if (supabase && currentUser) {
       const { error } = status === "rejected" && target.orderId
         ? await supabase.rpc("reject_purchase_order_item", { target_request_id: requestId, reason: "seller_rejected_item" })
@@ -2881,21 +2903,72 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       }
       await reloadAfterUserMutation();
       void dispatchNotificationDeliveries();
-      setToast(status === "accepted" ? "已選定買家，保留期限為 7 天" : "已婉拒這筆請求");
+      setToast("已婉拒這筆請求");
       return;
     }
     setStore((previous) => ({
       ...previous,
       books: previous.books.map((book) =>
-        book.id === target.bookId && status === "accepted" ? { ...book, status: "negotiating" } : book,
+        book.id === target.bookId ? { ...book, status: "negotiating" } : book,
       ),
       requests: previous.requests.map((request) =>
         request.id === requestId
-          ? { ...request, status: status === "accepted" ? "reserved" : "rejected" }
+          ? { ...request, status: "rejected" }
           : request,
       ),
     }));
-    setToast(status === "accepted" ? "已接受意願，雙方聯絡資訊已開放" : "已婉拒這筆意願");
+    setToast("已婉拒這筆意願");
+  }
+
+  async function confirmSellerRequest(location: string, time: string) {
+    const target = sellerConfirmationRequest;
+    if (!target || !currentUser || currentUser.accountStatus === "suspended") return;
+    const targetBook = [...myBooks, ...requestBooks, ...marketplaceBooks, ...store.books].find((book) => book.id === target.bookId);
+    const normalizedLocation = normalizeMeetupMode(targetBook?.meetupMode) === DEFAULT_MEETUP_MODE
+      ? targetBook?.meetup.trim() || location.trim().slice(0, REQUEST_COORDINATION_MAX_LENGTH)
+      : location.trim().slice(0, REQUEST_COORDINATION_MAX_LENGTH);
+    const normalizedTime = time.trim().slice(0, REQUEST_COORDINATION_MAX_LENGTH);
+    if (!normalizedLocation || !normalizedTime) {
+      setToast("請先確認面交地點與時間");
+      return;
+    }
+    setSellerConfirmationSaving(true);
+    try {
+      if (supabase) {
+        const { error } = await supabase.rpc("seller_confirm_purchase_request", {
+          target_request_id: target.id,
+          final_location: normalizedLocation,
+          final_time: normalizedTime,
+        });
+        if (error) {
+          setToast(`確認訂單失敗：${error.message}`);
+          return;
+        }
+        await reloadAfterUserMutation();
+        void dispatchNotificationDeliveries();
+      } else {
+        const now = new Date().toISOString();
+        setStore((previous) => ({
+          ...previous,
+          books: previous.books.map((book) => book.id === target.bookId ? { ...book, status: "negotiating" } : book),
+          orders: previous.orders.map((order) => order.id === target.orderId
+            ? { ...order, status: "reserved", preferredMeetupLocation: normalizedLocation, preferredMeetupTime: normalizedTime, updatedAt: now }
+            : order),
+          requests: previous.requests.map((request) => request.id === target.id
+            ? { ...request, status: "reserved", preferredMeetupLocation: normalizedLocation, preferredMeetupTime: normalizedTime, reservationExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: now }
+            : request.bookId === target.bookId && request.status === "pending"
+              ? { ...request, status: "waitlisted", updatedAt: now }
+              : request.orderId === target.orderId
+                ? { ...request, preferredMeetupLocation: normalizedLocation, preferredMeetupTime: normalizedTime, updatedAt: now }
+                : request),
+        }));
+      }
+      setModal(null);
+      setSellerConfirmationRequest(null);
+      setToast("已確認訂單與面交資訊，保留期限為 7 天");
+    } finally {
+      setSellerConfirmationSaving(false);
+    }
   }
 
   async function selectGiveawayRecipient(requestId: string) {
@@ -4331,7 +4404,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     aria-label={`查看《${book.title}》，${book.listingType === "giveaway" ? "零元贈送" : book.listingType === "secondhand" ? book.itemCategory : book.author}，${book.listingType === "giveaway" ? "免費" : money(book.price)}，${book.condition}`}
                   >
                     <div className="card-image">
-                      <Image src={book.imageUrl} alt="" width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
+                      <ResilientBookCover book={book} />
                       {book.sellerVerified && <span className="verified-seller-badge"><ShieldCheck size={13} />{book.listingType === "giveaway" ? "已驗證贈送者" : "已驗證賣家"}</span>}
                       <span className={`status ${book.status}`}>{book.listingType === "giveaway" ? "免費贈送" : statusLabels[book.status]}</span>
                     </div>
@@ -4344,6 +4417,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                           {giveawayCategoryLabel(book) || "\u00a0"}
                         </span>
                       )}
+                      {book.listingType !== "giveaway" && <FixedMeetupBadge book={book} />}
                       <h3>{book.title}</h3>
                       <p className={book.listingType === "giveaway" ? "giveaway-card-description" : undefined}>{book.listingType === "giveaway" ? (book.description || "填寫意願即可申請，面交前可先使用站內訊息確認。") : book.listingType === "secondhand" ? (book.description || "校園二手好物") : [book.author, book.edition, book.publisher].filter(Boolean).join(" · ")}</p>
                       {book.listingType === "book" && textbookMetadata(book).length > 0 && (
@@ -4758,9 +4832,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       <span>選取</span>
                     </label>
                   )}
-                  {book.imageUrl
-                    ? <Image src={book.imageUrl} alt="" width={160} height={210} sizes="80px" />
-                    : <div className="listing-image-placeholder"><BookOpen size={24} /></div>}
+                  <ResilientBookCover book={book} variant="listing" />
                   <div className="listing-main">
                     <div className="listing-badges">
                       {book.lifecycleState === "active" && book.reviewStatus === "approved" ? (
@@ -4770,6 +4842,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                           {book.lifecycleState === "archived" ? "暫時封存" : "已下架"}
                         </span>
                       ) : null}
+                      <FixedMeetupBadge book={book} compact />
                     </div>
                     <h3>{book.title}</h3>
                     <p>{visibleBookField(book.course) ? `${visibleBookField(book.course)} · ` : ""}{money(book.price)}</p>
@@ -5461,6 +5534,24 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             void startConversation(selectedBook.id);
           }}
           onSubmit={sendRequest}
+        />
+      )}
+      {modal === "sellerConfirm" && sellerConfirmationRequest && sellerConfirmationBook && (
+        <SellerOrderConfirmationModal
+          request={sellerConfirmationRequest}
+          book={sellerConfirmationBook}
+          saving={sellerConfirmationSaving}
+          onClose={() => {
+            if (sellerConfirmationSaving) return;
+            setModal(null);
+            setSellerConfirmationRequest(null);
+          }}
+          onOpenChat={() => {
+            if (sellerConfirmationSaving) return;
+            setModal(null);
+            void openOrderConversation(sellerConfirmationRequest.id);
+          }}
+          onConfirm={(location, time) => void confirmSellerRequest(location, time)}
         />
       )}
       {modal === "meetup" && selectedBook && editingMeetupRequest && (
@@ -7683,6 +7774,63 @@ function RequestOrderConfirmationModal({
   );
 }
 
+function SellerOrderConfirmationModal({
+  request,
+  book,
+  saving,
+  onClose,
+  onOpenChat,
+  onConfirm,
+}: {
+  request: PurchaseRequest;
+  book: Book;
+  saving: boolean;
+  onClose: () => void;
+  onOpenChat: () => void;
+  onConfirm: (location: string, time: string) => void;
+}) {
+  const fixedLocation = normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? book.meetup.trim() : "";
+  const location = request.preferredMeetupLocation.trim() || fixedLocation;
+  const time = request.preferredMeetupTime.trim();
+  const ready = Boolean(location && time);
+  return (
+    <ModalShell
+      title="確認訂單"
+      subtitle="請確認雙方決定好的面交時間與地點。"
+      onClose={onClose}
+      closeOnBackdrop={!saving}
+    >
+      <div className="order-confirmation-summary">
+        <span>{book.title}</span>
+        <strong>{money(book.price)}</strong>
+      </div>
+      <div className="seller-confirmation-coordination">
+        <div>
+          <small>面交地點</small>
+          <b>{location || "尚未決定"}</b>
+          {fixedLocation && <span className="fixed-location-note">刊登者指定位置</span>}
+        </div>
+        <div>
+          <small>面交時間</small>
+          <b>{time || "尚未決定"}</b>
+        </div>
+      </div>
+      {!ready && (
+        <div className="coordination-missing" role="alert">
+          <b>還缺少面交資訊</b>
+          <span>請先到訊息頁補齊面交地點與時間，再回來確認訂單。</span>
+          <button type="button" className="chat-context-link" onClick={onOpenChat} disabled={saving}><MessageCircle size={15} />前往訊息補填</button>
+        </div>
+      )}
+      <p className="order-confirmation-copy">確認後訂單會保留 7 天，面交時間與地點會鎖定供雙方查看。</p>
+      <div className="modal-actions">
+        <button type="button" className="secondary-action" onClick={onClose} disabled={saving}>返回</button>
+        <button type="button" className="primary" onClick={() => onConfirm(location, time)} disabled={saving || !ready}>{saving ? "確認中…" : "確認訂單"}</button>
+      </div>
+    </ModalShell>
+  );
+}
+
 function TradeReviewModal({
   revieweeName,
   onClose,
@@ -8384,12 +8532,31 @@ function TradeChatPanel({
 }
 /* eslint-enable @next/next/no-img-element */
 
-function ResilientBookCover({ book }: { book: Book }) {
-  const [imageFailed, setImageFailed] = useState(!book.imageUrl);
+function ResilientBookCover({ book, variant = "card" }: { book: Book; variant?: "card" | "listing" }) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const imageFailed = !book.imageUrl || failedImageUrl === book.imageUrl;
   if (imageFailed) {
-    return <div className="card-image-fallback" role="img" aria-label={`${book.title} 封面`}><BookOpen size={34} aria-hidden="true" /><span>暫無封面</span></div>;
+    return (
+      <div
+        className={variant === "listing" ? "listing-image-placeholder" : "card-image-fallback"}
+        role="img"
+        aria-label={`${book.title} 封面`}
+      >
+        <BookOpen size={variant === "listing" ? 24 : 34} aria-hidden="true" />
+        <span>暫無封面</span>
+      </div>
+    );
   }
-  return <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" onError={() => setImageFailed(true)} />;
+  return (
+    <Image
+      src={book.imageUrl}
+      alt={book.title}
+      width={variant === "listing" ? 160 : 420}
+      height={variant === "listing" ? 210 : 560}
+      sizes={variant === "listing" ? "80px" : "(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px"}
+      onError={() => setFailedImageUrl(book.imageUrl)}
+    />
+  );
 }
 
 function EmptyDashboard({ text }: { text: string }) {

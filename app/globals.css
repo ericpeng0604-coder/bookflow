@@ -4113,7 +4113,7 @@ footer,
 
 .chat-route-page .chat-context-card {
   min-height: 90px;
-  max-height: 116px;
+  max-height: none;
   padding: 10px 15px;
   position: relative;
   border-bottom-color: var(--chat-border);
@@ -5841,3 +5841,57 @@ footer,
 .bundle-dashboard-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .bundle-dashboard-actions button { display: inline-flex; align-items: center; gap: 6px; }
 .bundle-action-status { color: #887d72; font-size: 13px; }
+.fixed-meetup-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #b8d9ca;
+  border-radius: 9px;
+  background: #edf8f1;
+  color: #23664d;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.fixed-meetup-badge b { font-weight: 800; }
+.fixed-meetup-badge > span { overflow-wrap: anywhere; }
+.fixed-meetup-badge.compact { padding: 4px 6px; font-size: 10px; }
+.listing-badges .fixed-meetup-badge { max-width: min(100%, 250px); }
+.storefront-fixed-meetup { margin-top: 9px; }
+.meetup-coordination-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #cde2d7;
+  border-radius: 11px;
+  background: #f4fbf7;
+  text-align: left;
+}
+.meetup-coordination-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.meetup-coordination-heading > div { display: grid; gap: 3px; min-width: 0; }
+.meetup-coordination-heading small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.meetup-coordination-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.meetup-coordination-grid label { display: grid; gap: 4px; color: var(--muted); font-size: 11px; }
+.meetup-coordination-grid input { min-width: 0; width: 100%; box-sizing: border-box; }
+.meetup-coordination-editor .chat-context-link { justify-self: start; }
+.seller-confirmation-coordination { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.seller-confirmation-coordination > div { display: grid; gap: 5px; min-width: 0; padding: 11px; border: 1px solid #dce9e3; border-radius: 10px; background: #f8fbf9; }
+.seller-confirmation-coordination small { color: var(--muted); font-size: 11px; }
+.seller-confirmation-coordination b { overflow-wrap: anywhere; line-height: 1.45; }
+.fixed-location-note { color: var(--green); font-size: 10px; font-weight: 800; }
+.coordination-missing { display: grid; gap: 5px; margin: 10px 0; padding: 10px 12px; border: 1px solid #efd2ae; border-radius: 10px; background: #fff8ee; color: #7d542d; font-size: 12px; line-height: 1.45; }
+.coordination-missing .chat-context-link { justify-self: start; }
+@media (max-width: 680px) {
+  .meetup-coordination-grid,
+  .seller-confirmation-coordination { grid-template-columns: 1fr; }
+  .meetup-coordination-heading { flex-direction: column; }
+}
