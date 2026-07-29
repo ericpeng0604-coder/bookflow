@@ -813,6 +813,18 @@ type MarketplaceAppProps = {
   initialDashboardTab?: DashboardTab;
 };
 
+function CartLineIcon() {
+  return (
+    <svg className="cart-line-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 3h1.35c.46 0 .86.31.98.75l3.1 12.04c.16.63.73 1.07 1.38 1.07h9.15" />
+      <path d="M6.15 6.1h14.25c.58 0 1 .55.85 1.1l-1.58 6.05a1.1 1.1 0 0 1-1.06.82H7.55" />
+      <path d="M7.35 9.7h12.6M10.25 6.2l.58 7.25M15.15 6.2l-.34 7.25" />
+      <circle cx="9.4" cy="20.1" r="1.55" />
+      <circle cx="18.15" cy="20.1" r="1.55" />
+    </svg>
+  );
+}
+
 export function MarketplaceApp({ initialView = "home", initialDashboardTab = "listings" }: MarketplaceAppProps) {
   const [store, setStore] = useState<Store>({ books: demoBooks, requests: demoRequests, orders: [], profiles: demoProfiles, currentUser: null });
   const [ready, setReady] = useState(false);
@@ -3968,7 +3980,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             aria-label={`購物車，${cartItems.length} 項商品`}
             onClick={() => setCartOpen(true)}
           >
-            <span aria-hidden="true">🛒</span>
+            <CartLineIcon />
             {cartItems.length > 0 && <span className="notification-count message-count">{cartItems.length > 9 ? "9+" : cartItems.length}</span>}
           </button>
           {currentUser ? (
@@ -4418,7 +4430,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                             <span className={`giveaway-meetup-row meetup-${normalizeMeetupMode(book.meetupMode)}`}>
                               {normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? <MapPin size={14} aria-hidden="true" /> : normalizeMeetupMode(book.meetupMode) === "mutual_discussion" ? <MessageCircle size={14} aria-hidden="true" /> : <UserRound size={14} aria-hidden="true" />}
                               <span className="giveaway-meetup-copy">
-                                <b>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? "刊登者指定位置" : "面交方式"}</b>
+                                <b>{normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? "指定位置" : "面交方式"}</b>
                                 <strong>{meetupSummary(book) || "尚未提供詳細資訊"}</strong>
                               </span>
                             </span>
@@ -7931,11 +7943,19 @@ function RequestCoordinationPanel({
     );
   }
   return (
-    <div className="request-coordination-note">
+    <div className="request-coordination-note" aria-label="雙方共享的面交資訊">
       <b>雙方共享的面交資訊</b>
-      <ul>
-        {lines.map((line) => <li key={line}>{line}</li>)}
-      </ul>
+      <div className="request-coordination-lines">
+        {lines.map((line) => {
+          const separatorIndex = line.indexOf("：");
+          return (
+            <div className="request-coordination-line" key={line}>
+              <span>{separatorIndex >= 0 ? line.slice(0, separatorIndex + 1) : "面交資訊："}</span>
+              <strong>{separatorIndex >= 0 ? line.slice(separatorIndex + 1) : line}</strong>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -8309,25 +8329,10 @@ function TradeChatPanel({
                   <em>{[contextLabel, book.listingType === "giveaway" ? "免費贈送" : money(book.price), `面交：${meetupSummary(book)}`].filter(Boolean).join(" · ")}</em>
                 </span>
               </button>
-              <FixedMeetupBadge book={book} compact />
               {request ? (
                 <div className="chat-order-status">
                   <span className={`request-status ${request.status}`}>{book.listingType === "giveaway" ? giveawayRequestLabel(request.status) : requestLabels[request.status]}</span>
                   {book.listingType === "giveaway" && giveawayChatBanner(request.status) && <p className="giveaway-chat-banner">{giveawayChatBanner(request.status)}</p>}
-                  {book.listingType !== "giveaway" && <p>{isSeller ? `${senderName(request.buyerId)} 已送出購買意願` : "你已送出購買意願"}</p>}
-                  {(() => {
-                    const meetup = meetupInfoSummary({
-                      location: request.preferredMeetupLocation,
-                      time: request.preferredMeetupTime,
-                      fallbackLocation: normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? book.meetup : "",
-                    });
-                    return (
-                      <div className="chat-meetup-summary" aria-label="面交資訊摘要">
-                        <span>面交時間：{meetup.time || "尚未確認"}</span>
-                        <span>面交地點：{meetup.location || "尚未確認"}</span>
-                      </div>
-                    );
-                  })()}
                   <button
                     type="button"
                     className="chat-context-details-toggle"

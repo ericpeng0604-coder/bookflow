@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260730-shared-meetup-info-release",
+  "taskId": "20260729-deploy-shared-meetup-information-details",
   "taskTitle": "deploy shared meetup information details modal",
-  "baseCommit": "1f80386624267b4f03f999bf7efe811b02a889aa",
-  "updatedAt": "2026-07-30T03:20:00.000Z",
+  "baseCommit": "1201dc206736fc658038fa896e63b68f0789c998",
+  "updatedAt": "2026-07-29T20:47:49.470Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260730-shared-meetup-info-release.md"
+  "historyFile": ".ai/history/20260729-2047-20260729-deploy-shared-meetup-informatio.md"
 }

@@ -92,6 +92,12 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .push-permission-card small { color: var(--muted); line-height: 1.4; }
 .push-permission-card button { white-space: nowrap; }
 .icon-button, .mobile-menu { border: 0; background: none; padding: 8px; cursor: pointer; }
+.header-actions .icon-button { display: inline-flex; align-items: center; justify-content: center; color: var(--green-dark); line-height: 1; transition: background-color .16s ease, color .16s ease; }
+.header-actions .icon-button svg { display: block; flex: 0 0 auto; }
+.header-actions .cart-line-icon { width: 22px; height: 22px; }
+.header-actions .icon-button:hover,
+.header-actions .icon-button:focus-visible { background: #f1f6f3; color: var(--green); }
+.header-actions .cart-button { color: #17191b; }
 .mobile-menu { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 9px; }
 .mobile-menu.active { color: var(--green); background: var(--mint); }
 .mobile-nav-backdrop { position: fixed; z-index: 40; inset: 86px 0 0; display: block; background: transparent; }
@@ -259,8 +265,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .chat-context-link { border: 1px solid #cfe0d9; border-radius: 8px; background: #f4faf7; color: var(--green); padding: 8px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .chat-order-status { display: grid; gap: 6px; justify-items: end; text-align: right; }
 .chat-order-status p { margin: 0; color: var(--muted); font-size: 11px; }
-.chat-meetup-summary { display: grid; gap: 2px; color: var(--muted); font-size: 11px; line-height: 1.4; }
-.chat-meetup-details { display: grid; gap: 8px; width: min(100%, 360px); }
+.chat-meetup-details { display: grid; justify-items: end; gap: 8px; width: min(100%, 360px); }
 .chat-meetup-details .request-coordination-note { margin-top: 0; }
 .chat-meetup-readonly { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .chat-order-actions { display: flex; gap: 6px; justify-content: flex-end; }
@@ -754,11 +759,13 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .request-coordination-actions { display: grid; gap: 8px; }
 .request-coordination-actions .chat-context-link { justify-self: start; }
 .request-coordination-actions small { color: var(--muted); line-height: 1.5; }
-.request-coordination-note { margin-top: 10px; padding: 10px 12px; border: 1px solid #dce9e3; border-radius: 10px; background: #f8fbf9; color: #315b49; font-size: 12px; line-height: 1.55; }
+.request-coordination-note { width: min(100%, 320px); margin-top: 10px; padding: 10px 12px; border: 1px solid #dce9e3; border-radius: 10px; background: #f8fbf9; color: #315b49; font-size: 12px; line-height: 1.55; text-align: right; }
 .request-coordination-note.is-empty { color: var(--muted); background: #f5f7f6; border-color: #e4ece8; }
-.request-coordination-note b { display: block; margin-bottom: 5px; color: var(--green); font-size: 12px; }
-.request-coordination-note ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
-.request-coordination-note li { margin: 0; }
+.request-coordination-note b { display: block; margin-bottom: 6px; color: var(--green); font-size: 12px; }
+.request-coordination-lines { display: grid; gap: 4px; }
+.request-coordination-line { display: flex; justify-content: flex-end; align-items: baseline; gap: 8px; min-width: 0; }
+.request-coordination-line span { color: #6f857b; font-size: 11px; white-space: nowrap; }
+.request-coordination-line strong { min-width: 0; color: #315b49; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
 .meetup-info-form { gap: 14px; }
 .toast { position: fixed; z-index: 100; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--ink); color: white; padding: 12px 18px; border-radius: 9px; display: flex; align-items: center; gap: 8px; box-shadow: var(--shadow); font-size: 13px; }
 .empty { padding: 70px 20px; display: grid; justify-items: center; color: var(--muted); text-align: center; }
@@ -4108,6 +4115,7 @@ footer,
   min-height: 90px;
   max-height: none;
   padding: 10px 15px;
+  position: relative;
   border-bottom-color: var(--chat-border);
   background: var(--chat-soft-surface);
 }
@@ -4130,6 +4138,41 @@ footer,
 .chat-route-page .chat-order-status {
   padding-left: 12px;
   border-left: 1px solid #d7e6de;
+}
+
+.chat-route-page .chat-meetup-details {
+  justify-items: end;
+  width: min(100%, 320px);
+}
+
+.chat-route-page .chat-context-card.details-open {
+  max-height: 116px;
+  z-index: 6;
+}
+
+.chat-route-page .chat-context-card.details-open .chat-meetup-details {
+  position: absolute;
+  top: calc(100% - 12px);
+  right: 12px;
+  z-index: 7;
+  width: min(320px, calc(100% - 24px));
+  max-height: min(280px, 42vh);
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--chat-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .98);
+  box-shadow: 0 16px 32px rgba(27, 57, 45, .16);
+  animation: chat-detail-overlay-in .16s ease-out both;
+}
+
+@keyframes chat-detail-overlay-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.chat-route-page .request-coordination-note {
+  margin-top: 2px;
 }
 
 .chat-route-page .request-status {
@@ -4261,6 +4304,35 @@ footer,
   .chat-route-page .chat-order-status {
     padding-left: 0;
     border-left: 0;
+  }
+
+  .chat-route-page .chat-meetup-details {
+    justify-items: stretch;
+    width: 100%;
+  }
+
+  .chat-route-page .chat-context-card.details-open .chat-meetup-details {
+    top: calc(100% - 8px);
+    right: 8px;
+    width: calc(100% - 16px);
+    max-height: min(320px, 48vh);
+  }
+
+  .chat-route-page .chat-context-card.details-open {
+    max-height: none;
+  }
+
+  .chat-route-page .request-coordination-note {
+    width: 100%;
+    text-align: left;
+  }
+
+  .chat-route-page .request-coordination-line {
+    justify-content: space-between;
+  }
+
+  .chat-route-page .request-coordination-line strong {
+    text-align: right;
   }
 
   .chat-route-page .trade-chat-log {

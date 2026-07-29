@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: deploy shared meetup information details modal
+- Actor: codex
+- Status: complete
+- Base commit: `1201dc206736fc658038fa896e63b68f0789c998`
+- Archived at: 2026-07-29T20:47:49.469Z
+
+---
 # BookFlow AI Handoff
 
 ## Task title
@@ -23,8 +32,7 @@ deploy shared meetup information details modal
 
 ## Verification
 
-- Focused source checks passed: shared meetup 14/14, chat/listing/order UX 35/35, chat order fixes, image resilience, meetup modes, multi-item orders, and trade chat.
-- Typecheck, lint, production build, and authenticated browser proof remain release-gate work.
+- Focused source checks, typecheck, lint, production build, and authenticated browser proof: pending in the clean release gates.
 - Local npm is unavailable in this environment; CI must provide dependency installation and the full npm-based checks unless a compatible npm runtime is restored.
 
 ## Next steps
@@ -50,12 +58,12 @@ deploy shared meetup information details modal
 - `app/globals.css`
 - `components/marketplace-app.tsx`
 - `scripts/check-chat-listing-order-ux.mjs`
-- `scripts/check-chat-order-fixes.mjs`
 - `scripts/check-shared-meetup-info.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
+- `.ai/history/20260729-deploy-shared-meetup-information-details.md`
 
 ## Commit
 
 - Base commit: `1201dc206736fc658038fa896e63b68f0789c998`.
-- Current implementation commit before final commit: `09c241f`.
+- Current implementation commit before final commit: `not committed yet`.
