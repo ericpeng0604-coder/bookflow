@@ -66,15 +66,9 @@ import type {
   BookOcrDraft,
 } from "@/lib/marketplace/free-ocr";
 import {
-  deleteChatImageUploads,
-  fetchTradeMessages,
-  mapTradeMessage,
   markConversationRead,
-  recallTradeMessage,
-  sendTradeMessage,
-  signChatImages,
-  uploadChatImages,
 } from "@/lib/marketplace/trade-chat";
+import { useTradeChatSession } from "@/lib/marketplace/trade-chat-session";
 import {
   fetchActiveRequestForBook,
   fetchBookById,
@@ -415,14 +409,32 @@ function maskEmail(email: string) {
   return `${name.slice(0, 2)}${"*".repeat(Math.max(2, name.length - 2))}@${domain}`;
 }
 
-function authErrorMessage(message: string, fallback: string) {
-  const normalized = message.toLowerCase();
+function authErrorMessage(error: unknown, fallback: string) {
+  const authError = error && typeof error === "object" ? error as { code?: unknown; message?: unknown } : null;
+  const code = typeof authError?.code === "string" ? authError.code.toLowerCase() : "";
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : typeof authError?.message === "string"
+        ? authError.message
+        : "";
+  const normalized = `${code} ${message}`.toLowerCase();
+  if (normalized.includes("captcha") || normalized.includes("turnstile") || normalized.includes("verification failed")) {
+    return "請完成安全驗證後再試";
+  }
+  if (code.includes("email_address_invalid") || normalized.includes("invalid email")) {
+    return "管理員 Email 格式無效，請確認帳號設定";
+  }
+  if (code.includes("email_provider_disabled") || normalized.includes("email provider") || normalized.includes("smtp") || normalized.includes("error sending email")) {
+    return "Email 寄送服務目前無法使用，請確認 Supabase Email/SMTP 設定";
+  }
   if (normalized.includes("invalid login credentials")) return "Email 或密碼錯誤，請重新確認";
   if (normalized.includes("email not confirmed")) return "這個 Email 尚未完成驗證，請先完成註冊驗證";
   if (normalized.includes("user already registered") || normalized.includes("already been registered")) return "這個 Email 已經註冊，請直接登入";
   if (normalized.includes("password should be at least")) return "密碼至少需要 8 個字元";
   if (normalized.includes("signup is disabled")) return "目前暫停開放註冊";
-  if (normalized.includes("rate limit") || normalized.includes("security purposes")) return "操作次數過多，請稍後再試";
+  if (code.includes("rate_limit") || normalized.includes("rate limit") || normalized.includes("security purposes")) return "操作次數過多，請稍後再試";
   if (normalized.includes("expired") || normalized.includes("invalid token") || normalized.includes("token has expired")) {
     return "驗證碼錯誤或已過期，請重新寄送";
   }
@@ -657,13 +669,18 @@ export function MarketplaceApp() {
     if (!force && adminOtpRequestedRef.current === email) return null;
 
     adminOtpRequestedRef.current = email;
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false },
-    });
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser: false },
+      });
+      if (error) {
+        adminOtpRequestedRef.current = null;
+    return authErrorMessage(error, "管理員驗證碼寄送失敗，請稍後再試；若持續發生，請確認 Email/SMTP 設定");
+      }
+    } catch {
       adminOtpRequestedRef.current = null;
-      return authErrorMessage(error.message, "管理員驗證碼寄送失敗，請稍後再試");
+      return "無法連線到管理員驗證服務，請稍後再試";
     }
     return null;
   }, []);
@@ -4242,18 +4259,28 @@ function AdminOtpModal({
     event.preventDefault();
     setLoading(true);
     setError("");
-    const message = await onVerify(code);
-    setLoading(false);
-    if (message) setError(message);
+    try {
+      const message = await onVerify(code);
+      if (message) setError(message);
+    } catch {
+      setError("管理員驗證服務暫時無法使用，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function resend() {
     setLoading(true);
     setError("");
-    const message = await onResend();
-    setLoading(false);
-    if (message) setError(message);
-    else setCode("");
+    try {
+      const message = await onResend();
+      if (message) setError(message);
+      else setCode("");
+    } catch {
+      setError("管理員驗證碼寄送服務暫時無法使用，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -4900,7 +4927,7 @@ function LoginModal({
           </>
         )}
         {error && <div className="auth-error">{error}</div>}
-        {!configured && <div className="auth-warning">網站管理員尚未完成 Email 驗證設定，請先依照專案內的設定指南操作。</div>}
+          {!configured && <div className="auth-warning">網站管理員尚未完成 Email 驗證設定，請先依照專案內的設定指南操作。</div>}
         <small><ShieldCheck size={13} />密碼由 Supabase Auth 加密處理，網站不會讀取你的明碼密碼。</small>
       </div>
     </ModalShell>
@@ -5708,28 +5735,37 @@ function TradeChatPanel({
   onEditRequest: () => void;
   onRespondToRequest: (requestId: string, status: "accepted" | "rejected") => void | Promise<void>;
 }) {
-  const [messages, setMessages] = useState<TradeMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
   const [safetyMenuOpen, setSafetyMenuOpen] = useState(false);
   const [showQuickPhrases, setShowQuickPhrases] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [loadingOlder, setLoadingOlder] = useState(false);
-  const [hasOlderMessages, setHasOlderMessages] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const actionDialog = useActionDialog();
   const logRef = useRef<HTMLDivElement>(null);
   const draftInputRef = useRef<HTMLTextAreaElement>(null);
-  const messageCursorRef = useRef<{ createdAt: string; id: string } | null>(null);
-  const sendingRef = useRef(false);
   const stickToBottomRef = useRef(true);
   const lastMessageCountRef = useRef(0);
   const sentByCurrentUserRef = useRef(false);
   const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
   const [messageActionNow, setMessageActionNow] = useState<number | null>(null);
+  const {
+    messages,
+    imageUrls,
+    loading,
+    loadingOlder,
+    hasOlderMessages,
+    sending,
+    error,
+    sendMessage: sendSessionMessage,
+    loadOlderMessages: loadOlderSessionMessages,
+    recallMessage: recallSessionMessage,
+  } = useTradeChatSession({
+    client: supabase,
+    conversationId: conversation.id,
+    currentUserId,
+    onRead,
+  });
   const otherUserId = conversation.buyerId === currentUserId ? conversation.sellerId : conversation.buyerId;
   const isSeller = conversation.sellerId === currentUserId;
   const canRespondToRequest = Boolean(
@@ -5752,87 +5788,8 @@ function TradeChatPanel({
   }, [draft]);
 
   useEffect(() => {
-    if (!supabase) return;
-    const client = supabase;
-    let active = true;
-    void fetchTradeMessages(client, conversation.id)
-      .then(async (page) => {
-        if (!active) return;
-        setMessages(page.messages);
-        lastMessageCountRef.current = page.messages.length;
-        stickToBottomRef.current = true;
-        window.requestAnimationFrame(() => scrollChatLogToBottom("auto"));
-        setShowQuickPhrases(!page.messages.some((item) => item.senderId === currentUserId));
-        setHasOlderMessages(page.hasMore);
-        messageCursorRef.current = page.nextCursor;
-        onRead(conversation.id);
-        try {
-          await markConversationRead(client, conversation.id);
-        } catch (readError) {
-          if (active) {
-            setError(readError instanceof Error ? readError.message : "無法更新已讀狀態");
-          }
-        }
-        if (!active) return;
-        const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
-        if (paths.length === 0) return;
-        try {
-          const signed = await signChatImages(client, paths);
-          if (active) setImageUrls(signed);
-        } catch (signError) {
-          if (active) {
-            setError(signError instanceof Error ? signError.message : "部分圖片無法載入");
-          }
-        }
-      })
-      .catch((loadError) => {
-        if (!active) return;
-        setMessages([]);
-        setError(loadError instanceof Error ? loadError.message : "無法載入聊聊");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    const channel = client
-      .channel(`trade-chat:${conversation.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "trade_messages",
-          filter: `conversation_id=eq.${conversation.id}`,
-        },
-        (payload) => {
-          if (!active) return;
-          let message: TradeMessage;
-          try {
-            message = mapTradeMessage(payload.new as Record<string, unknown>);
-          } catch {
-            return;
-          }
-          setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
-          onRead(conversation.id);
-          void markConversationRead(client, conversation.id).catch(() => undefined);
-          if (message.imagePaths.length === 0) return;
-          void signChatImages(client, message.imagePaths)
-            .then((signed) => {
-              if (active) setImageUrls((previous) => ({ ...previous, ...signed }));
-            })
-            .catch((signError) => {
-              if (active) {
-                setError(signError instanceof Error ? signError.message : "部分圖片無法載入");
-              }
-            });
-        },
-      )
-      .subscribe();
-    return () => {
-      active = false;
-      void client.removeChannel(channel);
-    };
-  }, [conversation.id, currentUserId, onRead]);
+    setActionError("");
+  }, [conversation.id]);
 
   useEffect(() => {
     const updateMessageActionTime = () => setMessageActionNow(Date.now());
@@ -5844,8 +5801,16 @@ function TradeChatPanel({
   useEffect(() => {
     const messageCount = messages.length;
     const addedMessage = messageCount > lastMessageCountRef.current;
+    const firstLoadedPage = lastMessageCountRef.current === 0 && messageCount > 0 && !sentByCurrentUserRef.current;
     lastMessageCountRef.current = messageCount;
     if (!addedMessage) return;
+    if (firstLoadedPage) {
+      setShowQuickPhrases(!messages.some((item) => item.senderId === currentUserId));
+      stickToBottomRef.current = true;
+      setHasUnreadBelow(false);
+      scrollChatLogToBottom("auto");
+      return;
+    }
     if (stickToBottomRef.current || sentByCurrentUserRef.current) {
       sentByCurrentUserRef.current = false;
       setHasUnreadBelow(false);
@@ -5853,7 +5818,7 @@ function TradeChatPanel({
     } else {
       setHasUnreadBelow(true);
     }
-  }, [messages]);
+  }, [currentUserId, messages]);
 
   useEffect(() => {
     if (!enlargedImageUrl) return;
@@ -5866,36 +5831,21 @@ function TradeChatPanel({
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase || sendingRef.current || (!draft.trim() && files.length === 0)) return;
-    sendingRef.current = true;
+    if (!supabase || sending || (!draft.trim() && files.length === 0)) return;
     const body = draft.trim();
     setDraft("");
-    setError("");
-    setSending(true);
-    let uploadedPaths: string[] = [];
     try {
-      uploadedPaths = files.length > 0
-        ? await uploadChatImages(supabase, conversation.id, currentUserId, files)
-        : [];
-      const message = await sendTradeMessage(supabase, conversation.id, body, uploadedPaths);
-      sentByCurrentUserRef.current = true;
-      setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]);
-      if (uploadedPaths.length > 0) {
-        const signed = await signChatImages(supabase, uploadedPaths);
-        setImageUrls((previous) => ({ ...previous, ...signed }));
+      const message = await sendSessionMessage(body, files);
+      if (!message) {
+        setDraft(body);
+        return;
       }
+      sentByCurrentUserRef.current = true;
       setFiles([]);
       setShowQuickPhrases(false);
       void dispatchBrowserPush(supabase);
-    } catch (sendError) {
-      if (uploadedPaths.length > 0) {
-        await deleteChatImageUploads(supabase, uploadedPaths).catch(() => undefined);
-      }
+    } catch {
       setDraft(body);
-      setError(sendError instanceof Error ? sendError.message : "訊息傳送失敗");
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
     }
   }
 
@@ -5923,45 +5873,20 @@ function TradeChatPanel({
   }
 
   async function loadOlderMessages() {
-    const cursor = messageCursorRef.current;
-    if (!supabase || !cursor || loadingOlder) return;
+    if (!supabase || loadingOlder) return;
     const log = logRef.current;
     const previousScrollHeight = log?.scrollHeight ?? 0;
     const previousScrollTop = log?.scrollTop ?? 0;
-    setLoadingOlder(true);
-    try {
-      const page = await fetchTradeMessages(supabase, conversation.id, cursor);
-      setMessages((previous) => [
-        ...page.messages.filter((item) => !previous.some((existing) => existing.id === item.id)),
-        ...previous,
-      ]);
-      setHasOlderMessages(page.hasMore);
-      messageCursorRef.current = page.nextCursor;
-      window.requestAnimationFrame(() => {
-        if (!logRef.current) return;
-        const heightDelta = logRef.current.scrollHeight - previousScrollHeight;
-        logRef.current.scrollTop = previousScrollTop + heightDelta;
-      });
-      const paths = [...new Set(page.messages.flatMap((item) => item.imagePaths))];
-      const signed = await signChatImages(supabase, paths);
-      setImageUrls((previous) => ({ ...previous, ...signed }));
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "無法載入較早訊息");
-    } finally {
-      setLoadingOlder(false);
-    }
+    await loadOlderSessionMessages();
+    window.requestAnimationFrame(() => {
+      if (!logRef.current) return;
+      const heightDelta = logRef.current.scrollHeight - previousScrollHeight;
+      logRef.current.scrollTop = previousScrollTop + heightDelta;
+    });
   }
 
   async function recall(messageId: string) {
-    if (!supabase) return;
-    try {
-      await recallTradeMessage(supabase, messageId);
-      setMessages((previous) => previous.map((message) =>
-        message.id === messageId ? { ...message, body: "", recalledAt: new Date().toISOString() } : message,
-      ));
-    } catch (recallError) {
-      setError(recallError instanceof Error ? recallError.message : "無法收回訊息");
-    }
+    await recallSessionMessage(messageId);
   }
 
   async function closeChat() {
@@ -5978,7 +5903,7 @@ function TradeChatPanel({
       target_conversation_id: conversation.id,
       reason: reason.trim(),
     });
-    if (closeError) setError(closeError.message);
+    if (closeError) setActionError(closeError.message);
     else onChanged();
   }
 
@@ -6006,7 +5931,7 @@ function TradeChatPanel({
       target_user_id: otherUserId,
       should_block: true,
     });
-    if (blockError) setError(blockError.message);
+    if (blockError) setActionError(blockError.message);
     else onChanged();
   }
 
@@ -6028,7 +5953,7 @@ function TradeChatPanel({
       report_reason: "other",
       report_details: details,
     });
-    setError(reportError ? reportError.message : "檢舉已送出，管理員將進行審查");
+    setActionError(reportError ? reportError.message : "檢舉已送出，管理員將進行審查");
   }
 
   function applyQuickPhrase(phrase: string) {
@@ -6113,7 +6038,7 @@ function TradeChatPanel({
             {loadingOlder ? "載入中..." : "載入較早訊息"}
           </button>
         )}
-        {error && <p className="trade-chat-error">{error}</p>}
+        {(error || actionError) && <p className="trade-chat-error">{error || actionError}</p>}
         {!loading && messages.length === 0 && <p className="trade-chat-empty">尚未開始對話，先打聲招呼吧。</p>}
         {messages.map((message) => (
           <div className={`trade-chat-bubble ${message.senderId === currentUserId ? "mine" : "theirs"}`} key={message.id}>

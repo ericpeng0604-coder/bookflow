@@ -1,56 +1,71 @@
 # BookFlow AI Handoff
 
-## 任務目標
+## Task title
 
-Deploy the homepage market-switch color update.
+Secure legacy Books RLS policies and make seller reservations atomic.
 
-## 目前狀態與背景
+## Release context
 
-- Branch: `codex/unify-market-switch-green`.
-- Base commit: `e1374ec335c744bb3b1ddf1b3b51c5380c2b2d89` (`origin/main`).
-- This release contains only one homepage CSS color update.
-- No database migration is required.
-- No protected recovery file is changed.
-- Do not add `Rollback-Workflow-Approved: true`.
+- Task ID: `20260727-security-hardening`.
+- Task: `secure legacy Books RLS and atomic reservations`.
+- Branch: `codex/security-hardening-20260727`.
+- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
+- History: `.ai/history/20260727-security-hardening.md`.
+- Production database migration and history reconciliation are complete.
+- No protected recovery files or GitHub workflows were changed.
 
-## 已完成
+## Completed work
 
-- Unified the active `二手物品` market-switch button with the left `二手書籍` green.
+- Removed known permissive legacy Books policies and recreated the active-listing authorization model.
+- Blocked anonymous writes and suspended-user listing writes through RLS.
+- Locked the request and listing during single-item acceptance with update-count assertions.
+- Locked every active book in a bundle in deterministic order with an updated-book-count assertion.
+- Added the security contract and staging concurrency harness.
+- Ran the staging two-session concurrency test: exactly one bundle was reserved and the other received `A selected listing is unavailable`.
+- Removed all temporary staging auth, profile, book, bundle, item, and notification fixtures.
 
-## 驗證結果
+## Next steps
 
-- Diff check: passed.
-- Production build: pending for this one-line CSS release.
-- Vercel Preview: pending on the release PR.
-- Production deployment: pending PR merge and post-merge verification.
+1. Wait for PR checks, merge the approved branch, and confirm the Vercel production deployment.
+2. Verify `/api/health/release`, homepage, and marketplace count against the merged SHA.
+3. Keep the staging concurrency harness available for future regression runs.
 
-## 下一步
+## Changed files
 
-1. Wait for the release PR checks and resolve only release-gate failures.
-2. Merge the clean PR after required checks pass.
-3. Verify the Vercel production deployment commit and homepage market switch.
-4. Run production smoke checks for release health.
-
-## 風險與注意事項
-
-- A Vercel Preview is not production proof.
-- Do not include unrelated local files or pnpm-generated files in the release.
-- Keep staging/database migration evidence separate; this UI release has no migration.
-
-## 下一位 AI 工作指引
-
-1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry in sync with the release commit.
-2. Verify GitHub checks before merging; do not treat Preview as production.
-3. Preserve all protected recovery files.
-
-## 變更檔案
-
-- `app/globals.css`
+- `supabase/migrations/20260727060919_secure_book_rls_and_atomic_reservations.sql`
+- `scripts/check-security-hardening.mjs`
+- `scripts/check-bundle-concurrency.mjs`
+- `package.json`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260714-secondhand-market-homepage-release.md`
+- `.ai/history/20260727-security-hardening.md`
+- Restored versioned migrations under `supabase/migrations/` required by staging and production history.
 
-## 相關 Commit
+## Verification
 
-- Base commit: `af354eb6fbcc682185df3359284dcf0753be208b`.
-- Feature commit: `67af592`.
+- `node scripts/check-security-hardening.mjs`: passed.
+- `node --check scripts/check-bundle-concurrency.mjs`: passed.
+- `git diff --check`: passed.
+- Staging concurrent bundle accepts: passed; one success, one unavailable error, one reserved book.
+- Staging fixture cleanup: passed; zero auth users, profiles, books, bundles, and items remained.
+- Production RLS/RPC/anonymous read-write probes: passed.
+- Staging suspended-user RLS transaction test: passed; `is_active_user()` returned false and Books INSERT/UPDATE/DELETE were denied. The temporary fixture was rolled back and post-test cleanup found zero fixture rows and zero suspended profiles. This was a database role/claim simulation, not a full HTTP Auth-token session test.
+- Production migration history: aligned to `20260727060919`.
+- Production web deployment and merged-SHA health: NOT VERIFIED; current endpoint still reports `c41695f7157a2ed1c42db3992fb493559a493467`.
+
+## Risks and blockers
+
+- The production web deployment must propagate the merged `main` commit before release health can be called verified.
+- Existing Supabase advisor notices are broader pre-existing findings and were not changed by this task.
+- A live staging transaction-level suspended-user RLS test is verified. A full HTTP Auth-token session test remains NOT VERIFIED because local staging service credentials were not available; do not claim that separate API-session path as covered.
+
+## AI follow-up
+
+1. Preserve the exact migration history and do not rerun the migration manually.
+2. Verify the deployed commit through `/api/health/release` before claiming production completion.
+3. Keep `AI_HANDOFF.md`, `.ai/state.json`, and `.ai/history/*.md` in sync.
+
+## Commit
+
+- Base commit: `c41695f7157a2ed1c42db3992fb493559a493467`.
+- Current implementation commit before final handoff update: `7140e9432d42c06ede282958f97b23ad165792a0`.

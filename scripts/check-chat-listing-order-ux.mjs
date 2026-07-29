@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
+const session = readFileSync(new URL("../lib/marketplace/trade-chat-session.ts", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../lib/marketplace/queries.ts", import.meta.url), "utf8");
 const handoffPreferencesMigration = readFileSync(new URL("../supabase/migrations/20260704160000_purchase_request_handoff_preferences.sql", import.meta.url), "utf8");
@@ -18,8 +19,8 @@ const checks = [
   ["request modal captures meetup preferences and chat jump", app.includes('name="preferredMeetupLocation"') && app.includes('name="preferredMeetupTime"') && app.includes("先去聊聊確認")],
   ["buyer can edit meetup preferences from chat before seller handoff", app.includes("canEditRequestFromChat") && app.includes("onEditRequest") && app.includes("修改面交資訊")],
   ["chat safety actions are hidden behind menu", app.includes('className="trade-chat-actions chat-safety-actions"') && app.includes('className="chat-safety-menu"')],
-  ["quick phrases stay until a message is sent", /function applyQuickPhrase\(phrase: string\) \{\s*setDraft\(phrase\);\s*\}/.test(app) && /const message = await sendTradeMessage[\s\S]*setShowQuickPhrases\(false\)/.test(app)],
-  ["chat submit is guarded against rapid duplicate sends", app.includes("const sendingRef = useRef(false)") && app.includes("sendingRef.current ||") && app.includes("sendingRef.current = true") && app.includes("sendingRef.current = false")],
+  ["quick phrases stay until a message is sent", /function applyQuickPhrase\(phrase: string\) \{\s*setDraft\(phrase\);\s*\}/.test(app) && /const message = await sendSessionMessage[\s\S]*setShowQuickPhrases\(false\)/.test(app)],
+  ["chat submit is guarded against rapid duplicate sends", session.includes("const sendingRef = useRef(false)") && session.includes("sendingRef.current ||") && session.includes("sendingRef.current = true") && session.includes("sendingRef.current = false")],
   ["chat does not force-scroll while reading older messages", app.includes("stickToBottomRef") && app.includes("hasUnreadBelow") && app.includes('className="chat-new-message-button"')],
   ["new message jump only scrolls the chat log", app.includes("function scrollChatLogToBottom") && app.includes("log.scrollTo({ top: log.scrollHeight, behavior })") && !app.includes("bottomRef.current?.scrollIntoView")],
   ["chat preserves scroll when loading older messages", app.includes("previousScrollHeight") && app.includes("previousScrollTop") && app.includes("heightDelta")],

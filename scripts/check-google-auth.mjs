@@ -21,6 +21,11 @@ const checks = [
   ["admin OAuth sessions still require verification", app.includes("await ensureAdminOtp(user.email)")],
   ["admin OTP backend accepts Google OAuth sessions", adminOtpRoute.includes('"oauth"')],
   ["admin OTP backend still accepts password sessions", adminOtpRoute.includes('"password"')],
+  ["admin OTP auth errors accept structured Supabase errors", app.includes("function authErrorMessage(error: unknown, fallback: string)")],
+  ["admin OTP classifies CAPTCHA failures", app.includes("normalized.includes(\"captcha\")") && app.includes("normalized.includes(\"turnstile\")")],
+  ["admin OTP classifies SMTP failures", app.includes("email_provider_disabled") && app.includes("Email/SMTP")],
+  ["admin OTP resets the send lock after failures", app.includes("adminOtpRequestedRef.current = null;") && app.includes("無法連線到管理員驗證服務")],
+  ["admin OTP delivery remains retryable after UI exceptions", app.includes("管理員驗證碼寄送服務暫時無法使用") && app.includes("finally")],
   [
     "admin OTP dedupe resets when the session ends",
     /if\s*\(!user\?\.email\)\s*\{\s*adminOtpRequestedRef\.current\s*=\s*null;/.test(app),

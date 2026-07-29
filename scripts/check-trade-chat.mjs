@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 
 const chat = readFileSync(new URL("../lib/marketplace/trade-chat.ts", import.meta.url), "utf8");
+const session = readFileSync(new URL("../lib/marketplace/trade-chat-session.ts", import.meta.url), "utf8");
 const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
 
 const checks = [
@@ -12,9 +13,12 @@ const checks = [
   ["upload rollback helper", chat.includes("deleteChatImageUploads")],
   ["shared trade message mapper export", chat.includes("export function mapTradeMessage")],
   ["chat error mapping helper", chat.includes("export function mapChatError")],
-  ["initial load keeps messages when sign fails", /fetchTradeMessages[\s\S]*catch\(\(signError\)/.test(app)],
-  ["send failure cleans uploaded chat images", app.includes("deleteChatImageUploads(supabase, uploadedPaths)")],
-  ["realtime uses shared mapper", app.includes("mapTradeMessage(payload.new")],
+  ["session owns initial load and realtime", /export function useTradeChatSession[\s\S]*fetchTradeMessages[\s\S]*mapTradeMessage/.test(session)],
+  ["session keeps messages when signing fails", /setMessages\(page\.messages\)[\s\S]*catch \(signError\)/.test(session)],
+  ["session rolls back uploaded images on send failure", session.includes("deleteChatImageUploads(client, uploadedPaths)")],
+  ["session owns message pagination and recall", session.includes("loadOlderMessages") && session.includes("recallMessage")],
+  ["panel calls the session seam", app.includes("useTradeChatSession") && app.includes("sendSessionMessage(body, files)")],
+  ["panel keeps scroll restoration at the UI seam", app.includes("previousScrollHeight") && app.includes("loadOlderSessionMessages()")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
