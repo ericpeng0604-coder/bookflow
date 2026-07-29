@@ -9,6 +9,7 @@ const queries = readFileSync(new URL("../lib/marketplace/queries.ts", import.met
 const handoffPreferencesMigration = readFileSync(new URL("../supabase/migrations/20260704160000_purchase_request_handoff_preferences.sql", import.meta.url), "utf8");
 const livePurchaseRequestFixMigration = readFileSync(new URL("../supabase/migrations/20260705224319_fix_live_purchase_request_function.sql", import.meta.url), "utf8");
 const sellerCancelMigration = readFileSync(new URL("../supabase/migrations/20260705100000_seller_cancel_reserved_request.sql", import.meta.url), "utf8");
+const coordinationMigration = readFileSync(new URL("../supabase/migrations/20260730120000_shared_meetup_information.sql", import.meta.url), "utf8");
 
 const checks = [
   ["listing card uses department and course helper", /function cardContextLabel\(book: Book\)[\s\S]*listingContextLabel\(book\)/.test(app) && /cardContextLabel\(book\)/.test(app)],
@@ -18,7 +19,7 @@ const checks = [
   ["seller can respond to request inside chat", app.includes("canRespondToRequest") && app.includes('respondFromChat("accepted")') && app.includes('respondFromChat("rejected")')],
   ["request modal captures meetup preferences and message jump", app.includes('name="preferredMeetupLocation"') && app.includes('name="preferredMeetupTime"') && app.includes("先去訊息確認")],
   ["meetup preferences stay optional and editable after submission", app.includes("希望面交地點（選填）") && app.includes("送出後，在賣家按下「已完成面交」前，都能回訊息再修改") && app.includes("preferred_meetup_location: preferredMeetupLocation")],
-  ["both parties can edit shared meetup preferences from chat before seller handoff", app.includes("function MeetupCoordinationEditor") && app.includes("canEditCoordinationFromChat") && app.includes("onUpdateCoordination") && app.includes("雙方共享的面交資訊")],
+  ["shared meetup info uses a details-only modal with fixed-location permission", app.includes("MeetupInfoModal") && app.includes("canEditMeetupInfo") && app.includes("onEditMeetupInfo") && app.includes("chat-meetup-summary") && app.includes("update_purchase_request_coordination") && coordinationMigration.includes("Only the listing seller can edit a fixed meetup location")],
   ["request modal rehydrates saved purchase fields", /const initialMessage = request\?\.message \|\| REQUEST_PHRASES\[0\]/.test(app) && /setPreferredMeetupLocation\(initialPreferredMeetupLocation\)/.test(app) && /setPreferredMeetupTime\(initialPreferredMeetupTime\)/.test(app)],
   ["chat safety actions are hidden behind menu", app.includes('className="trade-chat-actions chat-safety-actions"') && app.includes('className="chat-safety-menu"')],
   ["quick phrases stay until a message is sent", /function applyQuickPhrase\(phrase: string\) \{\s*setDraft\(phrase\);\s*\}/.test(app) && /const message = await sendTradeMessage[\s\S]*setShowQuickPhrases\(false\)/.test(app)],

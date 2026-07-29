@@ -96,6 +96,7 @@ import {
 } from "@/lib/marketplace/queries";
 import { giveawayChatBanner, giveawayRequestLabel, sortGiveawayRequests } from "@/lib/marketplace/giveaway";
 import { DEFAULT_MEETUP_MODE, MEETUP_MODE_OPTIONS, meetupModeLabel, normalizeMeetupMode } from "@/lib/marketplace/meetup";
+import { canEditMeetupInfo, meetupInfoSummary, normalizeMeetupInfo } from "@/lib/marketplace/meetup-coordination";
 import { isAbortError, runGuarded } from "@/lib/marketplace/refresh-guard";
 import {
   invalidateMarketplaceCache,
@@ -191,7 +192,7 @@ const messageTimeFormatter = new Intl.DateTimeFormat("zh-TW", {
   minute: "2-digit",
 });
 
-type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "sellerConfirm" | "report" | "feedback" | "tradeReview" | null;
+type Modal = "login" | "adminOtp" | "resetPassword" | "profile" | "bookForm" | "contactSettings" | "request" | "sellerConfirm" | "meetup" | "report" | "feedback" | "tradeReview" | null;
 
 type Store = {
   books: Book[];
@@ -300,10 +301,18 @@ function hasRequestCoordination(request: Pick<PurchaseRequest, "preferredMeetupL
   return Boolean(request.preferredMeetupLocation.trim() || request.preferredMeetupTime.trim());
 }
 
-function requestCoordinationLines(request: Pick<PurchaseRequest, "preferredMeetupLocation" | "preferredMeetupTime">) {
+function requestCoordinationLines(
+  request: Pick<PurchaseRequest, "preferredMeetupLocation" | "preferredMeetupTime">,
+  fallbackLocation = "",
+) {
+  const summary = meetupInfoSummary({
+    location: request.preferredMeetupLocation,
+    time: request.preferredMeetupTime,
+    fallbackLocation,
+  });
   return [
-    request.preferredMeetupLocation.trim() ? `希望地點：${request.preferredMeetupLocation.trim()}` : "",
-    request.preferredMeetupTime.trim() ? `希望時間：${request.preferredMeetupTime.trim()}` : "",
+    summary.location ? `面交地點：${summary.location}` : "",
+    summary.time ? `面交時間：${summary.time}` : "",
   ].filter(Boolean);
 }
 
@@ -821,7 +830,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [editingRequest, setEditingRequest] = useState<PurchaseRequest | null>(null);
   const [sellerConfirmationRequest, setSellerConfirmationRequest] = useState<PurchaseRequest | null>(null);
   const [sellerConfirmationSaving, setSellerConfirmationSaving] = useState(false);
-  const [coordinationSavingRequestId, setCoordinationSavingRequestId] = useState<string | null>(null);
+  const [editingMeetupRequest, setEditingMeetupRequest] = useState<PurchaseRequest | null>(null);
   const [toast, setToast] = useState("");
   const [notificationOpen, setNotificationOpen] = useState(false);
   const notificationWrapRef = useRef<HTMLDivElement>(null);
@@ -862,6 +871,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [showCourseSearchGuide, setShowCourseSearchGuide] = useState(false);
   const bookSavingRef = useRef(false);
   const requestSavingRef = useRef(false);
+  const meetupSavingRef = useRef(false);
   const adminOtpRequestedRef = useRef<string | null>(null);
   const imageSearchInputRef = useRef<HTMLInputElement>(null);
   const imageSearchRequestRef = useRef(0);
@@ -879,6 +889,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const detailTouchStartXRef = useRef<number | null>(null);
   const [bookSaving, setBookSaving] = useState(false);
   const [requestSaving, setRequestSaving] = useState(false);
+  const [meetupSaving, setMeetupSaving] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartSaving, setCartSaving] = useState(false);
@@ -2780,6 +2791,49 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     }
   }
 
+  async function saveMeetupInfo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !currentUser || !selectedBook || !editingMeetupRequest || meetupSavingRef.current) return;
+    if (!canEditMeetupInfo({
+      requestStatus: editingMeetupRequest.status,
+      meetupMode: normalizeMeetupMode(selectedBook.meetupMode),
+      currentUserId: currentUser.id,
+      buyerId: editingMeetupRequest.buyerId,
+      sellerId: selectedBook.sellerId,
+    })) {
+      setToast("目前交易狀態或面交方式不允許修改");
+      return;
+    }
+
+    const fields = new FormData(event.currentTarget);
+    const { location, time } = normalizeMeetupInfo(
+      String(fields.get("meetupLocation") || ""),
+      String(fields.get("meetupTime") || ""),
+    );
+    meetupSavingRef.current = true;
+    setMeetupSaving(true);
+    try {
+      const { error } = await supabase.rpc("update_purchase_request_coordination", {
+        target_request_id: editingMeetupRequest.id,
+        preferred_location: location,
+        preferred_time: time,
+      });
+      if (error) {
+        setToast(`面交資訊儲存失敗：${error.message}`);
+        return;
+      }
+      await reloadAfterUserMutation();
+      setModal(null);
+      setEditingMeetupRequest(null);
+      setToast("面交資訊已更新");
+    } catch (error) {
+      setToast(`面交資訊儲存失敗：${error instanceof Error ? error.message : "請稍後再試"}`);
+    } finally {
+      meetupSavingRef.current = false;
+      setMeetupSaving(false);
+    }
+  }
+
   async function saveContactSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || !editingBook) return;
@@ -2852,50 +2906,6 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       ),
     }));
     setToast("已婉拒這筆意願");
-  }
-
-  async function updateRequestCoordination(requestId: string, location: string, time: string) {
-    if (!currentUser || currentUser.accountStatus === "suspended") {
-      setToast("你的帳號目前為唯讀模式，不能修改面交資訊");
-      return;
-    }
-    const target = store.requests.find((request) => request.id === requestId);
-    if (!target) return;
-    const targetBook = [...myBooks, ...requestBooks, ...marketplaceBooks, ...store.books].find((book) => book.id === target.bookId);
-    const normalizedLocation = normalizeMeetupMode(targetBook?.meetupMode) === DEFAULT_MEETUP_MODE
-      ? targetBook?.meetup.trim() || location.trim().slice(0, REQUEST_COORDINATION_MAX_LENGTH)
-      : location.trim().slice(0, REQUEST_COORDINATION_MAX_LENGTH);
-    const normalizedTime = time.trim().slice(0, REQUEST_COORDINATION_MAX_LENGTH);
-    setCoordinationSavingRequestId(requestId);
-    try {
-      if (supabase) {
-        const { error } = await supabase.rpc("update_purchase_request_coordination", {
-          target_request_id: requestId,
-          preferred_location: normalizedLocation,
-          preferred_time: normalizedTime,
-        });
-        if (error) {
-          setToast(`面交資訊儲存失敗：${error.message}`);
-          return;
-        }
-        await reloadAfterUserMutation();
-        setToast("面交資訊已更新，雙方會看到相同內容");
-        return;
-      }
-      const now = new Date().toISOString();
-      setStore((previous) => ({
-        ...previous,
-        orders: previous.orders.map((order) => order.id === target.orderId
-          ? { ...order, preferredMeetupLocation: normalizedLocation, preferredMeetupTime: normalizedTime, updatedAt: now }
-          : order),
-        requests: previous.requests.map((request) => request.orderId === target.orderId || request.id === requestId
-          ? { ...request, preferredMeetupLocation: normalizedLocation, preferredMeetupTime: normalizedTime, updatedAt: now }
-          : request),
-      }));
-      setToast("面交資訊已更新，雙方會看到相同內容");
-    } finally {
-      setCoordinationSavingRequestId(null);
-    }
   }
 
   async function confirmSellerRequest(location: string, time: string) {
@@ -4950,8 +4960,13 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                         onMessageActivity={updateConversationActivity}
                         onHide={() => void hideClosedConversation(expandedConversationId)}
                         onOpenBook={openBook}
-                        onUpdateCoordination={updateRequestCoordination}
-                        coordinationSavingRequestId={coordinationSavingRequestId}
+                        onEditMeetupInfo={() => {
+                          if (!conversationRequest) return;
+                          setEditingMeetupRequest(conversationRequest);
+                          setSelectedId(conversation.bookId);
+                          setDetailBook(null);
+                          setModal("meetup");
+                        }}
                         onRespondToRequest={respondToRequest}
                       />
                     );
@@ -5525,6 +5540,19 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             void openOrderConversation(sellerConfirmationRequest.id);
           }}
           onConfirm={(location, time) => void confirmSellerRequest(location, time)}
+        />
+      )}
+      {modal === "meetup" && selectedBook && editingMeetupRequest && (
+        <MeetupInfoModal
+          book={selectedBook}
+          request={editingMeetupRequest}
+          saving={meetupSaving}
+          onClose={() => {
+            if (meetupSaving) return;
+            setModal(null);
+            setEditingMeetupRequest(null);
+          }}
+          onSubmit={saveMeetupInfo}
         />
       )}
       {modal === "report" && reportTarget && (
@@ -7487,6 +7515,68 @@ function CartOrderConfirmationModal({
   );
 }
 
+function MeetupInfoModal({
+  book,
+  request,
+  saving,
+  onClose,
+  onSubmit,
+}: {
+  book: Book;
+  request: PurchaseRequest;
+  saving: boolean;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+}) {
+  const fallbackLocation = normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? book.meetup : "";
+  const initial = meetupInfoSummary({
+    location: request.preferredMeetupLocation,
+    time: request.preferredMeetupTime,
+    fallbackLocation,
+  });
+  const [location, setLocation] = useState(initial.location);
+  const [time, setTime] = useState(initial.time);
+
+  useEffect(() => {
+    setLocation(initial.location);
+    setTime(initial.time);
+  }, [initial.location, initial.time]);
+
+  return (
+    <ModalShell title="修改面交資訊" subtitle={`交易：${book.title}`} onClose={onClose} closeOnBackdrop={!saving}>
+      <form className="form meetup-info-form" onSubmit={onSubmit} aria-busy={saving}>
+        <p className="form-note">儲存後，雙方重新整理交易頁面就會看到相同的面交資訊。</p>
+        <label>
+          面交地點
+          <input
+            name="meetupLocation"
+            maxLength={120}
+            value={location}
+            onChange={(event) => setLocation(event.target.value)}
+            placeholder="例如：圖書館一樓"
+          />
+        </label>
+        <label>
+          面交時間
+          <input
+            name="meetupTime"
+            maxLength={120}
+            value={time}
+            onChange={(event) => setTime(event.target.value)}
+            placeholder="例如：週三下午"
+          />
+        </label>
+        <div className="modal-actions">
+          <button type="button" className="secondary-action" onClick={onClose} disabled={saving}>取消</button>
+          <button type="submit" className="primary" disabled={saving}>
+            {saving ? "儲存中..." : "確認儲存"}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
 function RequestModal({
   book,
   request,
@@ -7824,97 +7914,28 @@ function OrderTimeline({ request }: { request: PurchaseRequest }) {
 function RequestCoordinationPanel({
   request,
   viewer,
+  fallbackLocation = "",
 }: {
   request: PurchaseRequest;
   viewer: "buyer" | "seller";
+  fallbackLocation?: string;
 }) {
-  const lines = requestCoordinationLines(request);
+  const lines = requestCoordinationLines(request, fallbackLocation);
   if (lines.length === 0) {
     return (
       <div className="request-coordination-note is-empty">
         {viewer === "buyer"
-          ? "你還沒填寫希望的面交時間或地點，可以先去訊息和賣家確認。"
-          : "買家還沒填寫希望的面交時間或地點，建議先到訊息確認。"}
+          ? "目前尚未確認面交時間或地點，可以先到訊息討論。"
+          : "目前尚未確認面交時間或地點，建議先到訊息討論。"}
       </div>
     );
   }
   return (
     <div className="request-coordination-note">
-      <b>{viewer === "buyer" ? "你填寫的面交偏好" : "買家填寫的面交偏好"}</b>
+      <b>雙方共享的面交資訊</b>
       <ul>
         {lines.map((line) => <li key={line}>{line}</li>)}
       </ul>
-    </div>
-  );
-}
-
-function MeetupCoordinationEditor({
-  book,
-  request,
-  editable,
-  saving,
-  onSave,
-}: {
-  book: Book;
-  request: PurchaseRequest;
-  editable: boolean;
-  saving: boolean;
-  onSave: (location: string, time: string) => void | Promise<void>;
-}) {
-  const fixedLocation = normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? book.meetup.trim() : "";
-  const [location, setLocation] = useState(request.preferredMeetupLocation || fixedLocation);
-  const [time, setTime] = useState(request.preferredMeetupTime);
-
-  useEffect(() => {
-    setLocation(request.preferredMeetupLocation || fixedLocation);
-    setTime(request.preferredMeetupTime);
-  }, [fixedLocation, request.id, request.preferredMeetupLocation, request.preferredMeetupTime]);
-
-  const normalizedLocation = fixedLocation || location.trim();
-  const dirty = normalizedLocation !== request.preferredMeetupLocation.trim() || time.trim() !== request.preferredMeetupTime.trim();
-  return (
-    <div className="meetup-coordination-editor">
-      <div className="meetup-coordination-heading">
-        <div>
-          <b>雙方共享的面交資訊</b>
-          <small>{editable ? "任一方更新後，對方重新整理就會看到相同內容。" : "賣家確認訂單後，面交資訊已鎖定。"}</small>
-        </div>
-        {fixedLocation && <span className="fixed-location-note">刊登者指定位置</span>}
-      </div>
-      <div className="meetup-coordination-grid">
-        <label>
-          面交地點
-          <input
-            value={fixedLocation || location}
-            readOnly={Boolean(fixedLocation)}
-            disabled={!editable || saving}
-            maxLength={REQUEST_COORDINATION_MAX_LENGTH}
-            onChange={(event) => setLocation(event.target.value)}
-            placeholder="例如：圖書館一樓"
-          />
-        </label>
-        <label>
-          面交時間
-          <input
-            value={time}
-            disabled={!editable || saving}
-            maxLength={REQUEST_COORDINATION_MAX_LENGTH}
-            onChange={(event) => setTime(event.target.value)}
-            placeholder="例如：週三下午"
-          />
-        </label>
-      </div>
-      {editable && (
-        <button
-          type="button"
-          className="chat-context-link"
-          disabled={saving || !dirty}
-          onClick={() => void onSave(normalizedLocation, time.trim())}
-        >
-          <Check size={15} />
-          {saving ? "儲存中…" : "儲存共享面交資訊"}
-        </button>
-      )}
     </div>
   );
 }
@@ -7933,8 +7954,7 @@ function TradeChatPanel({
   onMessageActivity,
   onHide,
   onOpenBook,
-  onUpdateCoordination,
-  coordinationSavingRequestId,
+  onEditMeetupInfo,
   onRespondToRequest,
 }: {
   conversation: Conversation;
@@ -7949,8 +7969,7 @@ function TradeChatPanel({
   onMessageActivity: (message: TradeMessage) => void;
   onHide: () => void;
   onOpenBook: (bookId: string) => void;
-  onUpdateCoordination: (requestId: string, location: string, time: string) => void | Promise<void>;
-  coordinationSavingRequestId: string | null;
+  onEditMeetupInfo: () => void;
   onRespondToRequest: (requestId: string, status: "accepted" | "rejected") => void | Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
@@ -8004,11 +8023,16 @@ function TradeChatPanel({
     && ["pending", "waitlisted"].includes(request.status)
     && book?.status === "available",
   );
-  const canEditCoordinationFromChat = Boolean(
-    request
-    && book?.listingType !== "giveaway"
-    && ["pending", "waitlisted"].includes(request.status)
-    && currentUser.accountStatus !== "suspended",
+  const canEditMeetupFromChat = Boolean(
+    book
+    && request
+    && canEditMeetupInfo({
+      requestStatus: request.status,
+      meetupMode: normalizeMeetupMode(book.meetupMode),
+      currentUserId,
+      buyerId: request.buyerId,
+      sellerId: book.sellerId,
+    }),
   );
 
   useEffect(() => {
@@ -8291,16 +8315,19 @@ function TradeChatPanel({
                   <span className={`request-status ${request.status}`}>{book.listingType === "giveaway" ? giveawayRequestLabel(request.status) : requestLabels[request.status]}</span>
                   {book.listingType === "giveaway" && giveawayChatBanner(request.status) && <p className="giveaway-chat-banner">{giveawayChatBanner(request.status)}</p>}
                   {book.listingType !== "giveaway" && <p>{isSeller ? `${senderName(request.buyerId)} 已送出購買意願` : "你已送出購買意願"}</p>}
-                  {contextDetailsOpen && <RequestCoordinationPanel request={request} viewer={isSeller ? "seller" : "buyer"} />}
-                  {book.listingType !== "giveaway" && (
-                    <MeetupCoordinationEditor
-                      book={book}
-                      request={request}
-                      editable={canEditCoordinationFromChat}
-                      saving={coordinationSavingRequestId === request.id}
-                      onSave={(location, time) => onUpdateCoordination(request.id, location, time)}
-                    />
-                  )}
+                  {(() => {
+                    const meetup = meetupInfoSummary({
+                      location: request.preferredMeetupLocation,
+                      time: request.preferredMeetupTime,
+                      fallbackLocation: normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? book.meetup : "",
+                    });
+                    return (
+                      <div className="chat-meetup-summary" aria-label="面交資訊摘要">
+                        <span>面交時間：{meetup.time || "尚未確認"}</span>
+                        <span>面交地點：{meetup.location || "尚未確認"}</span>
+                      </div>
+                    );
+                  })()}
                   <button
                     type="button"
                     className="chat-context-details-toggle"
@@ -8310,6 +8337,23 @@ function TradeChatPanel({
                     <ChevronDown size={14} aria-hidden="true" />
                     {contextDetailsOpen ? "收合交易詳情" : "查看交易詳情"}
                   </button>
+                  {contextDetailsOpen && (
+                    <div className="chat-meetup-details">
+                      <RequestCoordinationPanel
+                        request={request}
+                        viewer={isSeller ? "seller" : "buyer"}
+                        fallbackLocation={normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE ? book.meetup : ""}
+                      />
+                      {canEditMeetupFromChat ? (
+                        <button type="button" className="chat-inline-edit" onClick={onEditMeetupInfo}>
+                          <Pencil size={14} />
+                          修改面交資訊
+                        </button>
+                      ) : normalizeMeetupMode(book.meetupMode) === DEFAULT_MEETUP_MODE && !isSeller ? (
+                        <p className="chat-meetup-readonly">刊登者指定位置，只有刊登者可以修改面交資訊。</p>
+                      ) : null}
+                    </div>
+                  )}
                   {canRespondToRequest && (
                     <div className="chat-order-actions">
                       <button className="accept" type="button" disabled={currentUser.accountStatus === "suspended"} onClick={() => void respondFromChat("accepted")}><Check size={15} />接受</button>
