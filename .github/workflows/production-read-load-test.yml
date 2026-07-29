@@ -1,13 +1,17 @@
 name: Production Read Load Test
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - codex/production-read-load-test-20260729
     paths:
       - .github/workflows/production-read-load-test.yml
+      - app/api/internal/production-read-load-test/route.ts
 
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 concurrency:
   group: production-read-load-test
@@ -15,7 +19,7 @@ concurrency:
 
 jobs:
   load-test:
-    if: github.head_ref == 'codex/production-read-load-test-20260729'
+    if: github.ref == 'refs/heads/codex/production-read-load-test-20260729'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -24,13 +28,16 @@ jobs:
       SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJna3BteGJwZWpmd2N1eG5jYWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMDQ3MzcsImV4cCI6MjA5NjU4MDczN30.KkMAVHa-PG9hHjEQvj8yPhjJKKvTpElYendcI5aIlnU
     steps:
       - name: Run bounded read-only load test
+        id: load
+        continue-on-error: true
         shell: bash
         run: |
-          node <<'NODE'
+          set -o pipefail
+          node <<'NODE' | tee load-test.log
           const siteUrl = process.env.SITE_URL;
           const supabaseUrl = process.env.SUPABASE_URL;
           const anonKey = process.env.SUPABASE_ANON_KEY;
-          const stages = [10, 25, 50, 100, 200];
+          const stages = [5, 10, 25, 50, 100, 200];
           const percentile = (values, ratio) => {
             if (!values.length) return 0;
             const sorted = [...values].sort((a, b) => a - b);
@@ -146,3 +153,41 @@ jobs:
           const failedThreshold = all.some((result) => result.errorRatePercent >= 1 || result.p95Ms > 1500);
           if (failedThreshold) process.exitCode = 1;
           NODE
+
+      - name: Publish results to PR
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOAD_OUTCOME: ${{ steps.load.outcome }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const log = fs.existsSync('load-test.log') ? fs.readFileSync('load-test.log', 'utf8') : '';
+          const finalLine = log.split(/\r?\n/).find((line) => line.startsWith('FINAL_REPORT '));
+          const lines = [
+            '## Production read load test result',
+            '',
+            `Workflow load step outcome: **${process.env.LOAD_OUTCOME || 'unknown'}**`,
+            '',
+            'Scope: production homepage GET and read-only `list_books_page` RPC. No writes were performed.',
+            '',
+          ];
+          if (!finalLine) {
+            lines.push('No final report was produced. Test result: **NOT VERIFIED**.');
+          } else {
+            const report = JSON.parse(finalLine.slice('FINAL_REPORT '.length));
+            lines.push('| Scenario | Concurrency | Requests | Req/s | p50 | p95 | p99 | Error rate | Statuses |');
+            lines.push('|---|---:|---:|---:|---:|---:|---:|---:|---|');
+            for (const result of [...report.homepageResults, ...report.rpcResults]) {
+              lines.push(`| ${result.name} | ${result.concurrency} | ${result.requests} | ${result.reqPerSecond} | ${result.p50Ms} ms | ${result.p95Ms} ms | ${result.p99Ms} ms | ${result.errorRatePercent}% | \`${JSON.stringify(result.statuses)}\` |`);
+            }
+            lines.push('', 'Stop threshold: error rate >= 1% or p95 > 1500 ms.');
+          }
+          fs.writeFileSync('load-test-comment.md', `${lines.join('\n')}\n`);
+          NODE
+          gh pr comment 164 --repo "$GITHUB_REPOSITORY" --body-file load-test-comment.md
+
+      - name: Mark workflow failed when threshold reached
+        if: steps.load.outcome == 'failure'
+        run: exit 1
