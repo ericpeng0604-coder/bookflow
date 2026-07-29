@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "in_progress",
+  "owner": "none",
+  "status": "idle",
   "taskId": "20260729-supply-chain-risk-remediation-pr3",
   "taskTitle": "supply chain risk remediation PR3",
   "baseCommit": "8585a8875ac809e08aa9af09f021a0bb1794ff89",
-  "updatedAt": "2026-07-29T06:50:11.234Z",
+  "updatedAt": "2026-07-29T07:01:28.917Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260729-0652-supply-chain-risk-remediation-pr3.md"
+  "historyFile": ".ai/history/20260729-0701-20260729-supply-chain-risk-remediation-p.md"
 }
