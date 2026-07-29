@@ -22,7 +22,7 @@ assert.match(appSource, /取消收藏《\$\{book\.title\}》/, "favorite removal
 assert.match(appSource, /title=\{`取消收藏《\$\{book\.title\}》`\}/, "favorite removal should expose a visible tooltip");
 assert.match(appSource, /favoriteBooks\.length === 0 && <EmptyDashboard text="你還沒有收藏任何課本" \/>/, "favorites should retain an explicit empty state");
 assert.match(appSource, /<ResilientBookCover book=\{book\} \/>/, "favorite cards should use the resilient cover renderer");
-assert.match(appSource, /onError=\{\(\) => setImageFailed\(true\)\}/, "favorite cover failures should render a fallback instead of a broken image");
+assert.match(appSource, /onError=\{\(\) => setFailedImageUrl\(book\.imageUrl\)\}/, "favorite cover failures should render a fallback instead of a broken image");
 assert.match(cssSource, /\.detail-favorite-button/, "detail favorite button should have a stable style hook");
 assert.match(cssSource, /\.favorites-grid \.book-card \{ position: relative;/, "favorite cards should contain their action button");
 assert.match(cssSource, /\.favorites-grid \.book-card-main \{ width: 100%;/, "favorite card main action should fill the card");

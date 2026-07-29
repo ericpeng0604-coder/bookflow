@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: Fix chat transaction details, purchase response RPC ambiguity, and listing image fallbacks
+- Actor: codex
+- Status: complete
+- Base commit: `e711182cd68d9d5f1a01147de7a3c2767d16da30`
+- Archived at: 2026-07-29T14:06:30.363Z
+
+---
 # BookFlow AI Handoff
 
 ## Task title

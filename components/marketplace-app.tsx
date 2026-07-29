@@ -4264,7 +4264,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                     aria-label={`查看《${book.title}》，${book.listingType === "giveaway" ? "零元贈送" : book.listingType === "secondhand" ? book.itemCategory : book.author}，${book.listingType === "giveaway" ? "免費" : money(book.price)}，${book.condition}`}
                   >
                     <div className="card-image">
-                      <Image src={book.imageUrl} alt="" width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" />
+                      <ResilientBookCover book={book} />
                       {book.sellerVerified && <span className="verified-seller-badge"><ShieldCheck size={13} />{book.listingType === "giveaway" ? "已驗證贈送者" : "已驗證賣家"}</span>}
                       <span className={`status ${book.status}`}>{book.listingType === "giveaway" ? "免費贈送" : statusLabels[book.status]}</span>
                     </div>
@@ -4691,9 +4691,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                       <span>選取</span>
                     </label>
                   )}
-                  {book.imageUrl
-                    ? <Image src={book.imageUrl} alt="" width={160} height={210} sizes="80px" />
-                    : <div className="listing-image-placeholder"><BookOpen size={24} /></div>}
+                  <ResilientBookCover book={book} variant="listing" />
                   <div className="listing-main">
                     <div className="listing-badges">
                       {book.lifecycleState === "active" && book.reviewStatus === "approved" ? (
@@ -8028,7 +8026,7 @@ function TradeChatPanel({
                   <span className={`request-status ${request.status}`}>{book.listingType === "giveaway" ? giveawayRequestLabel(request.status) : requestLabels[request.status]}</span>
                   {book.listingType === "giveaway" && giveawayChatBanner(request.status) && <p className="giveaway-chat-banner">{giveawayChatBanner(request.status)}</p>}
                   {book.listingType !== "giveaway" && <p>{isSeller ? `${senderName(request.buyerId)} 已送出購買意願` : "你已送出購買意願"}</p>}
-                  <RequestCoordinationPanel request={request} viewer={isSeller ? "seller" : "buyer"} />
+                  {contextDetailsOpen && <RequestCoordinationPanel request={request} viewer={isSeller ? "seller" : "buyer"} />}
                   <button
                     type="button"
                     className="chat-context-details-toggle"
@@ -8217,12 +8215,31 @@ function TradeChatPanel({
 }
 /* eslint-enable @next/next/no-img-element */
 
-function ResilientBookCover({ book }: { book: Book }) {
-  const [imageFailed, setImageFailed] = useState(!book.imageUrl);
+function ResilientBookCover({ book, variant = "card" }: { book: Book; variant?: "card" | "listing" }) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const imageFailed = !book.imageUrl || failedImageUrl === book.imageUrl;
   if (imageFailed) {
-    return <div className="card-image-fallback" role="img" aria-label={`${book.title} 封面`}><BookOpen size={34} aria-hidden="true" /><span>暫無封面</span></div>;
+    return (
+      <div
+        className={variant === "listing" ? "listing-image-placeholder" : "card-image-fallback"}
+        role="img"
+        aria-label={`${book.title} 封面`}
+      >
+        <BookOpen size={variant === "listing" ? 24 : 34} aria-hidden="true" />
+        <span>暫無封面</span>
+      </div>
+    );
   }
-  return <Image src={book.imageUrl} alt={book.title} width={420} height={560} sizes="(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px" onError={() => setImageFailed(true)} />;
+  return (
+    <Image
+      src={book.imageUrl}
+      alt={book.title}
+      width={variant === "listing" ? 160 : 420}
+      height={variant === "listing" ? 210 : 560}
+      sizes={variant === "listing" ? "80px" : "(max-width: 680px) 50vw, (max-width: 1100px) 33vw, 260px"}
+      onError={() => setFailedImageUrl(book.imageUrl)}
+    />
+  );
 }
 
 function EmptyDashboard({ text }: { text: string }) {
