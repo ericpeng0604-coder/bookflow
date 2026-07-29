@@ -2,57 +2,64 @@
 
 ## Task title
 
-Fix chat transaction details, purchase response RPC ambiguity, and listing image fallbacks
+deploy shared meetup coordination and chat action clipping
 
 ## Release context
 
-- Task ID: `20260729-fix-chat-transaction-details-purchase-re`.
-- Task: `Fix chat transaction details, purchase response RPC ambiguity, and listing image fallbacks`.
-- Branch: `codex/chat-order-deploy-20260729`.
-- Base commit: `e711182cd68d9d5f1a01147de7a3c2767d16da30`.
-- History: `.ai/history/20260729-1406-20260729-fix-chat-transaction-details-pu.md`.
-- A database migration is included: remove the ambiguous `respond_to_purchase_request(uuid, request_status)` overload.
-- No GitHub workflow or protected recovery file is changed.
+- Task ID: `20260730-deploy-shared-meetup`.
+- Task: `deploy shared meetup coordination and chat action clipping`.
+- Branch: `codex/deploy-shared-meetup-20260730`.
+- Base commit: `5a349ac0ae2b15aa6fa48146e72f2b357e5ec2ff`.
+- History: `.ai/history/20260729-shared-meetup-coordination.md`.
+- The shared meetup migration was verified in Supabase Staging.
+- Protected recovery files and recovery workflows are not changed.
 
 ## Completed work
 
-- Render transaction coordination details only after the chat details control is activated.
-- Route marketplace cards and dashboard listings through the resilient cover renderer with an accessible fallback.
-- Add a migration that removes the legacy enum RPC overload and reloads the PostgREST schema cache.
-- Add the focused chat-order regression check to the project check suite.
+- Added shared buyer/seller meetup coordination editing in the message workspace.
+- Added seller confirmation modal and atomic reservation RPCs with multi-item synchronization.
+- Added prominent seller-fixed-location display across cards, listings, storefronts, and chat.
+- Removed the fixed desktop chat context-card height that clipped the seller accept/reject row.
+- Added focused behavior checks and updated the responsive-overflow lesson.
+
+## Verification
+
+- `node scripts/check-chat-order-fixes.mjs`: passed.
+- `node scripts/run-project-checks.mjs`: passed (41/41).
+- `node scripts/verify.mjs`: passed checks, typecheck, and production build.
+- Supabase Staging migration and RPC permission/synchronization checks: passed.
+- Authenticated browser proof: not yet verified.
 
 ## Next steps
 
-1. Run `node scripts/release-preflight.mjs` and prepare the release candidate.
-2. Push the branch and open a draft PR.
-3. Pass PR and staging migration gates before requesting production migration approval.
-4. After merge and migration, verify production with `/api/health/release` and `release:smoke`.
+1. Review this clean release worktree and create the intentional commit.
+2. Push the branch and open a draft PR; pass CI and staging migration gates.
+3. Merge to `main`, verify the merged SHA in Vercel and `/api/health/release`.
+4. Apply the production migration only after the production migration approval gate, then run production smoke checks.
+
+## Risks and blockers
+
+- Supabase CLI is unavailable locally; connected Supabase tooling was used for Staging verification.
+- Production migration and authenticated browser proof remain outstanding.
+
+## AI follow-up
+
+1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching history entry synchronized.
+2. Run the PR and staging gates before any production migration approval.
+3. Do not claim production implementation until the merged SHA and production smoke checks match.
 
 ## Changed files
 
 - `components/marketplace-app.tsx`
-- `scripts/check-book-image-resilience.mjs`
+- `components/marketplace/seller-storefront.tsx`
+- `app/globals.css`
 - `scripts/check-chat-order-fixes.mjs`
-- `scripts/run-project-checks.mjs`
-- `supabase/migrations/20260729120000_remove_ambiguous_purchase_request_rpc.sql`
-
-## Verification
-
-- Clean release-worktree gates passed: project checks (41/41), TypeScript, ESLint, and production build.
-- Production behavior and remote migration are not verified yet.
-
-## Risks and blockers
-
-- Production migration must remain a separate approved gate after staging succeeds.
-- Authenticated browser interaction proof is not yet captured.
-
-## AI follow-up
-
-1. Keep `AI_HANDOFF.md`, `.ai/state.json`, and the matching `.ai/history/*.md` in sync.
-2. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
-3. Do not claim online implementation until the merged SHA, migration state, and production smoke all match.
+- `supabase/migrations/20260729155232_shared_purchase_coordination.sql`
+- `AI_WORK_MANUAL.md`
+- `.ai/state.json`
+- `AI_HANDOFF.md`
 
 ## Commit
 
-- Base commit: `e711182cd68d9d5f1a01147de7a3c2767d16da30`.
-- Current implementation commit: `78f59b8`.
+- Base commit: `5a349ac0ae2b15aa6fa48146e72f2b357e5ec2ff`.
+- Current implementation commit: pending.

@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260729-fix-chat-transaction-details-purchase-re",
-  "taskTitle": "Fix chat transaction details, purchase response RPC ambiguity, and listing image fallbacks",
-  "baseCommit": "e711182cd68d9d5f1a01147de7a3c2767d16da30",
-  "updatedAt": "2026-07-29T14:06:30.363Z",
+  "taskId": "20260730-deploy-shared-meetup",
+  "taskTitle": "deploy shared meetup coordination and chat action clipping",
+  "baseCommit": "5a349ac0ae2b15aa6fa48146e72f2b357e5ec2ff",
+  "updatedAt": "2026-07-30T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260729-1406-20260729-fix-chat-transaction-details-pu.md"
+  "historyFile": ".ai/history/20260729-shared-meetup-coordination.md"
 }

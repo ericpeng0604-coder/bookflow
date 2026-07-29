@@ -1198,19 +1198,24 @@ contract when the path is release-critical.
 
 **Observed problem:** The first desktop chat fix constrained the header, but
 the production screenshot still showed the order note, edit action, and quick
-phrases clipped at the right edge of the chat panel.
+phrases clipped at the right edge of the chat panel. A later shared meetup
+editor also caused the seller accept/reject row to be clipped below the
+transaction card.
 
 **Cause:** The nested context-card grid and scrollable phrase row retained
-intrinsic minimum widths even after the outer conversation grid was constrained.
+intrinsic minimum widths even after the outer conversation grid was constrained;
+the transaction card also kept a fixed max-height while its dynamic editor and
+action row grew beneath an ancestor with `overflow: hidden`.
 
 **Detection:** Inspect the narrowest supported desktop chat width with a real
-request containing long text. Check the context card, order status, action
-button, message bubbles, and phrase scroller for clipping or horizontal page
-overflow.
+request containing long text and shared meetup controls. Check the context card,
+order status, every action button, message bubbles, and phrase scroller for
+vertical or horizontal clipping and page overflow.
 
 **Prevention rule:** For responsive grid fixes, set `min-width: 0` on every
-nested grid/flex item that can contain user text, cap intrinsic columns, and
-assert the critical containment rules in a focused regression check.
+nested grid/flex item that can contain user text, cap intrinsic columns, avoid
+fixed heights on dynamic transaction panels, and assert the critical
+containment rules in a focused regression check.
 
 ### LESSON-067: Published memory commands and metadata need one enforced contract
 
@@ -1392,12 +1397,36 @@ wait for the workflow result, then perform one final exact-SHA smoke. Never
 claim production completion from a deployment URL, workflow start, or HTTP 200
 alone.
 
-### LESSON-NNN: Short title
+### LESSON-077: OCR browser smoke must isolate downloaded language models
 
-**Observed problem:** What verifiably went wrong.
+**Observed problem:** A local OCR browser smoke downloaded `eng.traineddata`
+and `chi_tra.traineddata` into the repository root, leaving untracked files
+and causing the clean-source check to report a mismatch.
 
-**Cause:** The technical or workflow reason.
+**Cause:** The OCR runtime fell back to its default worker data location when
+the local model cache was not isolated from the checkout.
 
-**Detection:** How future agents can notice the problem early.
+**Detection:** Check `git status --short` immediately after OCR smoke; model
+files or other runtime assets at the repository root are test artifacts, not
+release source.
 
-**Prevention rule:** A concrete, reusable rule that prevents recurrence.
+**Prevention rule:** Configure OCR smoke tests to use a temporary or ignored
+cache outside the repository, remove any artifacts created by the run, and
+rerun the local source check before trusting browser evidence.
+
+### LESSON-078: Connected migration timestamps must match source filenames
+
+**Observed problem:** Staging had a migration history row with version
+`20260729155232`, while the release branch contained the same SQL under
+`20260729140000`; the staging migration workflow stopped on the remote-only row.
+
+**Cause:** Connected migration application assigned a generated timestamp that
+was not copied back to the versioned source filename.
+
+**Detection:** Compare the exact staging migration history with the clean
+release worktree before opening the PR. A remote version absent from local
+`supabase/migrations` is a safety stop; do not blindly repair history.
+
+**Prevention rule:** Preserve the exact applied migration version in the source
+filename before pushing. Treat migration-history repair as a separate approved
+action that changes history only, not SQL or data.

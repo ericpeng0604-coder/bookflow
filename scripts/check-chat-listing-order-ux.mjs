@@ -18,7 +18,7 @@ const checks = [
   ["seller can respond to request inside chat", app.includes("canRespondToRequest") && app.includes('respondFromChat("accepted")') && app.includes('respondFromChat("rejected")')],
   ["request modal captures meetup preferences and message jump", app.includes('name="preferredMeetupLocation"') && app.includes('name="preferredMeetupTime"') && app.includes("先去訊息確認")],
   ["meetup preferences stay optional and editable after submission", app.includes("希望面交地點（選填）") && app.includes("送出後，在賣家按下「已完成面交」前，都能回訊息再修改") && app.includes("preferred_meetup_location: preferredMeetupLocation")],
-  ["buyer can edit meetup preferences from chat before seller handoff", app.includes("canEditRequestFromChat") && app.includes("onEditRequest") && app.includes("修改面交資訊")],
+  ["both parties can edit shared meetup preferences from chat before seller handoff", app.includes("function MeetupCoordinationEditor") && app.includes("canEditCoordinationFromChat") && app.includes("onUpdateCoordination") && app.includes("雙方共享的面交資訊")],
   ["request modal rehydrates saved purchase fields", /const initialMessage = request\?\.message \|\| REQUEST_PHRASES\[0\]/.test(app) && /setPreferredMeetupLocation\(initialPreferredMeetupLocation\)/.test(app) && /setPreferredMeetupTime\(initialPreferredMeetupTime\)/.test(app)],
   ["chat safety actions are hidden behind menu", app.includes('className="trade-chat-actions chat-safety-actions"') && app.includes('className="chat-safety-menu"')],
   ["quick phrases stay until a message is sent", /function applyQuickPhrase\(phrase: string\) \{\s*setDraft\(phrase\);\s*\}/.test(app) && /const message = await sendTradeMessage[\s\S]*setShowQuickPhrases\(false\)/.test(app)],

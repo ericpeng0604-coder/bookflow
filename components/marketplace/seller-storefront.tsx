@@ -5,6 +5,7 @@ import { ArrowLeft, Check, LoaderCircle, MapPin, ShoppingBag, X } from "lucide-r
 import { useEffect, useMemo, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { mapBook } from "@/lib/marketplace/mappers";
+import { DEFAULT_MEETUP_MODE, normalizeMeetupMode } from "@/lib/marketplace/meetup";
 import type { Book, Profile } from "@/lib/types";
 
 type SellerStorefrontProps = {
@@ -44,6 +45,17 @@ function formatMoney(value: number) {
     currency: "TWD",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function StorefrontMeetupBadge({ book }: { book: Book }) {
+  if (normalizeMeetupMode(book.meetupMode) !== DEFAULT_MEETUP_MODE || !book.meetup.trim()) return null;
+  return (
+    <span className="fixed-meetup-badge storefront-fixed-meetup">
+      <MapPin size={14} aria-hidden="true" />
+      <b>刊登者指定位置</b>
+      <span>{book.meetup.trim()}</span>
+    </span>
+  );
 }
 
 export function SellerStorefront({
@@ -302,6 +314,7 @@ export function SellerStorefront({
                       </div>
                       <div className="card-body">
                         <span className="course-tag">{book.listingType === "secondhand" ? book.itemCategory : "二手書籍"}</span>
+                        <StorefrontMeetupBadge book={book} />
                         <h2>{book.title}</h2>
                         <p>{book.listingType === "secondhand" ? book.description : [book.author, book.edition].filter(Boolean).join(" · ")}</p>
                         <div className="card-footer"><strong>{formatMoney(book.price)}</strong><small><MapPin size={13} />{book.meetup}</small></div>
