@@ -10,6 +10,15 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const TOKEN = "bookflow-production-read-load-test-20260729";
 const ALLOWED_CONCURRENCY = new Set([5, 10, 25, 50, 100, 200]);
 
+type Scenario = "homepage" | "rpc";
+type Result = { ok: boolean; status: string | number; elapsed: number };
+type LoadTestInput = {
+  scenario?: Scenario;
+  concurrency?: number;
+  seconds?: number;
+  token?: string;
+};
+
 function percentile(values: number[], ratio: number) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -20,9 +29,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-type Result = { ok: boolean; status: string | number; elapsed: number };
-
-async function performRequest(scenario: "homepage" | "rpc"): Promise<Result> {
+async function performRequest(scenario: Scenario): Promise<Result> {
   const started = performance.now();
   try {
     const response = scenario === "homepage"
@@ -65,38 +72,40 @@ async function performRequest(scenario: "homepage" | "rpc"): Promise<Result> {
   }
 }
 
-export async function POST(request: NextRequest) {
-  if (
-    process.env.VERCEL_ENV !== "preview" ||
-    process.env.VERCEL_GIT_COMMIT_REF !== "codex/production-read-load-test-20260729"
-  ) {
+function isPreviewBranch() {
+  return (
+    process.env.VERCEL_ENV === "preview" &&
+    process.env.VERCEL_GIT_COMMIT_REF === "codex/production-read-load-test-20260729"
+  );
+}
+
+async function runLoadTest(input: LoadTestInput) {
+  if (!isPreviewBranch()) {
     return NextResponse.json({ error: "Preview branch only" }, { status: 404 });
   }
 
-  if (request.headers.get("x-load-test-token") !== TOKEN) {
+  if (input.token !== TOKEN) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => ({})) as {
-    scenario?: "homepage" | "rpc";
-    concurrency?: number;
-    seconds?: number;
-  };
-  const scenario = body.scenario;
-  const concurrency = Number(body.concurrency);
-  const seconds = Number(body.seconds);
+  const scenario = input.scenario;
+  const concurrency = Number(input.concurrency);
+  const seconds = Number(input.seconds);
 
   if (
     (scenario !== "homepage" && scenario !== "rpc") ||
     !ALLOWED_CONCURRENCY.has(concurrency) ||
-    !Number.isFinite(seconds) || seconds < 5 || seconds > 15
+    !Number.isFinite(seconds) ||
+    seconds < 5 ||
+    seconds > 15
   ) {
     return NextResponse.json({ error: "Invalid bounded test parameters" }, { status: 400 });
   }
 
-  const validatedScenario: "homepage" | "rpc" = scenario;
+  const validatedScenario: Scenario = scenario;
   const results: Result[] = [];
   const stopAt = Date.now() + seconds * 1000;
+
   async function worker() {
     while (Date.now() < stopAt) {
       results.push(await performRequest(validatedScenario));
@@ -116,6 +125,7 @@ export async function POST(request: NextRequest) {
     statuses[key] = (statuses[key] || 0) + 1;
   }
   const errorRatePercent = results.length ? failed / results.length * 100 : 100;
+  const p95Ms = percentile(latencies, 0.95);
 
   return NextResponse.json({
     scenario: validatedScenario,
@@ -126,10 +136,28 @@ export async function POST(request: NextRequest) {
     failed,
     reqPerSecond: Number((success.length / duration).toFixed(2)),
     p50Ms: Math.round(percentile(latencies, 0.5)),
-    p95Ms: Math.round(percentile(latencies, 0.95)),
+    p95Ms: Math.round(p95Ms),
     p99Ms: Math.round(percentile(latencies, 0.99)),
     errorRatePercent: Number(errorRatePercent.toFixed(2)),
     statuses,
-    stopThresholdReached: errorRatePercent >= 1 || percentile(latencies, 0.95) > 1500,
+    stopThresholdReached: errorRatePercent >= 1 || p95Ms > 1500,
+  });
+}
+
+export async function GET(request: NextRequest) {
+  const params = request.nextUrl.searchParams;
+  return runLoadTest({
+    token: params.get("token") ?? undefined,
+    scenario: (params.get("scenario") ?? undefined) as Scenario | undefined,
+    concurrency: Number(params.get("concurrency")),
+    seconds: Number(params.get("seconds")),
+  });
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => ({})) as Omit<LoadTestInput, "token">;
+  return runLoadTest({
+    ...body,
+    token: request.headers.get("x-load-test-token") ?? undefined,
   });
 }
