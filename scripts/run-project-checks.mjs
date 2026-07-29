@@ -18,6 +18,7 @@ const checks = [
   { file: "benchmark-taiwan-textbooks.mjs", stripTypes: true },
   { file: "check-listing-navigation-ui.mjs" },
   { file: "check-multi-item-orders.mjs" },
+  { file: "check-shared-meetup-info.mjs" },
   { file: "check-market-switch.mjs" },
   { file: "check-market-cache.mjs" },
   { file: "check-listing-lifecycle.mjs" },

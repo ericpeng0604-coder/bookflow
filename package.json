@@ -55,6 +55,7 @@
     "check:six-fixes": "node scripts/check-six-fixes.mjs",
     "check:listing-ui": "node scripts/check-listing-navigation-ui.mjs",
     "check:multi-item-orders": "node scripts/check-multi-item-orders.mjs",
+    "check:shared-meetup-info": "node scripts/check-shared-meetup-info.mjs",
     "check:market-switch": "node scripts/check-market-switch.mjs",
     "check:market-cache": "node scripts/check-market-cache.mjs",
     "check:mobile-ocr": "node scripts/check-mobile-book-ocr.mjs",

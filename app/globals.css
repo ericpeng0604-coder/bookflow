@@ -259,6 +259,10 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .chat-context-link { border: 1px solid #cfe0d9; border-radius: 8px; background: #f4faf7; color: var(--green); padding: 8px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .chat-order-status { display: grid; gap: 6px; justify-items: end; text-align: right; }
 .chat-order-status p { margin: 0; color: var(--muted); font-size: 11px; }
+.chat-meetup-summary { display: grid; gap: 2px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.chat-meetup-details { display: grid; gap: 8px; width: min(100%, 360px); }
+.chat-meetup-details .request-coordination-note { margin-top: 0; }
+.chat-meetup-readonly { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .chat-order-actions { display: flex; gap: 6px; justify-content: flex-end; }
 .chat-order-status button { min-height: 32px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); padding: 6px 9px; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
 .chat-order-status button.accept { border-color: #b9d6cb; background: #edf6f2; color: var(--green); }
@@ -755,6 +759,7 @@ nav button.active:after { content: ""; position: absolute; height: 3px; backgrou
 .request-coordination-note b { display: block; margin-bottom: 5px; color: var(--green); font-size: 12px; }
 .request-coordination-note ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
 .request-coordination-note li { margin: 0; }
+.meetup-info-form { gap: 14px; }
 .toast { position: fixed; z-index: 100; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--ink); color: white; padding: 12px 18px; border-radius: 9px; display: flex; align-items: center; gap: 8px; box-shadow: var(--shadow); font-size: 13px; }
 .empty { padding: 70px 20px; display: grid; justify-items: center; color: var(--muted); text-align: center; }
 .empty h3 { color: var(--ink); margin-bottom: 0; }
