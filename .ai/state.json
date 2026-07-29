@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260729-supply-chain-risk-remediation-pr3",
-  "taskTitle": "supply chain risk remediation PR3",
-  "baseCommit": "8585a8875ac809e08aa9af09f021a0bb1794ff89",
-  "updatedAt": "2026-07-29T07:01:28.917Z",
+  "taskId": "20260729-fix-chat-transaction-details-purchase-re",
+  "taskTitle": "Fix chat transaction details, purchase response RPC ambiguity, and listing image fallbacks",
+  "baseCommit": "e711182cd68d9d5f1a01147de7a3c2767d16da30",
+  "updatedAt": "2026-07-29T14:06:30.363Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260729-0701-20260729-supply-chain-risk-remediation-p.md"
+  "historyFile": ".ai/history/20260729-1406-20260729-fix-chat-transaction-details-pu.md"
 }
