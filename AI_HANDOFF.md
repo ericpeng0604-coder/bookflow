@@ -2,58 +2,55 @@
 
 ## Task title
 
-Review and release TradeChat session architecture
+supply chain risk remediation PR1
 
 ## Release context
 
-- Task ID: `20260728-trade-chat-architecture-release`.
-- Task: `review and release TradeChat session architecture`.
-- Branch: `codex/trade-chat-session-release-20260728`.
-- Base commit: `b171e80e1335e4d9b91b1f0f546f1eab478a15b5`.
-- Base ref at merge resolution: `origin/main`.
-- History: `.ai/history/20260728-trade-chat-architecture-release.md`.
-- The TradeChat session seam is already included in the base; this release records the fixed-point review and proof.
-- No protected recovery files or GitHub workflows are changed.
+- Task ID: `20260729-supply-chain-risk-remediation-pr1`.
+- Task: `supply chain risk remediation PR1`.
+- Branch: `codex/supply-chain-pr1-20260729`.
+- Base commit: `9f97598626132eeb37a72dc7a250e7ecf675044d`.
+- History: `.ai/history/20260729-0613-supply-chain-risk-remediation-pr1.md`.
+- No database migration is included.
+- Protected recovery files and recovery workflows are not changed.
 
 ## Completed work
 
-- Confirmed that `origin/main` already contains the TradeChat session hook and session policy.
-- Rejected a duplicate session hook created in a dirty checkout before release.
-- Removed the obsolete inline TradeChat lifecycle block and kept scroll restoration at the UI caller seam.
-- Updated chat regression checks to inspect the session hook and made cleanup matching whitespace-tolerant.
-- Re-ran chat checks, project checks, typecheck, lint, and production build in a clean worktree.
+- Re-audited the latest `origin/main` dependency baseline with the supply-chain risk criteria.
+- Updated Next.js and its matching ESLint config to the patched 15.5 line.
+- Updated React and React DOM to the patched 19.2 line.
+- Added minimal npm overrides for vulnerable transitive `postcss`, `sharp`, `fast-uri`, and `brace-expansion` versions.
+- Rebuilt the npm lockfile with npm 10.9.8 and installed the clean dependency tree.
 
 ## Next steps
 
-1. Complete the fixed-point architecture review and release preflight.
-2. Publish only synchronized handoff metadata so the release proof is reproducible.
-3. Merge, deploy, and verify the exact production commit and runtime health.
-
-## Reviewed files
-
-- `components/marketplace/use-trade-chat-session.ts`
-- `components/marketplace/trade-chat-session-policy.ts`
-- `components/marketplace-app.tsx`
+1. Commit, run release preflight, open the PR, and wait for required checks.
+2. After merge, verify production with the merged SHA, `/api/health/release`, and `release:smoke`.
 
 ## Changed files
 
-- `scripts/check-trade-chat.mjs`
-- `scripts/check-chat-listing-order-ux.mjs`
-- `scripts/check-chat-switching.mjs`
-- `scripts/check-turnstile.mjs`
+- `package.json`
+- `package-lock.json`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260728-trade-chat-architecture-release.md`
+- `.ai/history/20260729-0613-supply-chain-risk-remediation-pr1.md`
 
 ## Verification
 
-- TradeChat checks, chat switching, chat listing UX, TypeScript, ESLint, and production build: passed.
-- Full project checks: passed (38/38).
-- Production deployment and exact-SHA verification: pending.
+- npm 10.9.8 lockfile generation: passed.
+- `npm ci`: passed.
+- `npm audit --audit-level=high`: passed with 0 vulnerabilities after transitive overrides.
+- `npm audit signatures`: passed; 484 packages verified, including 100 attestations.
+- `npm run check:memory`: passed.
+- `npm run check:project`: passed (38/38).
+- `npm run check:release-flow`: not a package script; direct `node scripts/check-release-flow.mjs` passed.
+- `npm run check:workflows`: passed.
+- TypeScript, lint, tests (22/22), and production build: passed.
 
 ## Risks and blockers
 
-- Production proof still depends on the merged commit, Vercel deployment state, and live health/smoke checks.
+- The audit fix path with `--force` proposes an unsafe Next.js downgrade; it must not be used.
+- The final production claim remains pending merged-SHA and live smoke evidence.
 
 ## AI follow-up
 
@@ -63,5 +60,5 @@ Review and release TradeChat session architecture
 
 ## Commit
 
-- Latest main base: `1bb3673d52222c9bc96afb6d8ed33b1a49c6905a`.
-- Current implementation commit: `42e17cf`.
+- Base commit: `9f97598626132eeb37a72dc7a250e7ecf675044d`.
+- Current implementation commit: amended after metadata synchronization; see `git rev-parse HEAD`.

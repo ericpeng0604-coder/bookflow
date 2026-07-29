@@ -2,6 +2,12 @@
   "name": "campus-books",
   "version": "0.1.6",
   "private": true,
+  "overrides": {
+    "brace-expansion": "5.0.8",
+    "fast-uri": "3.1.4",
+    "postcss": "8.5.24",
+    "sharp": "0.35.3"
+  },
   "scripts": {
     "predev": "node scripts/dev-environment.mjs --fix-processes",
     "dev": "node scripts/dev-latest.mjs",
@@ -117,9 +123,9 @@
     "@sentry/nextjs": "^10.63.0",
     "@supabase/supabase-js": "^2.50.0",
     "lucide-react": "^0.468.0",
-    "next": "^15.3.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "next": "^15.5.21",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "tesseract.js": "^5.1.1",
     "web-push": "^3.6.7"
   },
@@ -130,7 +136,7 @@
     "@types/react-dom": "^19.0.0",
     "@types/web-push": "^3.6.4",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^15.3.0",
+    "eslint-config-next": "^15.5.21",
     "eslint-plugin-react-hooks": "^5.2.0",
     "playwright": "^1.60.0",
     "typescript": "^5.7.0"
