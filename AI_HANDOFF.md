@@ -33,7 +33,7 @@ supply chain risk remediation PR1
 - `package-lock.json`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260729-0613-supply-chain-risk-remediation-pr1.md`
+- `.ai/history/20260729-0626-20260729-supply-chain-risk-remediation-p.md`
 
 ## Verification
 
