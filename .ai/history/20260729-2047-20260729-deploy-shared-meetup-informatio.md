@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: deploy shared meetup information details modal
+- Actor: codex
+- Status: complete
+- Base commit: `1201dc206736fc658038fa896e63b68f0789c998`
+- Archived at: 2026-07-29T20:47:49.469Z
+
+---
 # BookFlow AI Handoff
 
 ## Task title
@@ -52,6 +61,7 @@ deploy shared meetup information details modal
 - `scripts/check-shared-meetup-info.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
+- `.ai/history/20260729-deploy-shared-meetup-information-details.md`
 
 ## Commit
 

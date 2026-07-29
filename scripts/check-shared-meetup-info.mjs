@@ -18,7 +18,9 @@ assert.match(migration, /revoke all on function public\.update_purchase_request_
 assert.match(migration, /grant execute on function public\.update_purchase_request_coordination\(uuid, text, text\) to authenticated/);
 assert.match(app, /MeetupInfoModal/);
 assert.match(app, /update_purchase_request_coordination/);
-assert.match(app, /chat-meetup-summary/);
+assert.match(app, /request-coordination-lines/);
+assert.doesNotMatch(app, /chat-meetup-summary/);
+assert.doesNotMatch(app, /<div className="request-coordination-note"[^>]*>[\s\S]*<ul>/);
 assert.match(app, /查看交易詳情/);
 assert.match(app, /onEditMeetupInfo/);
 
