@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "handoff",
-  "taskId": "20260728-trade-chat-architecture-release",
-  "taskTitle": "review and release TradeChat session architecture",
-  "baseCommit": "b171e80e1335e4d9b91b1f0f546f1eab478a15b5",
-  "updatedAt": "2026-07-28T18:00:00+08:00",
+  "owner": "none",
+  "status": "idle",
+  "taskId": "20260729-supply-chain-risk-remediation-pr1",
+  "taskTitle": "supply chain risk remediation PR1",
+  "baseCommit": "9f97598626132eeb37a72dc7a250e7ecf675044d",
+  "updatedAt": "2026-07-29T06:26:21.496Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260728-trade-chat-architecture-release.md"
+  "historyFile": ".ai/history/20260729-0626-20260729-supply-chain-risk-remediation-p.md"
 }
