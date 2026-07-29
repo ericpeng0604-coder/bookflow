@@ -6,10 +6,9 @@ on:
       - codex/production-read-load-test-20260729
     paths:
       - .github/workflows/production-read-load-test.yml
-      - app/api/internal/production-read-load-test/route.ts
 
 permissions:
-  contents: read
+  contents: write
   issues: write
   pull-requests: write
 
@@ -21,23 +20,25 @@ jobs:
   load-test:
     if: github.ref == 'refs/heads/codex/production-read-load-test-20260729'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
     env:
       SITE_URL: https://bookflow-green.vercel.app/
       SUPABASE_URL: https://rgkpmxbpejfwcuxncadh.supabase.co
-      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJna3BteGJwZWpmd2N1eG5jYWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMDQ3MzcsImV4cCI6MjA5NjU4MDczN30.KkMAVHa-PG9hHjEQvj8yPhjJKKvTpElYendcI5aIlnU
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6InJna3BteGJwZWpmd2N1eG5jYWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMDQ3MzcsImV4cCI6MjA5NjU4MDczN30.KkMAVHa-PG9hHjEQvj8yPhjJKKvTpElYendcI5aIlnU
     steps:
-      - name: Run bounded read-only load test
+      - uses: actions/checkout@v4
+
+      - name: Run bounded 200-concurrency verification
         id: load
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
           node <<'NODE' | tee load-test.log
+          const fs = require('fs');
           const siteUrl = process.env.SITE_URL;
           const supabaseUrl = process.env.SUPABASE_URL;
           const anonKey = process.env.SUPABASE_ANON_KEY;
-          const stages = [5, 10, 25, 50, 100, 200];
           const percentile = (values, ratio) => {
             if (!values.length) return 0;
             const sorted = [...values].sort((a, b) => a - b);
@@ -68,13 +69,13 @@ jobs:
             }
           }
 
-          async function runStage({ name, concurrency, seconds, intervalMs, makeRequest }) {
+          async function runStage({ name, concurrency, seconds, makeRequest }) {
             const stopAt = Date.now() + seconds * 1000;
             const results = [];
             async function worker() {
               while (Date.now() < stopAt) {
                 results.push(await makeRequest());
-                if (intervalMs > 0) await sleep(intervalMs);
+                await sleep(1000);
               }
             }
             const started = performance.now();
@@ -86,9 +87,10 @@ jobs:
             const latencies = success.map((result) => result.elapsed);
             const statuses = {};
             for (const result of results) statuses[result.status] = (statuses[result.status] || 0) + 1;
-            const summary = {
+            return {
               name,
               concurrency,
+              seconds,
               requests: results.length,
               successful: success.length,
               failed,
@@ -99,31 +101,14 @@ jobs:
               errorRatePercent: Number(errorRate.toFixed(2)),
               statuses,
             };
-            console.log(`LOAD_RESULT ${JSON.stringify(summary)}`);
-            return summary;
           }
 
-          async function runScenario(name, seconds, intervalMs, makeRequest) {
-            console.log(`SCENARIO_START ${name}`);
-            const summaries = [];
-            for (const concurrency of stages) {
-              const summary = await runStage({ name, concurrency, seconds, intervalMs, makeRequest });
-              summaries.push(summary);
-              if (summary.errorRatePercent >= 1 || summary.p95Ms > 1500) {
-                console.log(`STOP_THRESHOLD ${JSON.stringify(summary)}`);
-                break;
-              }
-              await sleep(2000);
-            }
-            return summaries;
-          }
-
-          const homepageResults = await runScenario(
-            'homepage_get',
-            10,
-            1000,
-            () => request(siteUrl, { method: 'GET', redirect: 'follow' }),
-          );
+          const homepage = await runStage({
+            name: 'homepage_get',
+            concurrency: 200,
+            seconds: 10,
+            makeRequest: () => request(siteUrl, { method: 'GET', redirect: 'follow' }),
+          });
 
           const rpcBody = JSON.stringify({
             p_limit: 25,
@@ -133,11 +118,11 @@ jobs:
             p_max_price: null,
             p_query: null,
           });
-          const rpcResults = await runScenario(
-            'list_books_page_rpc',
-            15,
-            1000,
-            () => request(`${supabaseUrl}/rest/v1/rpc/list_books_page`, {
+          const rpc = await runStage({
+            name: 'list_books_page_rpc',
+            concurrency: 200,
+            seconds: 15,
+            makeRequest: () => request(`${supabaseUrl}/rest/v1/rpc/list_books_page`, {
               method: 'POST',
               headers: {
                 apikey: anonKey,
@@ -146,48 +131,34 @@ jobs:
               },
               body: rpcBody,
             }),
-          );
+          });
 
-          console.log(`FINAL_REPORT ${JSON.stringify({ homepageResults, rpcResults })}`);
-          const all = [...homepageResults, ...rpcResults];
-          const failedThreshold = all.some((result) => result.errorRatePercent >= 1 || result.p95Ms > 1500);
+          const report = {
+            generatedAt: new Date().toISOString(),
+            productionCommit: 'e711182cd68d9d5f1a01147de7a3c2767d16da30',
+            scope: 'read-only homepage GET and list_books_page RPC',
+            stopThreshold: { errorRatePercent: 1, p95Ms: 1500 },
+            results: [homepage, rpc],
+          };
+          fs.writeFileSync('PRODUCTION_LOAD_TEST_RESULT.json', `${JSON.stringify(report, null, 2)}\n`);
+          console.log(`FINAL_REPORT ${JSON.stringify(report)}`);
+          const failedThreshold = report.results.some((result) => result.errorRatePercent >= 1 || result.p95Ms > 1500);
           if (failedThreshold) process.exitCode = 1;
           NODE
 
-      - name: Publish results to PR
+      - name: Commit result evidence
         if: always()
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LOAD_OUTCOME: ${{ steps.load.outcome }}
         run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const log = fs.existsSync('load-test.log') ? fs.readFileSync('load-test.log', 'utf8') : '';
-          const finalLine = log.split(/\r?\n/).find((line) => line.startsWith('FINAL_REPORT '));
-          const lines = [
-            '## Production read load test result',
-            '',
-            `Workflow load step outcome: **${process.env.LOAD_OUTCOME || 'unknown'}**`,
-            '',
-            'Scope: production homepage GET and read-only `list_books_page` RPC. No writes were performed.',
-            '',
-          ];
-          if (!finalLine) {
-            lines.push('No final report was produced. Test result: **NOT VERIFIED**.');
-          } else {
-            const report = JSON.parse(finalLine.slice('FINAL_REPORT '.length));
-            lines.push('| Scenario | Concurrency | Requests | Req/s | p50 | p95 | p99 | Error rate | Statuses |');
-            lines.push('|---|---:|---:|---:|---:|---:|---:|---:|---|');
-            for (const result of [...report.homepageResults, ...report.rpcResults]) {
-              lines.push(`| ${result.name} | ${result.concurrency} | ${result.requests} | ${result.reqPerSecond} | ${result.p50Ms} ms | ${result.p95Ms} ms | ${result.p99Ms} ms | ${result.errorRatePercent}% | \`${JSON.stringify(result.statuses)}\` |`);
-            }
-            lines.push('', 'Stop threshold: error rate >= 1% or p95 > 1500 ms.');
-          }
-          fs.writeFileSync('load-test-comment.md', `${lines.join('\n')}\n`);
-          NODE
-          gh pr comment 164 --repo "$GITHUB_REPOSITORY" --body-file load-test-comment.md
+          if [ ! -f PRODUCTION_LOAD_TEST_RESULT.json ]; then
+            echo '{"status":"NOT VERIFIED","reason":"runner produced no result file"}' > PRODUCTION_LOAD_TEST_RESULT.json
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PRODUCTION_LOAD_TEST_RESULT.json
+          git commit -m "test: record production read load result" || true
+          git push
 
-      - name: Mark workflow failed when threshold reached
+      - name: Mark threshold failure
         if: steps.load.outcome == 'failure'
         run: exit 1
