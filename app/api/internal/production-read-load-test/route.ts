@@ -94,11 +94,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid bounded test parameters" }, { status: 400 });
   }
 
+  const validatedScenario: "homepage" | "rpc" = scenario;
   const results: Result[] = [];
   const stopAt = Date.now() + seconds * 1000;
   async function worker() {
     while (Date.now() < stopAt) {
-      results.push(await performRequest(scenario));
+      results.push(await performRequest(validatedScenario));
       await sleep(1000);
     }
   }
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
   const errorRatePercent = results.length ? failed / results.length * 100 : 100;
 
   return NextResponse.json({
-    scenario,
+    scenario: validatedScenario,
     concurrency,
     seconds,
     requests: results.length,
