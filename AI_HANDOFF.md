@@ -2,44 +2,45 @@
 
 ## Task title
 
-deploy shared meetup coordination and chat action clipping
+deploy shared meetup information details modal
 
 ## Release context
 
-- Task ID: `20260730-deploy-shared-meetup`.
-- Task: `deploy shared meetup coordination and chat action clipping`.
-- Branch: `codex/deploy-shared-meetup-20260730`.
-- Base commit: `5a349ac0ae2b15aa6fa48146e72f2b357e5ec2ff`.
-- History: `.ai/history/20260729-shared-meetup-coordination.md`.
-- The shared meetup migration was verified in Supabase Staging.
+- Task ID: `20260730-shared-meetup-info-release`.
+- Task: `deploy shared meetup information details modal`.
+- Branch: `codex/shared-meetup-info-release-main`.
+- Base commit: `1f80386624267b4f03f999bf7efe811b02a889aa`.
+- History: `.ai/history/20260730-shared-meetup-info-release.md`.
+- The new shared meetup migration is pending staging verification.
 - Protected recovery files and recovery workflows are not changed.
 
 ## Completed work
 
-- Added shared buyer/seller meetup coordination editing in the message workspace.
-- Added seller confirmation modal and atomic reservation RPCs with multi-item synchronization.
-- Added prominent seller-fixed-location display across cards, listings, storefronts, and chat.
-- Removed the fixed desktop chat context-card height that clipped the seller accept/reject row.
-- Added focused behavior checks and updated the responsive-overflow lesson.
+- Preserved the existing shared buyer/seller coordination and seller confirmation flow from `origin/main`.
+- Moved meetup editing out of the chat card into the transaction-details area and a two-field modal.
+- Added fixed-location seller-only permission checks, active-status locking, input normalization, and parent/child order synchronization.
+- Added focused helper tests and source-contract checks for summary, modal, permission, and RPC behavior.
 
 ## Verification
 
-- `node scripts/check-chat-order-fixes.mjs`: passed.
-- `node scripts/run-project-checks.mjs`: passed (41/41).
-- `node scripts/verify.mjs`: passed checks, typecheck, and production build.
-- Supabase Staging migration and RPC permission/synchronization checks: passed.
-- Authenticated browser proof: not yet verified.
+- Meetup helper tests: passed (5/5).
+- Shared meetup contracts: passed (14/14).
+- Trade chat checks: passed (9/9).
+- Chat/listing/order checks: passed (33/33).
+- Meetup mode and multi-item checks: passed.
+- Typecheck, full project checks, production build, staging migration, and authenticated browser proof: pending in CI/release gates.
 
 ## Next steps
 
-1. Review this clean release worktree and create the intentional commit.
-2. Push the branch and open a draft PR; pass CI and staging migration gates.
+1. Push the branch and open a draft PR; pass CI and staging migration gates.
+2. Resolve any staging migration-history drift before applying the new migration.
 3. Merge to `main`, verify the merged SHA in Vercel and `/api/health/release`.
 4. Apply the production migration only after the production migration approval gate, then run production smoke checks.
 
 ## Risks and blockers
 
-- Supabase CLI is unavailable locally; connected Supabase tooling was used for Staging verification.
+- Supabase CLI and dependencies are unavailable in this clean local worktree until the CI install step.
+- Supabase staging has remote-only migration history entries; do not repair or push migrations without explicit approval.
 - Production migration and authenticated browser proof remain outstanding.
 
 ## AI follow-up
@@ -51,15 +52,16 @@ deploy shared meetup coordination and chat action clipping
 ## Changed files
 
 - `components/marketplace-app.tsx`
-- `components/marketplace/seller-storefront.tsx`
 - `app/globals.css`
-- `scripts/check-chat-order-fixes.mjs`
-- `supabase/migrations/20260729155232_shared_purchase_coordination.sql`
-- `AI_WORK_MANUAL.md`
-- `.ai/state.json`
+- `lib/marketplace/meetup-coordination.ts`
+- `scripts/check-shared-meetup-info.mjs`
+- `supabase/migrations/20260730120000_shared_meetup_information.sql`
+- `tests/meetup-coordination.test.mjs`
 - `AI_HANDOFF.md`
+- `.ai/state.json`
+- `.ai/history/20260730-shared-meetup-info-release.md`
 
 ## Commit
 
-- Base commit: `5a349ac0ae2b15aa6fa48146e72f2b357e5ec2ff`.
-- Current implementation commit: pending.
+- Base commit: `1f80386624267b4f03f999bf7efe811b02a889aa`.
+- Current implementation commit: `16db382`.

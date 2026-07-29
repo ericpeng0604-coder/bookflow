@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260730-deploy-shared-meetup",
-  "taskTitle": "deploy shared meetup coordination and chat action clipping",
-  "baseCommit": "5a349ac0ae2b15aa6fa48146e72f2b357e5ec2ff",
-  "updatedAt": "2026-07-30T00:00:00.000Z",
+  "taskId": "20260730-shared-meetup-info-release",
+  "taskTitle": "deploy shared meetup information details modal",
+  "baseCommit": "1f80386624267b4f03f999bf7efe811b02a889aa",
+  "updatedAt": "2026-07-30T03:20:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260729-shared-meetup-coordination.md"
+  "historyFile": ".ai/history/20260730-shared-meetup-info-release.md"
 }
