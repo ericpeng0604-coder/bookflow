@@ -27,6 +27,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run security:audit
+      - run: npm run security:signatures
+      - run: npm run check:dependency-install-scripts
       - run: npm run release:local
       - name: Upload local release evidence
         if: ${{ always() }}
@@ -66,6 +69,23 @@ jobs:
       - name: Run actionlint
         uses: docker://rhysd/actionlint:1.7.12
 
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Review dependency changes
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294
+        with:
+          fail-on-severity: high
+
   release-readiness:
     name: Release Readiness
     if: ${{ always() }}
@@ -73,6 +93,7 @@ jobs:
       - quality
       - handoff
       - actionlint
+      - dependency-review
     runs-on: ubuntu-latest
     steps:
       - name: Require every release check
@@ -80,7 +101,9 @@ jobs:
           QUALITY: ${{ needs.quality.result }}
           HANDOFF: ${{ needs.handoff.result }}
           ACTIONLINT: ${{ needs.actionlint.result }}
+          DEPENDENCY_REVIEW: ${{ needs.dependency-review.result }}
         run: |
           test "$QUALITY" = success
           test "$HANDOFF" = success
           test "$ACTIONLINT" = success
+          test "$DEPENDENCY_REVIEW" = success
