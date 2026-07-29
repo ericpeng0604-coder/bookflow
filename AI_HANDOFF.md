@@ -23,7 +23,8 @@ deploy shared meetup information details modal
 
 ## Verification
 
-- Focused source checks, typecheck, lint, production build, and authenticated browser proof: pending in the clean release gates.
+- Focused source checks passed: shared meetup 14/14, chat/listing/order UX 35/35, chat order fixes, image resilience, meetup modes, multi-item orders, and trade chat.
+- Typecheck, lint, production build, and authenticated browser proof remain release-gate work.
 - Local npm is unavailable in this environment; CI must provide dependency installation and the full npm-based checks unless a compatible npm runtime is restored.
 
 ## Next steps
@@ -49,6 +50,7 @@ deploy shared meetup information details modal
 - `app/globals.css`
 - `components/marketplace-app.tsx`
 - `scripts/check-chat-listing-order-ux.mjs`
+- `scripts/check-chat-order-fixes.mjs`
 - `scripts/check-shared-meetup-info.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
@@ -56,4 +58,4 @@ deploy shared meetup information details modal
 ## Commit
 
 - Base commit: `1201dc206736fc658038fa896e63b68f0789c998`.
-- Current implementation commit before final commit: `not committed yet`.
+- Current implementation commit before final commit: `09c241f`.
