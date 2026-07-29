@@ -2,55 +2,58 @@
 
 ## Task title
 
-supply chain risk remediation PR1
+supply chain risk remediation PR2
 
 ## Release context
 
-- Task ID: `20260729-supply-chain-risk-remediation-pr1`.
-- Task: `supply chain risk remediation PR1`.
-- Branch: `codex/supply-chain-pr1-20260729`.
-- Base commit: `9f97598626132eeb37a72dc7a250e7ecf675044d`.
-- History: `.ai/history/20260729-0626-20260729-supply-chain-risk-remediation-p.md`.
+- Task ID: `20260729-supply-chain-risk-remediation-pr2`.
+- Task: `supply chain risk remediation PR2`.
+- Branch: `codex/supply-chain-pr2-20260729`.
+- Base commit: `30b743b42281b195bafac6d47f4083ab68f6efea`.
+- History: `.ai/history/20260729-0638-supply-chain-risk-remediation-pr2.md`.
 - No database migration is included.
 - Protected recovery files and recovery workflows are not changed.
 
 ## Completed work
 
-- Re-audited the latest `origin/main` dependency baseline with the supply-chain risk criteria.
-- Updated Next.js and its matching ESLint config to the patched 15.5 line.
-- Updated React and React DOM to the patched 19.2 line.
-- Added minimal npm overrides for vulnerable transitive `postcss`, `sharp`, `fast-uri`, and `brace-expansion` versions.
-- Rebuilt the npm lockfile with npm 10.9.8 and installed the clean dependency tree.
+- Added high-severity npm audit and registry signature checks.
+- Added a lockfile source, integrity, and lifecycle-script allowlist guard.
+- Added a negative test that rejects an unknown lifecycle-script package.
+- Added pinned GitHub dependency review to Release Readiness and made the aggregator require it.
 
 ## Next steps
 
-1. Commit, run release preflight, open the PR, and wait for required checks.
-2. After merge, verify production with the merged SHA, `/api/health/release`, and `release:smoke`.
+1. Run the tooling checks, commit, open the PR, and wait for required checks.
+2. Verify Dependabot security alerts and security updates are enabled.
 
 ## Changed files
 
 - `package.json`
-- `package-lock.json`
+- `scripts/check-dependency-install-scripts.mjs`
+- `scripts/run-project-checks.mjs`
+- `tests/dependency-install-scripts.test.mjs`
+- `.github/workflows/release-readiness.yml`
+- `scripts/check-workflows.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260729-0626-20260729-supply-chain-risk-remediation-p.md`
+- `.ai/history/20260729-0638-supply-chain-risk-remediation-pr2.md`
 
 ## Verification
 
-- npm 10.9.8 lockfile generation: passed.
-- `npm ci`: passed.
-- `npm audit --audit-level=high`: passed with 0 vulnerabilities after transitive overrides.
-- `npm audit signatures`: passed; 484 packages verified, including 100 attestations.
+- `npm ci --ignore-scripts`: passed.
+- `npm run security:audit`: passed with 0 vulnerabilities.
+- `npm run security:signatures`: passed; 488 registry signatures and 103 attestations verified.
+- `npm run check:dependency-install-scripts`: passed.
+- Negative lifecycle-script test: passed; 24/24 tests passed.
 - `npm run check:memory`: passed.
-- `npm run check:project`: passed (38/38).
-- `npm run check:release-flow`: not a package script; direct `node scripts/check-release-flow.mjs` passed.
+- `npm run check:project`: passed (39/39).
 - `npm run check:workflows`: passed.
-- TypeScript, lint, tests (22/22), and production build: passed.
+- TypeScript, lint, and production build: passed.
+- GitHub API verification: Dependabot security updates enabled; automated security fixes enabled and not paused; security alerts endpoint enabled with no current alerts.
 
 ## Risks and blockers
 
-- The audit fix path with `--force` proposes an unsafe Next.js downgrade; it must not be used.
-- The final production claim remains pending merged-SHA and live smoke evidence.
+- Final CI and PR checks remain pending.
 
 ## AI follow-up
 
@@ -60,5 +63,5 @@ supply chain risk remediation PR1
 
 ## Commit
 
-- Base commit: `9f97598626132eeb37a72dc7a250e7ecf675044d`.
-- Current implementation commit: amended after metadata synchronization; see `git rev-parse HEAD`.
+- Base commit: `30b743b42281b195bafac6d47f4083ab68f6efea`.
+- Current implementation commit: pending.

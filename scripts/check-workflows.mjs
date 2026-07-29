@@ -47,6 +47,12 @@ assert.match(readiness, /npm run release:local/);
 assert.match(readiness, /actions\/upload-artifact@v4/);
 assert.match(readiness, /ai-collaboration\.mjs check-ci/);
 assert.match(readiness, /rhysd\/actionlint/);
+assert.match(
+  readiness,
+  /name:\s*Dependency review[\s\S]*?actions\/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294[\s\S]*?fail-on-severity:\s*high/,
+);
+assert.match(readiness, /DEPENDENCY_REVIEW:\s*\$\{\{ needs\.dependency-review\.result \}\}/);
+assert.match(readiness, /test "\$DEPENDENCY_REVIEW" = success/);
 assert.match(staging, /name:\s*Staging Migration/);
 assert.match(staging, /environment:\s*staging/);
 assert.match(staging, /STAGING_DATABASE_URL/);

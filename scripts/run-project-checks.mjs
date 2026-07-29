@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const checks = [
   { file: "check-memory.mjs" },
+  { file: "check-dependency-install-scripts.mjs" },
   { file: "check-filters.mjs" },
   { file: "check-free-ocr-book-covers.mjs", stripTypes: true },
   { file: "check-mobile-book-ocr.mjs" },
