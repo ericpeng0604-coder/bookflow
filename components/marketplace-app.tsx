@@ -4746,7 +4746,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       )}
 
       {(view === "dashboard" || isStandaloneChatRoute) && currentUser && (
-        <section className={`dashboard ${isStandaloneChatRoute ? "chat-route-page" : ""}`}>
+        <section className={`dashboard ${isStandaloneChatRoute ? "chat-route-page" : ""} ${dashboardTab === "chats" ? "chat-dashboard-page" : ""}`}>
           <div className="dashboard-head">
             <div><span className="section-kicker">MY HUST BOOKFLOW</span><h1>嗨，{currentUser.name}</h1><p>管理你的刊登與購買意願。</p></div>
             <div className="dashboard-head-actions">
