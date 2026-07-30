@@ -2,9 +2,12 @@ import { useCallback, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DashboardTab } from "@/components/marketplace/navigation-state";
 import {
+  fetchRiskProfilesForModeration,
   loadModerationData,
   loadWorkspaceTabData,
   type ConversationPage,
+  type RiskModerationCursor,
+  type RiskModerationFilters,
 } from "@/lib/marketplace/queries";
 import { isAbortError, runGuarded } from "@/lib/marketplace/refresh-guard";
 import type {
@@ -70,6 +73,10 @@ export function useMarketplaceWorkspace({
   const [reports, setReports] = useState<Report[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [riskProfiles, setRiskProfiles] = useState<RiskProfile[]>([]);
+  const [riskCursor, setRiskCursor] = useState<RiskModerationCursor>(null);
+  const [riskHasMore, setRiskHasMore] = useState(false);
+  const [riskTotalCount, setRiskTotalCount] = useState(0);
+  const [riskLoading, setRiskLoading] = useState(false);
   const [riskPolicy, setRiskPolicy] = useState<RiskPolicy | null>(null);
   const [studentVerifications, setStudentVerifications] = useState<StudentVerification[]>([]);
 
@@ -142,7 +149,10 @@ export function useMarketplaceWorkspace({
         setReports(data.reports);
         setFeedback(data.feedback);
         setStudentVerifications(data.studentVerifications);
-        setRiskProfiles(data.riskProfiles);
+        setRiskProfiles(data.riskPage.profiles);
+        setRiskCursor(data.riskPage.nextCursor);
+        setRiskHasMore(data.riskPage.hasMore);
+        setRiskTotalCount(data.riskPage.totalCount);
         setRiskPolicy(data.riskPolicy);
         if (data.adminProfiles.length > 0) onAdminProfilesLoaded(data.adminProfiles);
       } catch (error) {
@@ -153,6 +163,31 @@ export function useMarketplaceWorkspace({
       }
     });
   }, [client, onAdminProfilesLoaded, onAdminVerificationExpired, onToast]);
+
+  const loadRiskProfiles = useCallback(async (filters: RiskModerationFilters, append = false) => {
+    if (!client || !currentUser || riskLoading) return;
+    setRiskLoading(true);
+    try {
+      const page = await fetchRiskProfilesForModeration(client, filters, append ? riskCursor : null);
+      setRiskProfiles((previous) => {
+        if (!append) return page.profiles;
+        return [...new Map([...previous, ...page.profiles].map((profile) => [profile.userId, profile])).values()];
+      });
+      setRiskCursor(page.nextCursor);
+      setRiskHasMore(page.hasMore);
+      if (!append || page.totalCount > 0) setRiskTotalCount(page.totalCount);
+    } catch (error) {
+      if (await onAdminVerificationExpired?.(error instanceof Error ? error.message : "", currentUser)) return;
+      if (!isAbortError(error)) onToast(`風險佇列載入失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
+    } finally {
+      setRiskLoading(false);
+    }
+  }, [client, currentUser, onAdminVerificationExpired, onToast, riskCursor, riskLoading]);
+
+  const loadMoreRiskProfiles = useCallback(async (filters: RiskModerationFilters) => {
+    if (!riskHasMore) return;
+    await loadRiskProfiles(filters, true);
+  }, [loadRiskProfiles, riskHasMore]);
 
   const reloadAfterUserMutation = useCallback(async () => {
     if (!currentUser) return;
@@ -179,6 +214,10 @@ export function useMarketplaceWorkspace({
     setReports([]);
     setFeedback([]);
     setRiskProfiles([]);
+    setRiskCursor(null);
+    setRiskHasMore(false);
+    setRiskTotalCount(0);
+    setRiskLoading(false);
     setRiskPolicy(null);
     setStudentVerifications([]);
   }, []);
@@ -193,6 +232,8 @@ export function useMarketplaceWorkspace({
     hiddenBooks,
     loadDashboardWorkspace,
     loadModerationPanel,
+    loadMoreRiskProfiles,
+    loadRiskProfiles,
     loadUserWorkspace,
     mergeTrustBadges,
     myBooks,
@@ -205,6 +246,9 @@ export function useMarketplaceWorkspace({
     replaceFavoriteIds,
     riskPolicy,
     riskProfiles,
+    riskHasMore,
+    riskLoading,
+    riskTotalCount,
     sellerLifecycle,
     studentVerifications,
     trustBadges,

@@ -157,6 +157,15 @@ export async function GET(request: Request) {
     admin.rpc("cleanup_sensitive_verification_data", { reference_time: now.toISOString() }),
     admin.rpc("cleanup_operational_data", { reference_time: now.toISOString() }),
   ]);
+  const { data: sellerVerificationProjection, error: sellerVerificationProjectionError } = await admin.rpc(
+    "recompute_all_books_seller_verified",
+  );
+  if (sellerVerificationProjectionError) {
+    console.error("Seller verification projection refresh failed", {
+      code: sellerVerificationProjectionError.code,
+    });
+    return NextResponse.json({ error: "Seller verification projection refresh failed" }, { status: 500 });
+  }
 
   return NextResponse.json({
     ok: true,
@@ -170,5 +179,6 @@ export async function GET(request: Request) {
       studentVerifications: Number(verificationCleanup || 0),
       operational: operationalCleanup ?? {},
     },
+    sellerVerificationProjection: Number(sellerVerificationProjection || 0),
   });
 }
