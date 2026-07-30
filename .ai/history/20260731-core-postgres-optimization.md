@@ -1,7 +1,7 @@
 # Core PostgreSQL performance and RLS optimization
 
 - Branch: `codex/core-postgres-optimization-release`.
-- Base commit: `f43d499efdf54a5f1b9d54d47254b67dd7e0d272`.
+- Base commit: `9ed43fbfa7732064337ca28be8429c7d81c2f6ca`.
 - Scope: seller verification projection and public catalog indexes, RLS scalar subqueries, core transaction indexes, and keyset-paginated risk moderation.
 - The migration is versioned as `20260731090000_core_postgres_optimization.sql` and has not yet been applied remotely.
 - Protected recovery files and workflows were not changed.

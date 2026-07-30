@@ -57,5 +57,5 @@ core PostgreSQL performance and RLS optimization
 
 ## Commit
 
-- Base commit: `f43d499efdf54a5f1b9d54d47254b67dd7e0d272`.
+- Base commit: `9ed43fbfa7732064337ca28be8429c7d81c2f6ca`.
 - Current implementation commit before final commit: `pending`.
