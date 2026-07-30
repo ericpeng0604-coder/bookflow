@@ -14,6 +14,8 @@ const checks = [
   ["conversation message index", sql.includes("trade_messages_conversation_sender_created_idx")],
   ["catalog count removed from page fetch", !queries.match(/fetchMarketplacePage[\s\S]*count_books_filtered/)],
   ["workspace tabs load independently", queries.includes("loadWorkspaceTabData")],
+  ["chat workspace parallelizes badge lookup", queries.includes("fetchBooksByIds(client, bookIds),\n      fetchPublicTrustBadges")],
+  ["rare marketplace panels load on demand", app.includes('dynamic(\n  () => import("@/components/marketplace/seller-storefront")') && app.includes('dynamic(\n  () => import("@/components/marketplace/bundle-request-panel")')],
   ["notification realtime channel removed", !app.includes("channel(`notifications:")],
   ["chat page size", chat.includes("const CHAT_PAGE_SIZE = 50")],
   ["chat signed URL batch", chat.includes("createSignedUrls")],

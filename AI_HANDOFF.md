@@ -2,31 +2,30 @@
 
 ## Task title
 
-core PostgreSQL performance and RLS optimization
+capacity observability and frontend performance
 
 ## Release context
 
-- Task ID: `20260731-core-postgres-optimization`.
-- Task: `core PostgreSQL performance and RLS optimization`.
-- Branch: `codex/core-postgres-optimization-release`.
-- Base commit: `9ed43fbfa7732064337ca28be8429c7d81c2f6ca`.
-- History: `.ai/history/20260731-core-postgres-optimization.md`.
+- Task ID: `20260731-capacity-observability`.
+- Task: `capacity observability and frontend performance`.
+- Branch: `codex/capacity-observability-release`.
+- Base commit: `e977986fd262349fde4a6e666a45d99f65f8244f`.
+- History: `.ai/history/20260731-capacity-observability.md`.
 - A versioned Supabase migration is included and must pass staging before production.
 - Protected recovery files and workflows are unchanged.
 
 ## Completed work
 
-- Added seller verification projection, synchronization triggers, public catalog indexes, and RLS scalar-subquery improvements.
-- Reworked the risk moderation RPC and client to keyset pagination with first-page total count only.
-- Added daily seller projection recomputation to the listing lifecycle cron.
-- Restored the chat context card's uncapped height required by the existing project layout contract.
+- Dynamically load infrequent seller storefront and bundle panels.
+- Parallelize chat workspace trust-badge loading with profile and book requests.
+- Document staging evidence requirements for p95/p99, slow SQL/RPC, and connection utilization.
 
 ## Verification
 
 - TypeScript check passed.
 - ESLint passed for all changed TypeScript files.
 - Production build passed.
-- Remote staging and production migration are pending this release candidate.
+- Capacity load execution remains a separate staging operation after deployment.
 
 ## Next steps
 
@@ -36,20 +35,17 @@ core PostgreSQL performance and RLS optimization
 
 ## Changed files
 
-- `app/api/cron/listing-lifecycle/route.ts`
-- `app/globals.css`
 - `components/marketplace-app.tsx`
-- `components/marketplace/use-marketplace-workspace.ts`
 - `lib/marketplace/queries.ts`
-- `supabase/migrations/20260731090000_core_postgres_optimization.sql`
+- `scripts/check-capacity-optimization.mjs`
+- `docs/CAPACITY_OBSERVABILITY.md`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260731-core-postgres-optimization.md`
+- `.ai/history/20260731-capacity-observability.md`
 
 ## Risks and blockers
 
-- Staging/production database credentials are held by GitHub environments; local direct migration is not used.
-- Production migration and exact-SHA application proof remain pending until staging succeeds.
+- The final production smoke proof depends on the merged SHA and the existing database baseline.
 
 ## AI follow-up
 
@@ -59,5 +55,5 @@ core PostgreSQL performance and RLS optimization
 
 ## Commit
 
-- Base commit: `9ed43fbfa7732064337ca28be8429c7d81c2f6ca`.
-- Current implementation commit before final commit: `pending`.
+- Base commit: `e977986fd262349fde4a6e666a45d99f65f8244f`.
+- Current implementation commit before final commit: `c7d4fa6bef917f2117fe479ae0e0315d515f534f`.

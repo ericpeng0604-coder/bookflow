@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260731-core-postgres-optimization",
-  "taskTitle": "core PostgreSQL performance and RLS optimization",
-  "baseCommit": "9ed43fbfa7732064337ca28be8429c7d81c2f6ca",
+  "taskId": "20260731-capacity-observability",
+  "taskTitle": "capacity observability and frontend performance",
+  "baseCommit": "e977986fd262349fde4a6e666a45d99f65f8244f",
   "updatedAt": "2026-07-31T00:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260731-core-postgres-optimization.md"
+  "historyFile": ".ai/history/20260731-capacity-observability.md"
 }
