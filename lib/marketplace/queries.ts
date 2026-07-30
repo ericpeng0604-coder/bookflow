@@ -422,10 +422,68 @@ export async function submitTradeReview(
   return String(data);
 }
 
-export async function fetchRiskProfilesForModeration(client: SupabaseClient): Promise<RiskProfile[]> {
-  const { data, error } = await client.rpc("list_risk_profiles_for_moderation");
+export type RiskModerationFilters = {
+  scope?: "queue" | "all";
+  status?: "pending" | "viewed" | "processed" | "all";
+  riskLevel?: "low" | "medium" | "high" | "all";
+  query?: string;
+  department?: string;
+};
+
+export type RiskModerationCursor = {
+  riskRank: number;
+  riskScore: number;
+  computedAt: string;
+  id: string;
+} | null;
+
+export type RiskModerationPage = {
+  profiles: RiskProfile[];
+  hasMore: boolean;
+  nextCursor: RiskModerationCursor;
+  totalCount: number;
+};
+
+function riskRank(level: string) {
+  return level === "high" ? 0 : level === "medium" ? 1 : 2;
+}
+
+export async function fetchRiskProfilesForModeration(
+  client: SupabaseClient,
+  filters: RiskModerationFilters = {},
+  cursor: RiskModerationCursor = null,
+): Promise<RiskModerationPage> {
+  const { data, error } = await client.rpc("list_risk_profiles_for_moderation", {
+    p_scope: filters.scope ?? "queue",
+    p_status: filters.status ?? "pending",
+    p_risk_level: filters.riskLevel ?? "all",
+    p_query: filters.query ?? "",
+    p_department: filters.department ?? "",
+    p_limit: RISK_REVIEW_PAGE_SIZE + 1,
+    p_cursor_risk_rank: cursor?.riskRank ?? null,
+    p_cursor_score: cursor?.riskScore ?? null,
+    p_cursor_computed_at: cursor?.computedAt ?? null,
+    p_cursor_id: cursor?.id ?? null,
+  });
   if (error) throw error;
-  return (data ?? []).map((row: Record<string, unknown>) => mapRiskProfile(row));
+  const rows = (data ?? []) as Record<string, unknown>[];
+  const pageRows = rows.slice(0, RISK_REVIEW_PAGE_SIZE);
+  const profiles = pageRows.map((row) => mapRiskProfile(row));
+  const last = pageRows[pageRows.length - 1];
+  const hasMore = rows.length > RISK_REVIEW_PAGE_SIZE && Boolean(last);
+  return {
+    profiles,
+    hasMore,
+    nextCursor: hasMore && last
+      ? {
+        riskRank: riskRank(String(last.risk_level || "low")),
+        riskScore: Number(last.risk_score || 0),
+        computedAt: String(last.computed_at),
+        id: String(last.user_id),
+      }
+      : null,
+    totalCount: Number(rows.find((row) => row.total_count !== null && row.total_count !== undefined)?.total_count || 0),
+  };
 }
 
 export const RISK_REVIEW_PAGE_SIZE = 20;
@@ -561,7 +619,7 @@ export async function loadWorkspaceTabData(
 }
 
 export async function loadModerationData(client: SupabaseClient, user: Profile) {
-  const [pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskProfiles, riskPolicy, adminProfiles] = await Promise.all([
+  const [pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskPage, riskPolicy, adminProfiles] = await Promise.all([
     fetchPendingReviews(client),
     fetchHiddenBooks(client),
     fetchModerationReports(client),
@@ -572,7 +630,7 @@ export async function loadModerationData(client: SupabaseClient, user: Profile) 
     user.role === "admin" ? fetchAdminProfiles(client) : Promise.resolve([] as Profile[]),
   ]);
 
-  return { pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskProfiles, riskPolicy, adminProfiles };
+  return { pendingReviews, hiddenBooks, reports, feedback, studentVerifications, riskPage, riskPolicy, adminProfiles };
 }
 
 export function mergeProfiles(

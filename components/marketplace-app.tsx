@@ -93,6 +93,7 @@ import {
   mergeProfiles,
   fetchRiskProfileDetail,
   RISK_REVIEW_PAGE_SIZE,
+  type RiskModerationFilters,
 } from "@/lib/marketplace/queries";
 import { giveawayChatBanner, giveawayRequestLabel, sortGiveawayRequests } from "@/lib/marketplace/giveaway";
 import { DEFAULT_MEETUP_MODE, MEETUP_MODE_OPTIONS, meetupModeLabel, normalizeMeetupMode } from "@/lib/marketplace/meetup";
@@ -849,7 +850,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [adminOtpEmail, setAdminOtpEmail] = useState("");
   const [riskProfileDetail, setRiskProfileDetail] = useState<RiskProfile | null>(null);
-  const [riskFilters, setRiskFilters] = useState({ status: "all", riskLevel: "all" });
+  const [riskFilters, setRiskFilters] = useState<Pick<RiskModerationFilters, "status" | "riskLevel">>({ status: "pending", riskLevel: "all" });
   const [reviewRequest, setReviewRequest] = useState<PurchaseRequest | null>(null);
   const [reviewStatus, setReviewStatus] = useState<{ reviewed: boolean; revieweeId: string; revieweeName: string } | null>(null);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; label: string } | null>(null);
@@ -1314,7 +1315,9 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     feedback,
     hiddenBooks,
     loadDashboardWorkspace,
+    loadMoreRiskProfiles,
     loadModerationPanel,
+    loadRiskProfiles,
     loadUserWorkspace,
     mergeTrustBadges,
     myBooks,
@@ -1326,7 +1329,10 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     reloadAfterUserMutation,
     replaceFavoriteIds,
     riskPolicy,
+    riskHasMore,
+    riskLoading,
     riskProfiles,
+    riskTotalCount,
     sellerLifecycle,
     studentVerifications,
     trustBadges,
@@ -1346,6 +1352,12 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
     onToast: setToast,
     onAdminVerificationExpired: onWorkspaceAdminVerificationExpired,
   });
+
+  const riskQueryFilters: RiskModerationFilters = {
+    scope: riskFilters.riskLevel === "low" ? "all" : "queue",
+    status: riskFilters.status,
+    riskLevel: riskFilters.riskLevel,
+  };
 
   conversationRefreshRef.current = async () => {
     if (store.currentUser) await loadUserWorkspace(store.currentUser, "chats");
@@ -5205,7 +5217,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   <div className="admin-workspace-heading"><div><span className="section-kicker">TODAY AT A GLANCE</span><h2 id="admin-overview-title">今天的審查概況</h2><p>從這裡開始，直接進入最需要處理的工作。</p></div><button type="button" className="secondary admin-refresh-button" onClick={() => void loadModerationPanel(currentUser)}><RotateCcw size={15} />重新整理</button></div>
                   <div className="admin-overview-grid">
                     <button type="button" className="admin-overview-card accent" onClick={() => openAdminWorkspace("listings")}><span className="admin-overview-card-icon"><BookOpen size={20} /></span><span><small>待審核刊登</small><strong>{pendingReviews.length}</strong><em>立即處理 →</em></span></button>
-                    <button type="button" className="admin-overview-card danger" onClick={() => openAdminWorkspace("risk")}><span className="admin-overview-card-icon"><ShieldCheck size={20} /></span><span><small>風險待處理</small><strong>{riskProfiles.length}</strong><em>查看風險佇列 →</em></span></button>
+                    <button type="button" className="admin-overview-card danger" onClick={() => openAdminWorkspace("risk")}><span className="admin-overview-card-icon"><ShieldCheck size={20} /></span><span><small>風險待處理</small><strong>{riskTotalCount || riskProfiles.length}</strong><em>查看風險佇列 →</em></span></button>
                     <button type="button" className="admin-overview-card" onClick={() => openAdminWorkspace("reports")}><span className="admin-overview-card-icon"><Flag size={20} /></span><span><small>待處理檢舉</small><strong>{pendingReports.length}</strong><em>查看回報 →</em></span></button>
                     <button type="button" className="admin-overview-card" onClick={() => openAdminWorkspace("studentVerification")}><span className="admin-overview-card-icon"><GraduationCap size={20} /></span><span><small>學生證審核</small><strong>{studentVerifications.length}</strong><em>查看申請 →</em></span></button>
                   </div>
@@ -5221,7 +5233,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 <h2 id="risk-panel-title">交易風險預警</h2>
                 <p>只供管理員查看原始評價、已處理檢舉與公開徽章資格。</p>
               </div>
-              <strong>{riskProfiles.length} 位使用者</strong>
+              <strong>{riskTotalCount || riskProfiles.length} 位使用者</strong>
             </div>
             {currentUser.role === "admin" && riskPolicy && (
               <form className="risk-policy-form" onSubmit={saveRiskPolicy}>
@@ -5235,7 +5247,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
             )}
             <div className="risk-actions" aria-label="風險篩選">
               <label>審核狀態
-                <select value={riskFilters.status} onChange={(event) => setRiskFilters((previous) => ({ ...previous, status: event.target.value }))}>
+                <select value={riskFilters.status} onChange={(event) => {
+                  const status = event.target.value as RiskModerationFilters["status"];
+                  setRiskFilters((previous) => ({ ...previous, status }));
+                  void loadRiskProfiles({ ...riskQueryFilters, status, scope: riskFilters.riskLevel === "low" ? "all" : "queue" });
+                }}>
                   <option value="all">全部</option>
                   <option value="pending">待處理</option>
                   <option value="viewed">已查看</option>
@@ -5243,7 +5259,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 </select>
               </label>
               <label>風險等級
-                <select value={riskFilters.riskLevel} onChange={(event) => setRiskFilters((previous) => ({ ...previous, riskLevel: event.target.value }))}>
+                <select value={riskFilters.riskLevel} onChange={(event) => {
+                  const riskLevel = event.target.value as RiskModerationFilters["riskLevel"];
+                  setRiskFilters((previous) => ({ ...previous, riskLevel }));
+                  void loadRiskProfiles({ ...riskQueryFilters, riskLevel, scope: riskLevel === "low" ? "all" : "queue" });
+                }}>
                   <option value="all">全部</option>
                   <option value="high">高風險</option>
                   <option value="medium">中風險</option>
@@ -5259,11 +5279,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
               </details>
             )}
             <div className="risk-profile-list" aria-label={`風險使用者列表，共 ${riskProfileIds.length} 位`}>
-              {riskProfiles
-                .filter((risk) => (riskFilters.status === "all" || risk.reviewStatus === riskFilters.status)
-                  && (riskFilters.riskLevel === "all" || risk.riskLevel === riskFilters.riskLevel))
-                .slice(0, RISK_REVIEW_PAGE_SIZE)
-                .map((risk) => (
+              {riskProfiles.map((risk) => (
                 <article className="risk-profile-card" key={risk.userId} onClick={() => void openRiskProfileDetail(risk.userId)}>
                   <header><div><h3>{risk.userName}</h3><small>{risk.userDepartment || "未填系所"}</small></div><span className={"risk-level " + risk.riskLevel}>{risk.riskLevel === "high" ? "高風險" : risk.riskLevel === "medium" ? "中風險" : "低風險"} · {risk.riskScore}</span></header>
                   <div className="risk-summary-grid">
@@ -5288,6 +5304,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                   </div>
                 </article>
               ))}
+              {riskHasMore && (
+                <button type="button" className="secondary" disabled={riskLoading} onClick={() => void loadMoreRiskProfiles(riskQueryFilters)}>
+                  {riskLoading ? "Loading..." : `Load more (${RISK_REVIEW_PAGE_SIZE})`}
+                </button>
+              )}
               {riskProfiles.length === 0 && <EmptyDashboard text="目前沒有可分析的交易風險資料" />}
             </div>
           </section>

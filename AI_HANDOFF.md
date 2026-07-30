@@ -2,52 +2,54 @@
 
 ## Task title
 
-production deploy: mobile messages button containment follow-up
+core PostgreSQL performance and RLS optimization
 
 ## Release context
 
-- Task ID: `20260730-production-deploy-mobile-messages-button-follow-up`.
-- Task: `production deploy: mobile messages button containment follow-up`.
-- Branch: `codex/mobile-messages-button-fix-20260730`.
-- Base commit: `f43d499efdf54a5f1b9d54d47254b67dd7e0d272`.
-- History: `.ai/history/20260730-production-deploy-mobile-messages-button-follow-up.md`.
-- No database migration is included.
+- Task ID: `20260731-core-postgres-optimization`.
+- Task: `core PostgreSQL performance and RLS optimization`.
+- Branch: `codex/core-postgres-optimization-release`.
+- Base commit: `9ed43fbfa7732064337ca28be8429c7d81c2f6ca`.
+- History: `.ai/history/20260731-core-postgres-optimization.md`.
+- A versioned Supabase migration is included and must pass staging before production.
 - Protected recovery files and workflows are unchanged.
 
 ## Completed work
 
-- Wrapped the multi-photo detail gallery so thumbnails remain below the main image and the product information stays in the second desktop column.
-- Made the standalone mobile messages workspace fill the available viewport below the site header.
-- Prevented the mobile show/hide list control from shrinking and clipping its label.
-- Added mobile header sizing and button content-width guards so the full label remains inside the message panel.
+- Added seller verification projection, synchronization triggers, public catalog indexes, and RLS scalar-subquery improvements.
+- Reworked the risk moderation RPC and client to keyset pagination with first-page total count only.
+- Added daily seller projection recomputation to the listing lifecycle cron.
+- Restored the chat context card's uncapped height required by the existing project layout contract.
 
 ## Verification
 
-- Chat listing and order UX checks passed (35/35).
 - TypeScript check passed.
-- ESLint passed.
+- ESLint passed for all changed TypeScript files.
 - Production build passed.
-- Focused mobile messages layout check passed (7/7).
-- Authenticated browser proof is pending until the release candidate is merged and deployed.
+- Remote staging and production migration are pending this release candidate.
 
 ## Next steps
 
-1. Commit only the scoped UI files and synchronized handoff metadata.
-2. Run release preflight and open a draft PR for GitHub/Vercel deployment.
-3. After merge, verify the exact production SHA with `/api/health/release` and `release:smoke`.
+1. Commit only the scoped database/RPC/client files and synchronized handoff metadata.
+2. Run release preflight and the Staging Migration workflow for this exact SHA.
+3. After successful staging evidence and approval, run Production Migration with the same SHA.
 
 ## Changed files
 
+- `app/api/cron/listing-lifecycle/route.ts`
 - `app/globals.css`
-- `scripts/check-mobile-messages-layout.mjs`
+- `components/marketplace-app.tsx`
+- `components/marketplace/use-marketplace-workspace.ts`
+- `lib/marketplace/queries.ts`
+- `supabase/migrations/20260731090000_core_postgres_optimization.sql`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260730-production-deploy-mobile-messages-button-follow-up.md`
+- `.ai/history/20260731-core-postgres-optimization.md`
 
 ## Risks and blockers
 
-- No database or production migration is included.
-- Production deployment and exact-SHA smoke remain pending until the PR is merged.
+- Staging/production database credentials are held by GitHub environments; local direct migration is not used.
+- Production migration and exact-SHA application proof remain pending until staging succeeds.
 
 ## AI follow-up
 
@@ -57,5 +59,5 @@ production deploy: mobile messages button containment follow-up
 
 ## Commit
 
-- Base commit: `f43d499efdf54a5f1b9d54d47254b67dd7e0d272`.
+- Base commit: `9ed43fbfa7732064337ca28be8429c7d81c2f6ca`.
 - Current implementation commit before final commit: `pending`.
