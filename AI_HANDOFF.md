@@ -19,6 +19,7 @@ core PostgreSQL performance and RLS optimization
 - Added seller verification projection, synchronization triggers, public catalog indexes, and RLS scalar-subquery improvements.
 - Reworked the risk moderation RPC and client to keyset pagination with first-page total count only.
 - Added daily seller projection recomputation to the listing lifecycle cron.
+- Restored the chat context card's uncapped height required by the existing project layout contract.
 
 ## Verification
 
@@ -36,6 +37,7 @@ core PostgreSQL performance and RLS optimization
 ## Changed files
 
 - `app/api/cron/listing-lifecycle/route.ts`
+- `app/globals.css`
 - `components/marketplace-app.tsx`
 - `components/marketplace/use-marketplace-workspace.ts`
 - `lib/marketplace/queries.ts`

@@ -2,7 +2,7 @@
 
 - Branch: `codex/core-postgres-optimization-release`.
 - Base commit: `9ed43fbfa7732064337ca28be8429c7d81c2f6ca`.
-- Scope: seller verification projection and public catalog indexes, RLS scalar subqueries, core transaction indexes, and keyset-paginated risk moderation.
+- Scope: seller verification projection and public catalog indexes, RLS scalar subqueries, core transaction indexes, keyset-paginated risk moderation, and the chat context-card layout contract fix.
 - The migration is versioned as `20260731090000_core_postgres_optimization.sql` and has not yet been applied remotely.
 - Protected recovery files and workflows were not changed.
 

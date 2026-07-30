@@ -4188,7 +4188,7 @@ footer,
 
 .chat-route-page .chat-context-card {
   min-height: 90px;
-  max-height: 116px;
+  max-height: none;
   padding: 10px 15px;
   position: relative;
   border-bottom-color: var(--chat-border);
