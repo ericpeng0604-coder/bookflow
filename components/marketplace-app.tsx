@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { FormEvent, type MouseEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { demoBooks, demoProfiles, demoRequests, departments } from "@/lib/demo-data";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
@@ -117,8 +118,6 @@ import {
 } from "@/lib/marketplace/taiwan-textbook";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { TurnstileWidget } from "@/components/turnstile-widget";
-import { SellerStorefront } from "@/components/marketplace/seller-storefront";
-import { BundleRequestPanel } from "@/components/marketplace/bundle-request-panel";
 import { useNotificationFeed } from "@/components/marketplace/use-notification-feed";
 import { useMarketplaceWorkspace } from "@/components/marketplace/use-marketplace-workspace";
 import { useConversationNavigation } from "@/components/marketplace/use-conversation-navigation";
@@ -155,6 +154,15 @@ import type {
   MeetupMode,
   UserRole,
 } from "@/lib/types";
+
+const SellerStorefront = dynamic(
+  () => import("@/components/marketplace/seller-storefront").then((module) => module.SellerStorefront),
+  { ssr: false },
+);
+const BundleRequestPanel = dynamic(
+  () => import("@/components/marketplace/bundle-request-panel").then((module) => module.BundleRequestPanel),
+  { ssr: false },
+);
 
 const STORAGE_KEY = "bookflow-market-v1";
 const PUSH_PROMPT_KEY = "bookflow-push-prompt-seen-v1";
