@@ -3682,6 +3682,18 @@ footer,
   .chat-route-page .conversation-list-header {
     width: 100%;
     min-width: 0;
+    box-sizing: border-box;
+    padding-inline: 8px;
+    overflow: visible;
+  }
+
+  .chat-dashboard-page .chat-list-toggle,
+  .chat-route-page .chat-list-toggle {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: max-content;
+    margin-right: 2px;
+    padding-inline: 7px;
   }
 }
 

@@ -2,15 +2,15 @@
 
 ## Task title
 
-production deploy: mobile messages layout
+production deploy: mobile messages button containment follow-up
 
 ## Release context
 
-- Task ID: `20260730-production-deploy-mobile-messages-layout`.
-- Task: `production deploy: mobile messages layout`.
-- Branch: `codex/messages-meetup-production-verify-20260730`.
-- Base commit: `090ef2308fc6a61f7616af3b48ddfd0eca96302a`.
-- History: `.ai/history/20260730-production-deploy-mobile-messages-layout.md`.
+- Task ID: `20260730-production-deploy-mobile-messages-button-follow-up`.
+- Task: `production deploy: mobile messages button containment follow-up`.
+- Branch: `codex/mobile-messages-button-fix-20260730`.
+- Base commit: `f43d499efdf54a5f1b9d54d47254b67dd7e0d272`.
+- History: `.ai/history/20260730-production-deploy-mobile-messages-button-follow-up.md`.
 - No database migration is included.
 - Protected recovery files and workflows are unchanged.
 
@@ -19,6 +19,7 @@ production deploy: mobile messages layout
 - Wrapped the multi-photo detail gallery so thumbnails remain below the main image and the product information stays in the second desktop column.
 - Made the standalone mobile messages workspace fill the available viewport below the site header.
 - Prevented the mobile show/hide list control from shrinking and clipping its label.
+- Added mobile header sizing and button content-width guards so the full label remains inside the message panel.
 
 ## Verification
 
@@ -26,7 +27,7 @@ production deploy: mobile messages layout
 - TypeScript check passed.
 - ESLint passed.
 - Production build passed.
-- Focused mobile messages layout check passed (6/6).
+- Focused mobile messages layout check passed (7/7).
 - Authenticated browser proof is pending until the release candidate is merged and deployed.
 
 ## Next steps
@@ -38,10 +39,10 @@ production deploy: mobile messages layout
 ## Changed files
 
 - `app/globals.css`
-- `components/marketplace-app.tsx`
+- `scripts/check-mobile-messages-layout.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260730-production-deploy-mobile-messages-layout.md`
+- `.ai/history/20260730-production-deploy-mobile-messages-button-follow-up.md`
 
 ## Risks and blockers
 
@@ -56,5 +57,5 @@ production deploy: mobile messages layout
 
 ## Commit
 
-- Base commit: `090ef2308fc6a61f7616af3b48ddfd0eca96302a`.
+- Base commit: `f43d499efdf54a5f1b9d54d47254b67dd7e0d272`.
 - Current implementation commit before final commit: `pending`.

@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260730-production-deploy-mobile-messages-layout",
-  "taskTitle": "production deploy: mobile messages layout",
-  "baseCommit": "090ef2308fc6a61f7616af3b48ddfd0eca96302a",
+  "taskId": "20260730-production-deploy-mobile-messages-button-follow-up",
+  "taskTitle": "production deploy: mobile messages button containment follow-up",
+  "baseCommit": "f43d499efdf54a5f1b9d54d47254b67dd7e0d272",
   "updatedAt": "2026-07-30T06:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260730-production-deploy-mobile-messages-layout.md"
+  "historyFile": ".ai/history/20260730-production-deploy-mobile-messages-button-follow-up.md"
 }
