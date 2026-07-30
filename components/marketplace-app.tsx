@@ -4561,6 +4561,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
         <section className="detail-page">
           <button type="button" className="back-button" onClick={returnToMarket}><ArrowLeft size={18} />返回市場</button>
           <div className="detail-grid">
+            <div className="detail-gallery-column">
             <div
               className="detail-image detail-gallery"
               onTouchStart={(event) => { detailTouchStartXRef.current = event.touches[0]?.clientX ?? null; }}
@@ -4617,6 +4618,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
                 ))}
               </div>
             )}
+            </div>
             <div className="detail-content">
               {selectedBook.listingType === "giveaway" ? (
                 <span className="course-tag">零元贈送</span>

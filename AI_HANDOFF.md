@@ -2,42 +2,50 @@
 
 ## Task title
 
-deploy shared meetup information details modal
+deploy mobile messages and gallery UI
 
 ## Release context
 
-- Task ID: `20260729-deploy-shared-meetup-information-details`.
-- Task: `deploy shared meetup information details modal`.
-- Branch: `codex/shared-meetup-info-production-20260730`.
-- Base commit: `1201dc206736fc658038fa896e63b68f0789c998`.
-- History: `.ai/history/20260729-2047-20260729-deploy-shared-meetup-informatio.md`.
-- This release candidate contains no database migration; the existing coordination RPC remains the protected data path.
-- Protected recovery files and recovery workflows are not changed.
+- Task ID: `20260730-deploy-mobile-messages-and-gallery-ui`.
+- Task: `deploy mobile messages and gallery UI`.
+- Branch: `codex/mobile-messages-gallery-deploy-20260730`.
+- Base commit: `c7c55a85abc8b01b5ddf61a048c3b06e3d68849a`.
+- History: `.ai/history/20260730-0529-deploy-mobile-messages-and-gallery-ui.md`.
+- No database migration is included.
+- Protected recovery files and workflows are unchanged.
 
 ## Completed work
 
-- Reworked shared meetup information into a compact right-aligned two-line panel without the stray bullet or duplicate purchase-intent summary.
-- Made the transaction-details panel an absolute overlay in the chat header so opening it does not move the listing title or existing messages.
-- Replaced the cart emoji with a restrained outline cart SVG that follows the surrounding header icon weight and spacing.
-- Preserved the existing meetup edit modal and protected coordination RPC behavior from the base release.
+- Wrapped the multi-photo detail gallery so thumbnails remain below the main image and the product information stays in the second desktop column.
+- Made the standalone mobile messages workspace fill the available viewport below the site header.
+- Prevented the mobile show/hide list control from shrinking and clipping its label.
 
 ## Verification
 
-- Focused source checks passed: shared meetup 14/14, chat/listing/order UX 35/35, chat order fixes, image resilience, meetup modes, multi-item orders, and trade chat.
-- Typecheck, lint, production build, and authenticated browser proof remain release-gate work.
-- Local npm is unavailable in this environment; CI must provide dependency installation and the full npm-based checks unless a compatible npm runtime is restored.
+- Chat listing and order UX checks passed (35/35).
+- TypeScript check passed.
+- ESLint passed.
+- Production build passed.
+- Authenticated browser proof is pending because the local preview session is not signed in.
 
 ## Next steps
 
-1. Run the focused source checks and the full local release gates where the runtime is available.
-2. Commit only the four UI/check files plus synchronized handoff metadata, run `node scripts/release-preflight.mjs`, then open a PR.
-3. Pass CI and the required release workflow gates before merging to `main`.
-4. After merge, verify the exact production SHA with `/api/health/release` and `release:smoke`.
+1. Commit only the scoped UI files and synchronized handoff metadata.
+2. Run release preflight and open a draft PR for GitHub/Vercel deployment.
+3. After merge, verify the exact production SHA with `/api/health/release` and `release:smoke`.
+
+## Changed files
+
+- `app/globals.css`
+- `components/marketplace-app.tsx`
+- `AI_HANDOFF.md`
+- `.ai/state.json`
+- `.ai/history/20260730-0529-deploy-mobile-messages-and-gallery-ui.md`
 
 ## Risks and blockers
 
-- Production deployment, exact merged SHA proof, and authenticated browser UI proof remain outstanding.
-- No database migration is included in this release candidate.
+- No database or production migration is included.
+- Production deployment and exact-SHA smoke remain pending until the PR is merged.
 
 ## AI follow-up
 
@@ -45,17 +53,7 @@ deploy shared meetup information details modal
 2. Run `node scripts/ai-collaboration.mjs check-ci origin/main HEAD` before opening or merging the PR.
 3. Do not claim production implementation until the merged SHA and production smoke checks match.
 
-## Changed files
-
-- `app/globals.css`
-- `components/marketplace-app.tsx`
-- `scripts/check-chat-listing-order-ux.mjs`
-- `scripts/check-chat-order-fixes.mjs`
-- `scripts/check-shared-meetup-info.mjs`
-- `AI_HANDOFF.md`
-- `.ai/state.json`
-
 ## Commit
 
-- Base commit: `1201dc206736fc658038fa896e63b68f0789c998`.
-- Current implementation commit before final commit: `09c241f`.
+- Base commit: `c7c55a85abc8b01b5ddf61a048c3b06e3d68849a`.
+- Current implementation commit before final commit: `pending`.
