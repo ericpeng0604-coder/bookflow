@@ -2,15 +2,15 @@
 
 ## Task title
 
-deploy mobile messages and gallery UI
+production deploy: mobile messages layout
 
 ## Release context
 
-- Task ID: `20260730-deploy-mobile-messages-and-gallery-ui`.
-- Task: `deploy mobile messages and gallery UI`.
-- Branch: `codex/mobile-messages-gallery-deploy-20260730`.
-- Base commit: `c7c55a85abc8b01b5ddf61a048c3b06e3d68849a`.
-- History: `.ai/history/20260730-0529-deploy-mobile-messages-and-gallery-ui.md`.
+- Task ID: `20260730-production-deploy-mobile-messages-layout`.
+- Task: `production deploy: mobile messages layout`.
+- Branch: `codex/messages-meetup-production-verify-20260730`.
+- Base commit: `090ef2308fc6a61f7616af3b48ddfd0eca96302a`.
+- History: `.ai/history/20260730-production-deploy-mobile-messages-layout.md`.
 - No database migration is included.
 - Protected recovery files and workflows are unchanged.
 
@@ -26,7 +26,8 @@ deploy mobile messages and gallery UI
 - TypeScript check passed.
 - ESLint passed.
 - Production build passed.
-- Authenticated browser proof is pending because the local preview session is not signed in.
+- Focused mobile messages layout check passed (6/6).
+- Authenticated browser proof is pending until the release candidate is merged and deployed.
 
 ## Next steps
 
@@ -40,7 +41,7 @@ deploy mobile messages and gallery UI
 - `components/marketplace-app.tsx`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260730-0529-deploy-mobile-messages-and-gallery-ui.md`
+- `.ai/history/20260730-production-deploy-mobile-messages-layout.md`
 
 ## Risks and blockers
 
@@ -55,5 +56,5 @@ deploy mobile messages and gallery UI
 
 ## Commit
 
-- Base commit: `c7c55a85abc8b01b5ddf61a048c3b06e3d68849a`.
+- Base commit: `090ef2308fc6a61f7616af3b48ddfd0eca96302a`.
 - Current implementation commit before final commit: `pending`.
