@@ -3641,6 +3641,50 @@ footer,
   }
 }
 
+/* Mobile messages use one full-width list; desktop keeps the compact rail. */
+@media (max-width: 980px) {
+  .chat-dashboard-page .conversation-layout,
+  .chat-route-page .conversation-layout {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .chat-dashboard-page .conversation-layout.chat-list-collapsed,
+  .chat-route-page .conversation-layout.chat-list-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-dashboard-page .conversation-layout.chat-list-collapsed .conversation-list,
+  .chat-route-page .conversation-layout.chat-list-collapsed .conversation-list {
+    display: none;
+  }
+
+  .chat-dashboard-page .conversation-list-shell,
+  .chat-route-page .conversation-list-shell {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chat-dashboard-page .conversation-list,
+  .chat-route-page .conversation-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .chat-dashboard-page .conversation-list-header,
+  .chat-route-page .conversation-list-header {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 .theme-secondhand .home-page .hero-art.hero-reference-art {
   background-image: linear-gradient(90deg, rgba(247, 246, 241, .98) 0%, rgba(247, 246, 241, .82) 42%, rgba(247, 246, 241, .12) 72%), url("/secondhand-items-hero.png") !important;
   background-position: 0 0, right center !important;
@@ -3960,6 +4004,7 @@ footer,
 
 .chat-route-page .conversation-layout {
   max-width: 1360px;
+  width: 100%;
   gap: 16px;
 }
 
@@ -3969,6 +4014,13 @@ footer,
   border-radius: 16px;
   background: var(--chat-surface);
   box-shadow: var(--chat-shadow);
+}
+
+.chat-route-page .conversation-panel > .empty.small {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .chat-route-page .conversation-list-shell {
@@ -4124,7 +4176,7 @@ footer,
 
 .chat-route-page .chat-context-card {
   min-height: 90px;
-  max-height: none;
+  max-height: 116px;
   padding: 10px 15px;
   position: relative;
   border-bottom-color: var(--chat-border);

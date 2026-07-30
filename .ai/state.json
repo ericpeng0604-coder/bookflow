@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260730-deploy-mobile-messages-and-gallery-ui",
-  "taskTitle": "deploy mobile messages and gallery UI",
-  "baseCommit": "c7c55a85abc8b01b5ddf61a048c3b06e3d68849a",
-  "updatedAt": "2026-07-30T05:31:00.000Z",
+  "taskId": "20260730-production-deploy-mobile-messages-layout",
+  "taskTitle": "production deploy: mobile messages layout",
+  "baseCommit": "090ef2308fc6a61f7616af3b48ddfd0eca96302a",
+  "updatedAt": "2026-07-30T06:00:00.000Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260730-0529-deploy-mobile-messages-and-gallery-ui.md"
+  "historyFile": ".ai/history/20260730-production-deploy-mobile-messages-layout.md"
 }
