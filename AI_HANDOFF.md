@@ -41,7 +41,7 @@ capacity observability and frontend performance
 - `docs/CAPACITY_OBSERVABILITY.md`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260731-core-postgres-optimization.md`
+- `.ai/history/20260731-capacity-observability.md`
 
 ## Risks and blockers
 
