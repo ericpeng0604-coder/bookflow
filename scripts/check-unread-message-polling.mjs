@@ -18,11 +18,16 @@ assert.ok(effectStart >= 0 && effectEnd > refreshIndex, "unread message fallback
 const effect = app.slice(effectStart, effectEnd);
 
 assert.match(effect, /view\s*===\s*["']dashboard["']\s*&&\s*dashboardTab\s*===\s*["']chats["']/, "fallback polling must skip the Messages dashboard tab");
-assert.match(effect, /view\s*===\s*["']chat["']/, "fallback polling must skip the active chat view");
+assert.match(effect, /isStandaloneChatRoute/, "fallback polling must skip the active chat route");
 assert.match(
   effect,
   /document\.visibilityState\s*!==\s*["']visible["']\s*\)\s*return/,
   "fallback polling must only query while the page is visible",
+);
+assert.match(
+  effect,
+  /Date\.now\(\)\s*-\s*lastConversationRefreshRef\.current\s*<\s*NOTIFICATION_REFRESH_INTERVAL_MS/,
+  "visibility changes must not bypass the unread summary refresh interval",
 );
 assert.match(effect, /void loadConversationSummary\(\)/, "fallback polling must refresh unread conversation summaries");
 assert.match(effect, /setInterval\(refreshWhenVisible,\s*NOTIFICATION_REFRESH_INTERVAL_MS\)/, "fallback polling must use the shared 30-second interval");
@@ -30,4 +35,4 @@ assert.match(effect, /clearInterval\(interval\)/, "fallback polling interval mus
 assert.match(effect, /removeEventListener\("visibilitychange",\s*refreshWhenVisible\)/, "visibility listener must be removed during cleanup");
 assert.doesNotMatch(effect, /\.channel\(|conversation-summaries:/, "fallback polling must not create a Realtime channel");
 
-console.log("Unread message polling checks passed (9/9).");
+console.log("Unread message polling checks passed (12/12).");

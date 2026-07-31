@@ -34,7 +34,7 @@ Add 30-second unread message polling
 - `scripts/run-project-checks.mjs`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- A new `.ai/history/*.md` archive will be created when this task is completed.
+- Archive: `.ai/history/20260731-1209-20260731-add-30-second-unread-message-po.md`.
 
 ## Verification
 
@@ -56,4 +56,4 @@ Add 30-second unread message polling
 ## Commit
 
 - Base commit: `b6ea639e095d661d9359ff09b6653f806dcb6d5c`.
-- Current implementation commit before final commit: `pending`.
+- Implementation commit: `cbaea7c`.
