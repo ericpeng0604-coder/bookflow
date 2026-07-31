@@ -29,6 +29,7 @@ const checks = [
   { file: "check-conversation-navigation.mjs" },
   { file: "check-conversation-navigation-behavior.mjs", stripTypes: true },
   { file: "check-realtime-subscription-scope.mjs" },
+  { file: "check-unread-message-polling.mjs" },
   { file: "check-notification-refresh.mjs" },
   { file: "check-browser-push.mjs" },
   { file: "check-capacity-optimization.mjs" },

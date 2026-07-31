@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "none",
-  "status": "idle",
-  "taskId": "20260731-scope-realtime-subscriptions-and-restore",
-  "taskTitle": "Scope Realtime subscriptions and restore capacity checks",
-  "baseCommit": "7e2a4c59000392aa5d73a21289f777d0dcf5df30",
-  "updatedAt": "2026-07-31T06:49:54.627Z",
+  "owner": "codex",
+  "status": "in_progress",
+  "taskId": "20260731-add-30-second-unread-message-polling",
+  "taskTitle": "Add 30-second unread message polling",
+  "baseCommit": "b6ea639e095d661d9359ff09b6653f806dcb6d5c",
+  "updatedAt": "2026-07-31T12:05:02.877Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260731-0649-20260731-scope-realtime-subscriptions-an.md"
+  "historyFile": null
 }

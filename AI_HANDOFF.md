@@ -2,56 +2,49 @@
 
 ## Task title
 
-Scope Realtime subscriptions and restore capacity checks
+Add 30-second unread message polling
 
 ## Release context
 
-- Task ID: `20260731-scope-realtime-subscriptions-and-restore`.
-- Task: `Scope Realtime subscriptions and restore capacity checks`.
-- Branch: `codex/realtime-lazy-subscription`.
-- Base commit: `7e2a4c59000392aa5d73a21289f777d0dcf5df30`.
-- History: `.ai/history/20260731-0649-20260731-scope-realtime-subscriptions-an.md`.
+- Task ID: `20260731-add-30-second-unread-message-polling`.
+- Task: `Add 30-second unread message polling`.
+- Branch: `codex/unread-polling-30s`.
+- Base commit: `b6ea639e095d661d9359ff09b6653f806dcb6d5c`.
+- History: `pending`.
 - No database migration is included.
 - No GitHub workflow or protected recovery file is changed.
 
 ## Completed work
 
-- Scope the conversation-summary Realtime channel to the authenticated Messages list and active chat view.
-- Preserve existing polling refresh outside messaging views.
-- Add a focused regression check for subscription scope and channel cleanup.
-- Preserve parallel chat-workspace loading while making the dependency order explicit to the capacity check.
-- Make the capacity static check normalize line endings so existing lazy panels are recognized across Windows and CI.
+- Added a 30-second fallback refresh for unread message summaries on visible, non-message views.
+- Kept the existing Realtime subscription exclusive to the Messages list and active chat view.
+- Added a focused regression check for the polling scope, visibility guard, and cleanup.
 
 ## Next steps
 
-1. Run the complete local release gates.
+1. Run full local and release gates.
 2. Commit the scoped implementation and synchronized metadata.
 3. Open, verify, merge, and deploy the pull request.
-4. Verify the exact deployed SHA and the scoped interaction in production.
+4. Verify the exact deployed SHA and the visible/non-message refresh behavior in production.
 
 ## Changed files
 
 - `components/marketplace-app.tsx`
-- `lib/marketplace/queries.ts`
-- `scripts/check-capacity-optimization.mjs`
-- `scripts/check-realtime-subscription-scope.mjs`
+- `scripts/check-unread-message-polling.mjs`
 - `scripts/run-project-checks.mjs`
-- `AI_WORK_MANUAL.md`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
 - A new `.ai/history/*.md` archive will be created when this task is completed.
 
 ## Verification
 
-- `node scripts/check-realtime-subscription-scope.mjs` passes.
-- TypeScript and changed-file ESLint pass.
-- Capacity optimization static checks pass after line-ending normalization.
-- Full project, build, pull request, and production checks remain required.
+- Focused polling, notification-refresh, and refresh-guard checks pass.
+- TypeScript and ESLint pass.
+- Full project, production build, pull request, and production checks remain required.
 
 ## Risks and blockers
 
-- Notification badges outside messaging views refresh through the existing visible-page polling rather than a persistent Realtime channel.
-- Static capacity checks must normalize line endings instead of changing production code to satisfy an exact newline match.
+- The fallback adds one small conversation-summary request per visible non-message page every 30 seconds; it does not add a Realtime connection.
 - Production behavior is not verified until the merged SHA is deployed and exercised in an authenticated browser session.
 
 ## AI follow-up
@@ -62,5 +55,5 @@ Scope Realtime subscriptions and restore capacity checks
 
 ## Commit
 
-- Base commit: `7e2a4c59000392aa5d73a21289f777d0dcf5df30`.
+- Base commit: `b6ea639e095d661d9359ff09b6653f806dcb6d5c`.
 - Current implementation commit before final commit: `pending`.
