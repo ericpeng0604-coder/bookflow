@@ -2,50 +2,47 @@
 
 ## Task title
 
-capacity observability and frontend performance
+core PostgreSQL performance and RLS optimization
 
 ## Release context
 
-- Task ID: `20260731-capacity-observability`.
-- Task: `capacity observability and frontend performance`.
-- Branch: `codex/capacity-observability-release`.
-- Base commit: `e977986fd262349fde4a6e666a45d99f65f8244f`.
-- History: `.ai/history/20260731-capacity-observability.md`.
+- Task ID: `20260731-core-postgres-optimization-release`.
+- Task: `core PostgreSQL performance and RLS optimization`.
+- Branch: `codex/postgres-optimization-release-20260731`.
+- Base commit: `1f8ee884b695c5a642dafc7cb26e760382343165`.
+- History: `.ai/history/20260731-postgres-optimization-release.md`.
 - A versioned Supabase migration is included and must pass staging before production.
 - Protected recovery files and workflows are unchanged.
 
 ## Completed work
 
-- Dynamically load infrequent seller storefront and bundle panels.
-- Parallelize chat workspace trust-badge loading with profile and book requests.
-- Document staging evidence requirements for p95/p99, slow SQL/RPC, and connection utilization.
+- Add a guarded seller-verification backfill that avoids unnecessary row updates.
+- Add FK, RLS join/order, catalog, and risk moderation indexes.
+- Keep catalog substring search semantics while adding a matching `pg_trgm` expression index.
 
 ## Verification
 
-- TypeScript check passed.
-- ESLint passed for all changed TypeScript files.
-- Production build passed.
-- Capacity load execution remains a separate staging operation after deployment.
+- Source migration diff is isolated to one SQL file plus synchronized release metadata.
+- Migration application, staging RPC/RLS probes, and EXPLAIN verification remain required.
+- Production migration and deployment remain separately gated by approval.
 
 ## Next steps
 
-1. Commit only the scoped database/RPC/client files and synchronized handoff metadata.
+1. Commit only the scoped migration and synchronized handoff metadata.
 2. Run release preflight and the Staging Migration workflow for this exact SHA.
 3. After successful staging evidence and approval, run Production Migration with the same SHA.
 
 ## Changed files
 
-- `components/marketplace-app.tsx`
-- `lib/marketplace/queries.ts`
-- `scripts/check-capacity-optimization.mjs`
-- `docs/CAPACITY_OBSERVABILITY.md`
+- `supabase/migrations/20260731090000_core_postgres_optimization.sql`
 - `AI_HANDOFF.md`
 - `.ai/state.json`
-- `.ai/history/20260731-capacity-observability.md`
+- `.ai/history/20260731-postgres-optimization-release.md`
 
 ## Risks and blockers
 
-- The final production smoke proof depends on the merged SHA and the existing database baseline.
+- The migration must be applied through the repository workflow, not by treating the SQL file as remote state.
+- Final production proof depends on the merged SHA, staging migration evidence, production approval, and health/smoke checks.
 
 ## AI follow-up
 
@@ -55,5 +52,5 @@ capacity observability and frontend performance
 
 ## Commit
 
-- Base commit: `e977986fd262349fde4a6e666a45d99f65f8244f`.
-- Current implementation commit before final commit: `c7d4fa6bef917f2117fe479ae0e0315d515f534f`.
+- Base commit: `1f8ee884b695c5a642dafc7cb26e760382343165`.
+- Current implementation commit before final commit: `pending`.
