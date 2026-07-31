@@ -1,0 +1,70 @@
+name: QA Transaction Flow
+
+on:
+  push:
+    branches:
+      - qa/transaction-flow-20260727
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-transaction-flow-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  transaction-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run production transaction QA
+        id: qa
+        continue-on-error: true
+        env:
+          RELEASE_BASE_URL: https://bookflow-green.vercel.app
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/qa-transaction-flow.mjs
+          node scripts/qa-order-targeted.mjs
+
+      - name: Add test summary
+        if: always()
+        shell: bash
+        run: |
+          for summary in artifacts/*/summary.md; do
+            if [ -f "$summary" ]; then
+              cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Upload screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transaction-flow-qa-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: error
+
+      - name: Require QA script completion
+        if: always()
+        shell: bash
+        run: test "${{ steps.qa.outcome }}" = "success"
