@@ -3,10 +3,10 @@
   "project": "bookflow",
   "owner": "none",
   "status": "idle",
-  "taskId": "20260731-core-postgres-optimization-release",
-  "taskTitle": "core PostgreSQL performance and RLS optimization",
-  "baseCommit": "1f8ee884b695c5a642dafc7cb26e760382343165",
-  "updatedAt": "2026-07-31T00:00:00.000Z",
+  "taskId": "20260731-scope-realtime-subscriptions-and-restore",
+  "taskTitle": "Scope Realtime subscriptions and restore capacity checks",
+  "baseCommit": "7e2a4c59000392aa5d73a21289f777d0dcf5df30",
+  "updatedAt": "2026-07-31T06:49:54.627Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": ".ai/history/20260731-postgres-optimization-release.md"
+  "historyFile": ".ai/history/20260731-0649-20260731-scope-realtime-subscriptions-an.md"
 }

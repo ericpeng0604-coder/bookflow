@@ -358,8 +358,9 @@ target behavior before changing production code. Compare the assertion with the
 integrated source and ask whether an equivalent implementation still preserves
 the same user-visible guarantee.
 
-**Prevention rule:** For cross-feature source checks, match stable syntax or
-behavioral structure with whitespace-tolerant patterns. Prefer checking the
+**Prevention rule:** For cross-feature source checks, normalize line endings
+and match stable syntax or behavioral structure with whitespace-tolerant
+patterns. Prefer checking the
 contract, such as keyed state isolation plus stale async invalidation, over
 requiring a particular state-reset statement. Rerun the complete project suite
 after every rebase or check update.

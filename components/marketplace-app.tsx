@@ -1688,7 +1688,11 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }, [conversations]);
 
   useEffect(() => {
-    if (!supabase || !store.currentUser) return;
+    if (
+      !supabase
+      || !store.currentUser
+      || ((view !== "dashboard" || dashboardTab !== "chats") && view !== "chat")
+    ) return;
     const client = supabase;
     let active = true;
     const channel = client
@@ -1714,7 +1718,7 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
       active = false;
       void client.removeChannel(channel);
     };
-  }, [store.currentUser, updateConversationActivity]);
+  }, [dashboardTab, store.currentUser, updateConversationActivity, view]);
 
   useEffect(() => {
     if (!supabase || !store.currentUser) {
