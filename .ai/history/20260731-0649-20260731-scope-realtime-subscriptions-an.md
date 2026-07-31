@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: Scope Realtime subscriptions and restore capacity checks
+- Actor: codex
+- Status: complete
+- Base commit: `7e2a4c59000392aa5d73a21289f777d0dcf5df30`
+- Archived at: 2026-07-31T06:49:54.626Z
+
+---
 # BookFlow AI Handoff
 
 ## Task title

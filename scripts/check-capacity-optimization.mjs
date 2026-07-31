@@ -2,10 +2,11 @@
 
 import { readFileSync } from "node:fs";
 
-const sql = readFileSync(new URL("../supabase/capacity-optimization.sql", import.meta.url), "utf8");
-const queries = readFileSync(new URL("../lib/marketplace/queries.ts", import.meta.url), "utf8");
-const app = readFileSync(new URL("../components/marketplace-app.tsx", import.meta.url), "utf8");
-const chat = readFileSync(new URL("../lib/marketplace/trade-chat.ts", import.meta.url), "utf8");
+const read = (path) => readFileSync(path, "utf8").replaceAll("\r\n", "\n");
+const sql = read(new URL("../supabase/capacity-optimization.sql", import.meta.url));
+const queries = read(new URL("../lib/marketplace/queries.ts", import.meta.url));
+const app = read(new URL("../components/marketplace-app.tsx", import.meta.url));
+const chat = read(new URL("../lib/marketplace/trade-chat.ts", import.meta.url));
 
 const checks = [
   ["trigram catalog index", sql.includes("books_public_search_trgm_idx") && sql.includes("gin_trgm_ops")],
