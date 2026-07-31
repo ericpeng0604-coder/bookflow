@@ -16,7 +16,7 @@ Campus-books concurrent capacity baseline and evidence-led optimization
 
 ## Current state
 
-- The branch is isolated from `main` and is being rebased onto the current `origin/main` before continuing Draft PR review.
+- The branch is isolated from `main` and has been rebased onto the current `origin/main` before continuing Draft PR review.
 - Existing application observability documentation is a starting contract, not proof of current staging or production state.
 - Added a guarded baseline runner for public reads, authenticated reads, purchase contention, and Realtime; it requires an explicit allowlisted non-production target.
 - Added `docs/performance/baseline.md`, `optimization-log.md`, and `final-report.md` with the current evidence boundary.
@@ -62,7 +62,7 @@ Campus-books concurrent capacity baseline and evidence-led optimization
 ## Risks and blockers
 
 - No production or staging load target was available; all external capacity and database evidence remains `NOT VERIFIED`.
-- PR base advanced after branch creation; the branch is being rebased onto the latest `origin/main` before continuing Draft PR review.
+- PR base advanced after branch creation; the branch was rebased onto the latest `origin/main` and its local/CI gates were rerun.
 
 ## AI follow-up
 

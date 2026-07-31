@@ -23,7 +23,7 @@ synthetic authenticated test identities.
 - The runner requires a target allowlist and explicit local/isolated/staging
   confirmation, and refuses mutating purchase tests without a second explicit
   confirmation.
-- `npm run typecheck`, `npm test` (29 tests), `npm run check:capacity-load`, and
+- `npm run typecheck`, `npm test` (31 tests), `npm run check:capacity-load`, and
   the two capacity-load tests passed.
 - No production load test, production migration, RLS weakening, auth bypass,
   transaction-protection change, or schema change was performed.
