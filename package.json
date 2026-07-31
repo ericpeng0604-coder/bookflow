@@ -51,6 +51,8 @@
     "ai:improve:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-node.ps1 scripts/ai-improve.mjs",
     "setup:check": "node scripts/setup-health-check.mjs",
     "load-test:marketplace": "node scripts/load-test-marketplace.mjs",
+    "capacity:load": "node scripts/capacity-load.mjs",
+    "check:capacity-load": "node scripts/check-capacity-load.mjs",
     "check:filters": "node scripts/check-filters.mjs",
     "check:six-fixes": "node scripts/check-six-fixes.mjs",
     "check:listing-ui": "node scripts/check-listing-navigation-ui.mjs",
