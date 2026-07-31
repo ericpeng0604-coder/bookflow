@@ -1431,3 +1431,18 @@ release worktree before opening the PR. A remote version absent from local
 **Prevention rule:** Preserve the exact applied migration version in the source
 filename before pushing. Treat migration-history repair as a separate approved
 action that changes history only, not SQL or data.
+
+### LESSON-079: Completed handoff records must not retain placeholder state
+
+**Observed problem:** A completed release handoff and its archive still said an
+archive would be created and left the implementation commit as `pending`.
+
+**Cause:** The task was marked complete before its final handoff text was
+synchronized with the archive and implementation commit already present.
+
+**Detection:** Before pushing, compare `AI_HANDOFF.md` and its referenced
+history record for placeholder words such as `pending` or future-tense archive
+statements, then run the handoff check.
+
+**Prevention rule:** Once a task has a history file and implementation commit,
+record their exact paths and SHAs in both handoff documents before release.

@@ -254,7 +254,7 @@ function useActionDialog() {
   return { dialog, ask, cancel, confirm };
 }
 
-const NOTIFICATION_REFRESH_INTERVAL_MS = 120_000;
+const NOTIFICATION_REFRESH_INTERVAL_MS = 30_000;
 const SECONDHAND_CATEGORIES = [ALL_ITEM_CATEGORIES, "3C 電子", "文具用品", "宿舍生活", "服飾配件", "運動休閒", "其他"];
 const DEFAULT_SECONDHAND_CATEGORY = SECONDHAND_CATEGORIES[1];
 const GIVEAWAY_CATEGORIES = [ALL_ITEM_CATEGORIES, "書籍", "3C 電子", "文具用品", "宿舍生活", "服飾配件", "運動休閒", "其他"];
@@ -1678,10 +1678,27 @@ export function MarketplaceApp({ initialView = "home", initialDashboardTab = "li
   }, [clearWorkspace, ready, ensureAdminOtp, replaceFavoriteIds, resetConversationNavigation, resetNotificationFeed]);
 
   useEffect(() => {
-    if (!supabase || !store.currentUser || (view === "dashboard" && dashboardTab === "chats") || view === "chat") return;
+    if (!supabase || !store.currentUser || (view === "dashboard" && dashboardTab === "chats") || isStandaloneChatRoute) return;
     if (Date.now() - lastConversationRefreshRef.current < NOTIFICATION_REFRESH_INTERVAL_MS) return;
     void loadConversationSummary();
-  }, [dashboardTab, loadConversationSummary, store.currentUser, view]);
+  }, [dashboardTab, isStandaloneChatRoute, loadConversationSummary, store.currentUser, view]);
+
+  useEffect(() => {
+    if (!supabase || !store.currentUser || (view === "dashboard" && dashboardTab === "chats") || isStandaloneChatRoute) return;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastConversationRefreshRef.current < NOTIFICATION_REFRESH_INTERVAL_MS) return;
+      void loadConversationSummary();
+    };
+    const interval = window.setInterval(refreshWhenVisible, NOTIFICATION_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [dashboardTab, isStandaloneChatRoute, loadConversationSummary, store.currentUser, view]);
 
   useEffect(() => {
     conversationIdsRef.current = new Set(conversations.map((conversation) => conversation.id));
