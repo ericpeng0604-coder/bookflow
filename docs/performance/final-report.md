@@ -1,6 +1,6 @@
 # Campus-books capacity final report
 
-Status: `NOT VERIFIED` / incomplete pending a non-production target.
+Status: `NOT VERIFIED` / incomplete pending a verified non-production target.
 
 ## Outcome
 
@@ -12,8 +12,9 @@ synthetic authenticated test identities.
 
 ## Verified
 
-- An isolated branch was created from `origin/main` at
-  `1f8ee884b695c5a642dafc7cb26e760382343165`.
+- The runner branch was created from `origin/main` at
+  `1f8ee884b695c5a642dafc7cb26e760382343165` and safely rebased onto current
+  `origin/main` at `7e2a4c59000392aa5d73a21289f777d0dcf5df30`.
 - The original dirty checkout was preserved and was not reset or modified by
   this task.
 - The load runner exposes separate public list/search/detail, authenticated
@@ -41,13 +42,15 @@ synthetic authenticated test identities.
   second command budget.
 - Full project checks: `NOT VERIFIED` because the Tesseract runtime check
   required a network fetch unavailable in the restricted environment.
-- Draft PR: pending final local review and publication of this scoped tooling
-  branch; it must remain Draft and must not be merged or auto-merged.
+- Draft PR [#176](https://github.com/ericpeng0604-coder/bookflow/pull/176) is
+  open, clean/mergeable, and all visible checks pass; the Production Smoke Test
+  is skipped. It must remain Draft and must not be merged or auto-merged.
 
 ## Blocker and next action
 
 The current blocker is missing verified non-production runtime/test data, not a
-proven application bottleneck. Supply a local/isolated/staging target label,
+proven application bottleneck. The only available ignored local environment
+points to production and was not used. Supply a local/isolated/staging target label,
 allowlisted host, synthetic dataset, synthetic access tokens, a synthetic
 purchase listing, and a synthetic conversation. Then execute the commands in
 `docs/performance/baseline.md`. If two optimization rounds fail to exceed
