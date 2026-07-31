@@ -21,6 +21,15 @@ set seller_verified = exists (
     and verification.admission_year between
       (extract(year from timezone('Asia/Taipei', now()))::int - 1911 - 4)
       and (extract(year from timezone('Asia/Taipei', now()))::int - 1911)
+)
+where b.seller_verified is distinct from exists (
+  select 1
+  from public.student_verifications verification
+  where verification.user_id = b.seller_id
+    and verification.status = 'approved'
+    and verification.admission_year between
+      (extract(year from timezone('Asia/Taipei', now()))::int - 1911 - 4)
+      and (extract(year from timezone('Asia/Taipei', now()))::int - 1911)
 );
 
 create index if not exists books_public_catalog_verified_idx
@@ -37,6 +46,32 @@ create index if not exists books_public_catalog_category_verified_idx
     and status <> 'sold'
     and lifecycle_state = 'active';
 
+-- seller_id is both the books foreign key and the owner predicate used by
+-- seller-facing reads and RLS checks.
+create index if not exists books_seller_created_idx
+  on public.books (seller_id, created_at desc, id desc);
+
+-- Keep substring search semantics while making the expression searchable by
+-- pg_trgm. The older title-only index does not cover the fields in the RPC.
+create extension if not exists pg_trgm;
+create index if not exists books_public_catalog_search_trgm_idx
+  on public.books using gin (
+    (lower(
+      coalesce(title, '') || ' ' || coalesce(author, '') || ' ' ||
+      coalesce(publisher, '') || ' ' || coalesce(course, '') || ' ' ||
+      coalesce(teacher, '') || ' ' || coalesce(description, '') || ' ' ||
+      coalesce(item_category, '') || ' ' || coalesce(education_level, '') || ' ' ||
+      coalesce(grade, '') || ' ' || coalesce(subject, '') || ' ' ||
+      coalesce(volume, '') || ' ' || coalesce(curriculum, '') || ' ' ||
+      coalesce(book_type, '') || ' ' || coalesce(isbn13, '') || ' ' ||
+      coalesce(approval_number, '')
+    )) gin_trgm_ops
+  )
+  where review_status = 'approved'
+    and moderation_visibility = 'visible'
+    and status <> 'sold'
+    and lifecycle_state = 'active';
+
 -- These indexes cover the newer order tables whose RLS policies filter by
 -- participant and whose UI reads are ordered by creation time.
 create index if not exists purchase_orders_buyer_created_idx
@@ -47,6 +82,17 @@ create index if not exists purchase_orders_seller_created_idx
 
 create index if not exists purchase_requests_book_created_idx
   on public.purchase_requests (book_id, created_at desc, id desc);
+
+create index if not exists risk_review_states_user_status_idx
+  on public.risk_review_states (user_id, status, updated_at desc);
+
+create index if not exists risk_profiles_moderation_order_idx
+  on public.risk_profiles (
+    (case risk_level when 'high' then 0 when 'medium' then 1 else 2 end),
+    risk_score desc,
+    computed_at desc,
+    user_id
+  );
 
 create or replace function private.recompute_books_seller_verified(target_seller_id uuid)
 returns integer
@@ -256,10 +302,18 @@ as $$
         select 1
         from regexp_split_to_table(lower(btrim(p_query)), '\s+') as search_token(token)
         where token <> ''
-          and position(token in lower(concat_ws(' ', b.title, b.author,
-            b.publisher, b.course, b.teacher, b.description, b.item_category,
-            b.education_level, b.grade, b.subject, b.volume, b.curriculum,
-            b.book_type, b.isbn13, b.approval_number))) = 0
+          and lower(
+            coalesce(b.title, '') || ' ' || coalesce(b.author, '') || ' ' ||
+            coalesce(b.publisher, '') || ' ' || coalesce(b.course, '') || ' ' ||
+            coalesce(b.teacher, '') || ' ' || coalesce(b.description, '') || ' ' ||
+            coalesce(b.item_category, '') || ' ' || coalesce(b.education_level, '') || ' ' ||
+            coalesce(b.grade, '') || ' ' || coalesce(b.subject, '') || ' ' ||
+            coalesce(b.volume, '') || ' ' || coalesce(b.curriculum, '') || ' ' ||
+            coalesce(b.book_type, '') || ' ' || coalesce(b.isbn13, '') || ' ' ||
+            coalesce(b.approval_number, '')
+          ) not like '%' || replace(
+              replace(replace(token, '\', '\\'), '%', '\%'), '_', '\_'
+            ) || '%' escape '\'
       )
     )
     and (
