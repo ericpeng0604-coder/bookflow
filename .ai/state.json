@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "project": "bookflow",
-  "owner": "codex",
-  "status": "in_progress",
+  "owner": "none",
+  "status": "idle",
   "taskId": "20260731-add-30-second-unread-message-polling",
   "taskTitle": "Add 30-second unread message polling",
   "baseCommit": "b6ea639e095d661d9359ff09b6653f806dcb6d5c",
-  "updatedAt": "2026-07-31T12:05:02.877Z",
+  "updatedAt": "2026-07-31T12:09:48.160Z",
   "handoffFile": "AI_HANDOFF.md",
-  "historyFile": null
+  "historyFile": ".ai/history/20260731-1209-20260731-add-30-second-unread-message-po.md"
 }

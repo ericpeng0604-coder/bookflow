@@ -1,3 +1,12 @@
+# AI Handoff Archive
+
+- Task: Add 30-second unread message polling
+- Actor: codex
+- Status: complete
+- Base commit: `b6ea639e095d661d9359ff09b6653f806dcb6d5c`
+- Archived at: 2026-07-31T12:09:48.160Z
+
+---
 # BookFlow AI Handoff
 
 ## Task title
