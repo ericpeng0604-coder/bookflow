@@ -1,90 +1,106 @@
 # Campus-books capacity baseline
 
-Status: `NOT VERIFIED` for a staging/local/isolated runtime baseline.
+Status: `PARTIAL / NOT VERIFIED`.
 
-This document records the reproducibility contract and the evidence boundary.
-It does not treat README text, an old schema, a baseline migration, a prior
-branch, or a deployed web commit as proof of the current Supabase state.
+This baseline was run only against the verified non-production Supabase project
+`BookFlow Staging` (`yffcyktpwmeslydlbctb`). No production load or migration was
+performed. The application URL, browser UI flows, same-window DB telemetry, and
+500-session login capacity remain `NOT VERIFIED`.
 
-## Source and environment
+## Source and fixture
 
 | Field | Value |
 | --- | --- |
 | Branch | `codex/campus-books-capacity-20260731` |
-| Baseline source commit | `1f8ee884b695c5a642dafc7cb26e760382343165` (`origin/main` when the runner branch was created) |
-| Current branch base | `7e2a4c59000392aa5d73a21289f777d0dcf5df30` (`origin/main` after PR rebase) |
-| Target environment | `NOT VERIFIED` — no non-production target was supplied or independently identified |
-| Supabase project | `NOT VERIFIED` |
-| Application URL | `NOT VERIFIED` |
-| Dataset size | `NOT VERIFIED` — book/user/conversation counts were not available |
-| Runtime | Node `v24.18.0`, npm `11.16.0` |
-| Supabase CLI / Docker | `NOT VERIFIED` — not installed on the test machine |
-| Credentials | No credentials, cookies, passwords, or access tokens were used |
+| Source commit used by runner | `85b2e55eed70c32d99756d3b0148b6505f426895` |
+| Target | Supabase `BookFlow Staging`, ref `yffcyktpwmeslydlbctb` |
+| Application URL | `NOT VERIFIED` (direct Supabase API tests only) |
+| Synthetic fixture | run `capacity-500-20260731-01` |
+| Auth users / profiles | 500 / 500 |
+| Books inserted and retained | 6,975 |
+| Publicly visible synthetic books | 0 (`list_books_page` marker query returned `[]`) |
+| Purchase requests / conversations | 1,000 / 500 |
+| Messages / notifications | 5,000 / 5,000 |
+| Runner | Node `v24.18.0`, timeout 10,000 ms unless noted |
 
-## Reproduction commands
+The seed trigger correctly forced new books to `review_status=pending`; therefore
+the 6,975 books are not a valid public-list dataset. No RLS or moderation rule
+was weakened to make them visible. Public results below are staging's existing
+visible data, not a claim about 6,975 public synthetic listings.
 
-The runner requires an explicit non-production label, hostname allowlist, and
-confirmation. It never prints the Supabase key or access tokens. Run one
-workload per report line and keep the same commit, dataset, duration, timeout,
-and concurrency while comparing experiments.
+## Public workload results
+
+The 30-second concurrency-1 runs warmed the path. The ladder used 10 seconds at
+concurrency `5, 25, 100, 250, 500`. "Max stable tested" means the largest tested
+stage with p95 <= 750 ms and HTTP error rate < 1%; it is not an extrapolated
+maximum.
+
+| Workload | Max stable tested | RPS at max stable | p50 | p95 | p99 | Timeout | 429 | 5xx | HTTP error rate |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Public list | 100 | 375.33 | 240.28 ms | 277.65 ms | 927.03 ms | 0 | 0 | 0 | 0% |
+| Public search | 250 | 687.79 | 326.55 ms | 611.50 ms | 853.29 ms | 0 | 0 | 0 | 0% |
+| Public detail | 100 | 398.57 | 241.20 ms | 258.96 ms | 452.12 ms | 0 | 0 | 0 | 0% |
+
+At concurrency 500, list p95 was 1,864.05 ms with 0% HTTP errors, search had
+309 timeouts and 4.375% HTTP error rate, and detail had 417 timeouts and
+11.453% HTTP error rate. These are observed staging thresholds, not a verified
+application bottleneck.
+
+## Authenticated endpoint results
+
+These runs reused one valid synthetic session at concurrency `1, 10, 100`; they
+measure endpoint/RLS load, not login throughput. Preparing 500 sessions hit the
+staging Auth `Request rate limit reached` response and is `NOT VERIFIED`.
+
+| Workload | Max tested | RPS | p50 | p95 | p99 | Timeout | 429 | 5xx | HTTP error rate |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Profile | 100 | 403.61 | 237.34 ms | 254.32 ms | 480.34 ms | 0 | 0 | 0 | 0% |
+| Notifications | 100 | 404.12 | 237.40 ms | 252.66 ms | 464.47 ms | 0 | 0 | 0 | 0% |
+| Conversations | 100 | 389.49 | 244.04 ms | 273.50 ms | 544.06 ms | 0 | 0 | 0 | 0% |
+
+## Purchase and Realtime
+
+Purchase request and race probes returned HTTP 400 / `Listing unavailable`.
+The current `enforce_book_review` trigger correctly makes service-role-seeded
+listings pending, so these probes cannot prove purchase atomicity with the
+synthetic listing. No security rule was bypassed. Purchase capacity is
+`NOT VERIFIED`.
+
+Realtime was first found to use an incorrect harness topic; the runner was
+corrected to the app's `trade-chat:<conversationId>` topic. The corrected ladder
+still returned 403/network failures, and one official Supabase client probe did
+not reach a terminal status within 30 seconds. Realtime capacity is
+`NOT VERIFIED`.
+
+## Observability evidence
+
+The staging dashboard overview (last 24 hours, not the exact load-test window)
+showed: slow queries `44`, peak connections `14/60`, disk usage `25%`, disk IO
+`1%`, memory `54%`, CPU `4%`, API Gateway errors `0.00%`, Database errors
+`53.6%`, PostgREST `574 requests`, Auth warnings `19.4%`, and Realtime errors
+`97.7%`. The detailed Auth and Realtime reports showed `No data`, and Query
+Performance showed `Project not found`; same-window slow-query, lock, pool,
+cache, Sentry, and route/RPC evidence is therefore `NOT VERIFIED`.
+
+## Reproduction
+
+Use the guarded runner with an anon key, never a service-role key:
 
 ```powershell
-$env:CAPACITY_TARGET_LABEL = "staging" # or local / isolated
-$env:CAPACITY_SUPABASE_URL = "https://<staging-project>.supabase.co"
-$env:CAPACITY_SUPABASE_ANON_KEY = "<staging-anon-key>"
-$env:CAPACITY_ALLOWED_HOSTS = "<staging-project>.supabase.co"
+$env:CAPACITY_TARGET_LABEL = "staging"
+$env:CAPACITY_SUPABASE_URL = "https://yffcyktpwmeslydlbctb.supabase.co"
+$env:CAPACITY_ALLOWED_HOSTS = "yffcyktpwmeslydlbctb.supabase.co"
 $env:CAPACITY_CONFIRM = "yes"
-$env:CAPACITY_DATASET_LABEL = "<synthetic-dataset-id>"
-$env:CAPACITY_BOOK_COUNT = "<count>"
-$env:CAPACITY_USER_COUNT = "<count>"
-$env:CAPACITY_CONVERSATION_COUNT = "<count>"
-$env:CAPACITY_CONCURRENCY = "10"
-$env:CAPACITY_DURATION_SECONDS = "60"
-$env:CAPACITY_OUTPUT_FILE = ".ai/artifacts/capacity-baseline.jsonl"
 $env:CAPACITY_WORKLOAD = "public-list"
+$env:CAPACITY_CONCURRENCY = "100"
+$env:CAPACITY_DURATION_SECONDS = "10"
+$env:CAPACITY_REQUEST_TIMEOUT_MS = "10000"
 npm run capacity:load
 ```
 
-Run separately with `public-search`, `public-detail`,
-`authenticated-profile`, `authenticated-notifications`,
-`authenticated-conversations`, `purchase-request`, `purchase-race`, and
-`realtime`. Authenticated workloads require synthetic staging access tokens;
-purchase workloads additionally require a synthetic listing and
-`CAPACITY_CONFIRM_MUTATIONS=yes`. Never point these commands at production.
+Authenticated workloads require synthetic access tokens. Purchase workloads
+also require `CAPACITY_CONFIRM_MUTATIONS=yes` and a synthetic listing that is
+publicly visible through the current moderation workflow.
 
-## Required metrics
-
-The runner records environment label, hostname, commit, dataset labels,
-concurrency, duration, timeout, total/success/failed requests, RPS, p50, p95,
-p99, timeout count, HTTP 429 count, HTTP 5xx count, status breakdown, and HTTP
-error rate. Application latency is not database evidence.
-
-| Workload | Stable concurrency | RPS | p50 | p95 | p99 | timeout | 429 | 5xx | HTTP error rate | Database evidence |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Public list | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` |
-| Public search | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` |
-| Public detail | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` |
-| Authenticated profile | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` |
-| Authenticated notifications | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` |
-| Authenticated conversations | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` |
-| Purchase request | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` |
-| Purchase race | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` |
-| Realtime subscription | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` | `NOT VERIFIED` |
-
-The conservative SLO is read p95 <= 750 ms, write p95 <= 1,500 ms, and HTTP
-error rate < 1%. A stable-capacity claim additionally needs the same-window
-Supabase Query Performance/`pg_stat_statements`, Supavisor pool utilization,
-lock/timeout/connection-limit logs, and Realtime-limit evidence. Those external
-observations are `NOT VERIFIED` here.
-
-## Pre-change checks
-
-- `npm ci --ignore-scripts`: passed.
-- `npm run typecheck`: passed.
-- `npm test`: passed, 29 tests.
-- `npm run check:capacity`: failed two existing origin/main assertions for chat badge parallelization and rare panel loading; no application change was made in response.
-- `npm run check:project`: `NOT VERIFIED`; the Tesseract runtime attempted a network fetch and failed in the restricted environment.
-- `npm run build`: `NOT VERIFIED`; the clean build did not finish within 180 seconds and was terminated by the command timeout.
-- Staging/local load execution: `NOT VERIFIED`; no target was available.
-- Sentry, route/RPC duration, Supabase slow queries, connection use, cache status, and browser-authenticated flows: `NOT VERIFIED`.
-- The only available ignored local environment points to `bookflow-green.vercel.app`, which is production and was not used.
+Raw non-secret metrics are in `.ai/artifacts/capacity-*.jsonl`. Access tokens,
+passwords, service-role keys, and cookies were kept outside the repository.

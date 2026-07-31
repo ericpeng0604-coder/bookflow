@@ -1,59 +1,67 @@
 # Campus-books capacity final report
 
-Status: `NOT VERIFIED` / incomplete pending a verified non-production target.
+Status: `BLOCKED / NOT VERIFIED` for the requested 2x stable-capacity goal.
 
 ## Outcome
 
-The requested two-times stable-concurrency target was not claimed. This branch
-contains a reproducible, guarded load-test runner and evidence/reporting
-contract, but no real staging/local load stage was executed because the test
-machine did not have an explicitly verified non-production Supabase target or
-synthetic authenticated test identities.
+No production load or migration was performed. The branch now contains a guarded
+reproducible runner, non-secret metric artifacts, and a staging evidence report.
+No application optimization was retained because no single code bottleneck was
+proven and the required full-user/purchase/Realtime evidence was blocked by
+external staging conditions.
 
-## Verified
+## Measured staging results
 
-- The runner branch was created from `origin/main` at
-  `1f8ee884b695c5a642dafc7cb26e760382343165` and safely rebased onto current
-  `origin/main` at `7e2a4c59000392aa5d73a21289f777d0dcf5df30`.
-- The original dirty checkout was preserved and was not reset or modified by
-  this task.
-- The load runner exposes separate public list/search/detail, authenticated
-  profile/notification/conversation, purchase request, purchase-race, and
-  Realtime workloads.
-- The runner requires a target allowlist and explicit local/isolated/staging
-  confirmation, and refuses mutating purchase tests without a second explicit
-  confirmation.
-- `npm run typecheck`, `npm test` (31 tests), `npm run check:capacity-load`, and
-  the two capacity-load tests passed.
-- No production load test, production migration, RLS weakening, auth bypass,
-  transaction-protection change, or schema change was performed.
+- Public list: max stable tested concurrency 100, 375.33 RPS, p95 277.65 ms,
+  p99 927.03 ms, 0% HTTP error rate.
+- Public search: max stable tested concurrency 250, 687.79 RPS, p95 611.50 ms,
+  p99 853.29 ms, 0% HTTP error rate.
+- Public detail: max stable tested concurrency 100, 398.57 RPS, p95 258.96 ms,
+  p99 452.12 ms, 0% HTTP error rate.
+- Authenticated profile/notifications/conversations: at concurrency 100 with
+  one synthetic session, p95 254.32/252.66/273.50 ms and 0% HTTP errors.
+- Purchase request/race: `NOT VERIFIED`; both returned 400 `Listing unavailable`
+  against correctly pending synthetic listings.
+- Realtime: `NOT VERIFIED`; corrected-topic probes returned 403/network failures
+  and an official-client probe timed out.
 
-## Not verified
+These are largest tested stages, not an exact capacity limit. The public fixture
+contained 6,975 inserted synthetic books but zero publicly visible synthetic
+books because the current moderation trigger enforced `review_status=pending`.
 
-- Maximum stable concurrency, RPS, p50/p95/p99, timeout/429/5xx/error rate for
-  every workload: `NOT VERIFIED`.
-- Sentry logs, route/RPC duration, Supabase slow queries, pool/connection
-  utilization, lock waits, Realtime limits, cache status, and same-window
-  database evidence: `NOT VERIFIED`.
-- Browser → Client → Server Route → Supabase → Response → UI verification for
-  login, listings, search, detail, purchase race, chat, notifications, and RLS:
-  `NOT VERIFIED`.
-- Production build: `NOT VERIFIED` because the clean build exceeded the 180
-  second command budget.
-- Full project checks: `NOT VERIFIED` because the Tesseract runtime check
-  required a network fetch unavailable in the restricted environment.
-- Draft PR [#176](https://github.com/ericpeng0604-coder/bookflow/pull/176) is
-  open, clean/mergeable, and all visible checks pass; the Production Smoke Test
-  is skipped. It must remain Draft and must not be merged or auto-merged.
+## Blockers
 
-## Blocker and next action
+1. Staging Auth rate-limited the 500-session preparation with
+   `Request rate limit reached`; 500-user login capacity is `NOT VERIFIED`.
+2. The current moderation/RLS path does not allow the seeded synthetic listings
+   into public or purchase flows without an authorized moderation workflow.
+3. Realtime and query-performance reporting were unavailable/inconsistent in the
+   dashboard; same-window slow-query, lock, pool, cache, and Sentry evidence is
+   `NOT VERIFIED`.
+4. The application URL and Browser -> Client -> Route -> Supabase -> Response ->
+   UI verification for login, listing, search, detail, purchase race, chat,
+   notifications, and RLS are `NOT VERIFIED`.
 
-The current blocker is missing verified non-production runtime/test data, not a
-proven application bottleneck. The only available ignored local environment
-points to production and was not used. Supply a local/isolated/staging target label,
-allowlisted host, synthetic dataset, synthetic access tokens, a synthetic
-purchase listing, and a synthetic conversation. Then execute the commands in
-`docs/performance/baseline.md`. If two optimization rounds fail to exceed
-measurement noise, or the limit is Vercel/Supabase plan, quota, region,
-external service, or test-machine capacity, stop modifications and preserve
-the evidence as the conclusion.
+## Verification and checks
+
+- `npm run check:capacity-load`: passed (17 checks).
+- `npm run check:observability`: passed; local Sentry DSN/live Sentry confirmation
+  remains `NOT VERIFIED`.
+- Public and authenticated API load artifacts were written under `.ai/artifacts/`.
+- `npm run typecheck`, `npm test` (31 tests), `npm run lint`,
+  `npm run check:capacity-load`, and `npm run build` passed after the harness
+  correction. Build emitted only existing workspace-root and webpack cache
+  warnings.
+- Full project checks remain `NOT VERIFIED` because the Tesseract runtime check
+  requires a network fetch in this environment.
+- Draft PR #176 remains Draft; no merge, auto-merge, ruleset change, production
+  load, or production migration was performed.
+
+## Conclusion and next step
+
+The requested 2x capacity increase cannot be honestly claimed. Stop modifying
+application code until staging provides: a moderation-approved synthetic fixture
+that remains governed by RLS, an Auth rate-limit-safe session preparation path,
+working Realtime/query telemetry, and the matching application URL for browser
+verification. Then rerun the exact workloads at the exact dataset and concurrency
+conditions before selecting one evidence-backed bottleneck.

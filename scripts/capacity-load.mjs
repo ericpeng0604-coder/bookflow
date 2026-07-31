@@ -207,7 +207,7 @@ function realtimeJoin(token) {
     }, timeoutMs);
     socket.addEventListener("open", () => {
       socket.send(JSON.stringify({
-        topic: `realtime:capacity-test-${conversationId}`,
+        topic: `realtime:trade-chat:${conversationId}`,
         event: "phx_join",
         payload: {
           config: {
